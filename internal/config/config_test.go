@@ -25,7 +25,7 @@ description = "A test agent"
 [llm]
 backend = "anthropic"
 model = "claude-haiku-4-5-20251001"
-api_key_env = "TEST_API_KEY"
+auth_profile = "anthropic-default"
 max_tokens = 1024
 timeout_sec = 30
 
@@ -54,6 +54,9 @@ type = "cli"
 	if cfg.LLM.Backend != "anthropic" {
 		t.Errorf("llm.backend = %q, want %q", cfg.LLM.Backend, "anthropic")
 	}
+	if cfg.LLM.AuthProfile != "anthropic-default" {
+		t.Errorf("llm.auth_profile = %q, want %q", cfg.LLM.AuthProfile, "anthropic-default")
+	}
 	if len(cfg.Tools.Allowed) != 2 {
 		t.Errorf("tools.allowed len = %d, want 2", len(cfg.Tools.Allowed))
 	}
@@ -74,7 +77,7 @@ func TestLoad_MissingPersonalityFiles(t *testing.T) {
 [agent]
 name = "minimal"
 [llm]
-api_key_env = "KEY"
+auth_profile = "default"
 [tools]
 [adapter]
 type = "cli"
@@ -107,7 +110,7 @@ name = "env-test"
 [llm]
 backend = "anthropic"
 model = "${MY_MODEL}"
-api_key_env = "KEY"
+auth_profile = "default"
 [tools]
 [adapter]
 type = "cli"
@@ -123,26 +126,5 @@ type = "cli"
 	}
 	if cfg.LLM.Model != "claude-opus-4-6" {
 		t.Errorf("llm.model = %q, want %q", cfg.LLM.Model, "claude-opus-4-6")
-	}
-}
-
-func TestAPIKey_ResolvedFromEnv(t *testing.T) {
-	t.Setenv("AGENT_API_KEY", "sk-test-123")
-	cfg := config.LLMConfig{APIKeyEnv: "AGENT_API_KEY"}
-	key, err := cfg.APIKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if key != "sk-test-123" {
-		t.Errorf("key = %q, want %q", key, "sk-test-123")
-	}
-}
-
-func TestAPIKey_MissingEnv(t *testing.T) {
-	cfg := config.LLMConfig{APIKeyEnv: "DEFINITELY_NOT_SET_XYZ"}
-	os.Unsetenv("DEFINITELY_NOT_SET_XYZ")
-	_, err := cfg.APIKey()
-	if err == nil {
-		t.Error("expected error for unset env var")
 	}
 }

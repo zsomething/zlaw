@@ -27,26 +27,14 @@ type AgentMeta struct {
 }
 
 // LLMConfig holds LLM backend settings.
-// Secrets (e.g. API keys) are loaded from environment variables named by the
-// *Env fields — never stored as plaintext in the config file.
+// Authentication is handled separately via a named credential profile in
+// ~/.config/zlaw/credentials.toml — no secrets belong in agent.toml.
 type LLMConfig struct {
-	Backend    string `toml:"backend"`     // e.g. "anthropic"
-	Model      string `toml:"model"`       // e.g. "claude-opus-4-6"
-	APIKeyEnv  string `toml:"api_key_env"` // env var name holding the API key
-	MaxTokens  int    `toml:"max_tokens"`
-	TimeoutSec int    `toml:"timeout_sec"`
-}
-
-// APIKey resolves the LLM API key from the environment.
-func (l LLMConfig) APIKey() (string, error) {
-	if l.APIKeyEnv == "" {
-		return "", fmt.Errorf("llm.api_key_env is not set")
-	}
-	val := os.Getenv(l.APIKeyEnv)
-	if val == "" {
-		return "", fmt.Errorf("env var %s is empty or unset", l.APIKeyEnv)
-	}
-	return val, nil
+	Backend     string `toml:"backend"`      // e.g. "anthropic", "minimax"
+	Model       string `toml:"model"`        // e.g. "claude-sonnet-4-6"
+	AuthProfile string `toml:"auth_profile"` // profile name in credentials.toml
+	MaxTokens   int    `toml:"max_tokens"`
+	TimeoutSec  int    `toml:"timeout_sec"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.

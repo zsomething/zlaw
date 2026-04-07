@@ -3,9 +3,9 @@ name = "default"
 description = "Default zlaw agent"
 
 [llm]
-backend = "anthropic"
-model = "claude-sonnet-4-6"
-api_key_env = "ANTHROPIC_API_KEY"
+backend = "minimax"
+model = "MiniMax-Text-01"
+auth_profile = "minimax-default"
 max_tokens = 4096
 timeout_sec = 60
 
