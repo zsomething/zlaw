@@ -110,8 +110,8 @@ func TestOpenAICompat_TextResponse(t *testing.T) {
 	if resp.Message.TextContent() != "Hello, world!" {
 		t.Errorf("text = %q, want %q", resp.Message.TextContent(), "Hello, world!")
 	}
-	if resp.StopReason != "stop" {
-		t.Errorf("stop_reason = %q, want %q", resp.StopReason, "stop")
+	if resp.StopReason != "end_turn" {
+		t.Errorf("stop_reason = %q, want %q", resp.StopReason, "end_turn")
 	}
 	if resp.Usage.InputTokens != 10 || resp.Usage.OutputTokens != 5 {
 		t.Errorf("usage = %+v", resp.Usage)
