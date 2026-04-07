@@ -48,6 +48,12 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	// --- Build tool registry ---
 	registry := tools.NewRegistry()
 	registry.Register(builtin.CurrentTime{})
+	registry.Register(builtin.ReadFile{})
+	registry.Register(builtin.WriteFile{})
+	registry.Register(builtin.EditFile{})
+	registry.Register(builtin.Glob{})
+	registry.Register(builtin.GrepFiles{})
+	registry.Register(builtin.Bash{})
 
 	// --- Build agent ---
 	history := agent.NewHistory()
