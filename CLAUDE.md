@@ -1,14 +1,14 @@
 # CLAUDE.md — Project Context for Claude Code
 
-This file gives Claude Code the full context needed to work on this project. Read ARCHITECTURE.md and PLANNING.md for full detail. This file summarizes the essentials and provides working conventions.
+File give Claude Code full context for project. Read ARCHITECTURE.md and PLANNING.md for full detail. File summarize essentials, give working conventions.
 
 ---
 
 ## What This Project Is
 
-A multi-agent personal assistant platform written in Go. A central **zlaw** process brokers communication between autonomous **Agent** processes over an embedded NATS message bus.
+Multi-agent personal assistant platform in Go. Central **zlaw** process broker communication between autonomous **Agent** processes over embedded NATS message bus.
 
-Primary use case: personal assistant (Telegram as main interface). Coding assistance is a nice-to-have.
+Primary use case: personal assistant (Telegram as main interface). Coding assistance nice-to-have.
 
 ---
 
@@ -16,23 +16,23 @@ Primary use case: personal assistant (Telegram as main interface). Coding assist
 
 **Phase 1: Standalone Agent**
 
-We are building a single zlaw-agent binary that runs independently — no zlaw-hub, no NATS, no inter-agent communication yet. The zlaw-hub and inter-agent layer come in Phase 2.
+Build single zlaw-agent binary, run independently — no zlaw-hub, no NATS, no inter-agent yet. zlaw-hub and inter-agent layer come Phase 2.
 
-Do not introduce zlaw dependencies into Phase 1 agent code. Design for it (e.g. use session IDs from day one), but don't couple to it.
+No zlaw dependencies in Phase 1 agent code. Design for it (e.g. use session IDs from day one), but no coupling.
 
 ---
 
 ## Key Architectural Decisions
 
-- **Language**: Go. No other languages in core. Skill plugins can be any language via gRPC/IPC.
-- **zlaw role**: Broker only — routes, verifies identity, audits. Does not plan or orchestrate.
-- **Planner agent**: One designated agent receives user input and delegates to peers. Planning lives in an agent, not zlaw.
+- **Language**: Go. No other languages in core. Skill plugins any language via gRPC/IPC.
+- **zlaw role**: Broker only — routes, verifies identity, audits. No planning or orchestration.
+- **Planner agent**: One designated agent receive user input, delegate to peers. Planning lives in agent, not zlaw.
 - **A2A routing**: All inter-agent messages via zlaw. Never direct agent-to-agent.
 - **Config format**: TOML. Per-agent `agent.toml`, global `zlaw.toml`.
 - **Personality**: `SOUL.md` + `IDENTITY.md` per agent. Hot-reloaded on file change.
-- **Session model**: `map[sessionID → history]` from day one. Do not use a single global history.
-- **Secrets**: Env-var injection only. Never plaintext in config files.
-- **Plugin system**: Skill binaries over gRPC or net/rpc. Versioned contract defined in `plugins/`.
+- **Session model**: `map[sessionID → history]` from day one. No single global history.
+- **Secrets**: Env-var injection only. Never plaintext in config.
+- **Plugin system**: Skill binaries over gRPC or net/rpc. Versioned contract in `plugins/`.
 - **Message bus**: NATS, embedded in zlaw-hub binary by default.
 
 ---
@@ -76,13 +76,13 @@ zlaw/
 
 ## Coding Conventions
 
-- Prefer explicit error handling over panic. No `log.Fatal` outside of `main()`.
-- Interfaces first — define the interface before the implementation (especially for LLM client, tool executor, input/output adapters).
-- No global state. Pass dependencies explicitly (no init() side effects for business logic).
-- Context propagation — pass `context.Context` as first arg to all functions that do I/O or may be cancelled.
-- Config structs are loaded once at startup and passed down; hot-reload fires a callback, does not mutate shared state unsafely.
-- Structured logging with `slog` (stdlib). Every log line includes `agent`, `session_id`, and where applicable `trace_id`.
-- Tests live alongside code (`_test.go`). Unit test the loop logic with a mock LLM client.
+- Prefer explicit error handling over panic. No `log.Fatal` outside `main()`.
+- Interfaces first — define interface before implementation (especially LLM client, tool executor, input/output adapters).
+- No global state. Pass dependencies explicitly (no `init()` side effects for business logic).
+- Context propagation — pass `context.Context` as first arg to all functions doing I/O or cancellable.
+- Config structs loaded once at startup, passed down; hot-reload fires callback, no unsafe mutation of shared state.
+- Structured logging with `slog` (stdlib). Every log line include `agent`, `session_id`, and where applicable `trace_id`.
+- Tests alongside code (`_test.go`). Unit test loop logic with mock LLM client.
 
 ---
 
@@ -96,7 +96,7 @@ zlaw/
 6. `internal/adapters/cli` — basic CLI adapter
 7. `internal/tools/plugin` — real plugin IPC contract + example skill
 
-Do not start Phase 2 (zlaw, NATS, adapters/telegram) until Phase 1 loop is working end-to-end with at least one real tool.
+No start Phase 2 (zlaw, NATS, adapters/telegram) until Phase 1 loop working end-to-end with at least one real tool.
 
 ---
 
