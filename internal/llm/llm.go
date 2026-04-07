@@ -29,10 +29,11 @@ type ToolResult struct {
 	IsError   bool
 }
 
-// ContentBlock is one item in a message — text, a tool call, or a tool result.
+// ContentBlock is one item in a message — text, a tool call, a tool result, or
+// model thinking (extended reasoning). Exactly one field is non-zero.
 type ContentBlock struct {
-	// Exactly one of the following is non-zero.
 	Text       string
+	Thinking   string
 	ToolUse    *ToolUse
 	ToolResult *ToolResult
 }
@@ -48,6 +49,15 @@ func (m Message) TextContent() string {
 	var s string
 	for _, b := range m.Content {
 		s += b.Text
+	}
+	return s
+}
+
+// ThinkingContent returns all thinking blocks concatenated.
+func (m Message) ThinkingContent() string {
+	var s string
+	for _, b := range m.Content {
+		s += b.Thinking
 	}
 	return s
 }

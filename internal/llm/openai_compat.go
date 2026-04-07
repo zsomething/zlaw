@@ -206,12 +206,27 @@ func fromOpenAICompletion(c *openai.ChatCompletion) (Response, error) {
 			Role:    RoleAssistant,
 			Content: blocks,
 		},
-		StopReason: string(choice.FinishReason),
+		StopReason: normalizeStopReason(string(choice.FinishReason)),
 		Usage: Usage{
 			InputTokens:  int(c.Usage.PromptTokens),
 			OutputTokens: int(c.Usage.CompletionTokens),
 		},
 	}, nil
+}
+
+// normalizeStopReason maps OpenAI finish reasons to the canonical values used
+// by the agent loop ("end_turn", "tool_use", "max_tokens").
+func normalizeStopReason(r string) string {
+	switch r {
+	case "stop":
+		return "end_turn"
+	case "tool_calls":
+		return "tool_use"
+	case "length":
+		return "max_tokens"
+	default:
+		return r
+	}
 }
 
 func isHTTP429(err error) bool {
