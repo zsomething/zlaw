@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "fizzy-workflow": {
+      "source": "akhy/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ebbd1d66267a2d4f7133338cf835669510824a154cdb8a5ba32cf88e4a0b9d19"
+    }
+  }
+}
