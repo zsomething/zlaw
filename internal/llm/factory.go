@@ -11,6 +11,11 @@ import (
 
 // NewClientFromConfig constructs the appropriate Client based on agent config.
 // credentialsPath is the path to credentials.toml; pass "" to use the default.
+//
+// Resolution order:
+//  1. Look up the named preset from cfg.Backend.
+//  2. Apply any per-field overrides from cfg (APIFormat, BaseURL).
+//  3. Dispatch to the matching Client implementation by APIFormat.
 func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *slog.Logger) (Client, error) {
 	if credentialsPath == "" {
 		credentialsPath = auth.DefaultCredentialsPath()
@@ -21,28 +26,36 @@ func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *s
 		return nil, fmt.Errorf("llm: load auth profile %q: %w", cfg.AuthProfile, err)
 	}
 
+	preset, err := LookupPreset(cfg.Backend)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply per-config overrides.
+	baseURL := preset.BaseURL
+	if cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
+	apiFormat := preset.APIFormat
+	if cfg.APIFormat != "" {
+		apiFormat = APIFormat(cfg.APIFormat)
+	}
+
 	timeout := time.Duration(cfg.TimeoutSec) * time.Second
 
-	switch cfg.Backend {
-	case "minimax":
+	switch apiFormat {
+	case APIFormatOpenAI:
 		return NewOpenAICompatClient(OpenAICompatConfig{
-			BaseURL:     BaseURLMinimax,
+			BaseURL:     baseURL,
 			TokenSource: src,
 			Model:       cfg.Model,
 			MaxTokens:   cfg.MaxTokens,
 			Timeout:     timeout,
 			Logger:      logger,
 		})
-	case "openrouter":
-		return NewOpenAICompatClient(OpenAICompatConfig{
-			BaseURL:     BaseURLOpenRouter,
-			TokenSource: src,
-			Model:       cfg.Model,
-			MaxTokens:   cfg.MaxTokens,
-			Timeout:     timeout,
-			Logger:      logger,
-		})
+	case APIFormatAnthropic:
+		return nil, fmt.Errorf("llm: anthropic api format not yet implemented (see card #178)")
 	default:
-		return nil, fmt.Errorf("llm: unknown backend %q (supported: minimax, openrouter)", cfg.Backend)
+		return nil, fmt.Errorf("llm: unknown api_format %q (supported: openai, anthropic)", apiFormat)
 	}
 }

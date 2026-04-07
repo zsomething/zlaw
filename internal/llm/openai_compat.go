@@ -15,12 +15,6 @@ import (
 	"github.com/chickenzord/zlaw/internal/llm/auth"
 )
 
-// Known OpenAI-compatible backend base URLs.
-const (
-	BaseURLMinimax    = "https://api.minimaxi.chat/v1"
-	BaseURLOpenRouter = "https://openrouter.ai/api/v1"
-)
-
 // OpenAICompatConfig holds settings for any OpenAI-compatible backend.
 type OpenAICompatConfig struct {
 	BaseURL     string

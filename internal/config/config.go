@@ -30,8 +30,18 @@ type AgentMeta struct {
 // Authentication is handled separately via a named credential profile in
 // ~/.config/zlaw/credentials.toml — no secrets belong in agent.toml.
 type LLMConfig struct {
-	Backend     string `toml:"backend"`      // e.g. "anthropic", "minimax"
-	Model       string `toml:"model"`        // e.g. "claude-sonnet-4-6"
+	// Backend selects a named preset (e.g. "minimax", "minimax-cn", "openrouter").
+	Backend string `toml:"backend"`
+
+	// APIFormat overrides the wire protocol from the preset ("openai" or "anthropic").
+	// Leave empty to use the preset default.
+	APIFormat string `toml:"api_format"`
+
+	// BaseURL overrides the endpoint URL from the preset.
+	// Leave empty to use the preset default.
+	BaseURL string `toml:"base_url"`
+
+	Model       string `toml:"model"`        // e.g. "MiniMax-Text-01"
 	AuthProfile string `toml:"auth_profile"` // profile name in credentials.toml
 	MaxTokens   int    `toml:"max_tokens"`
 	TimeoutSec  int    `toml:"timeout_sec"`
