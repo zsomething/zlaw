@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 
 	"os"
 
@@ -30,7 +31,13 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	}
 
 	// --- Load config ---
-	loader, err := config.NewLoader(agentDir, nil, logger)
+	var promptPtr atomic.Pointer[string]
+	onChange := func(_ config.AgentConfig, p config.Personality) {
+		s := agent.BuildSystemPrompt(p)
+		promptPtr.Store(&s)
+		logger.Info("system prompt reloaded")
+	}
+	loader, err := config.NewLoader(agentDir, onChange, logger)
 	if err != nil {
 		return fmt.Errorf("create config loader: %w", err)
 	}
@@ -38,6 +45,10 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+
+	// Seed the atomic with the initial prompt.
+	initial := agent.BuildSystemPrompt(personality)
+	promptPtr.Store(&initial)
 
 	// --- Build LLM client ---
 	llmClient, err := llm.NewClientFromConfig(cfg.LLM, "", logger)
@@ -59,9 +70,6 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	history := agent.NewHistory()
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
 
-	// --- Build system prompt ---
-	systemPrompt := agent.BuildSystemPrompt(personality)
-
 	// --- Start config hot-reload ---
 	go func() {
 		if err := loader.Watch(ctx); err != nil {
@@ -70,7 +78,7 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	}()
 
 	// --- Build CLI adapter ---
-	adapter := cli.New(ag, systemPrompt, *verbose, nil, nil, logger)
+	adapter := cli.New(ag, func() string { return *promptPtr.Load() }, *verbose, nil, nil, logger)
 
 	if cli.IsTerminal(os.Stdin) {
 		return adapter.RunInteractive(ctx, *sessionID)

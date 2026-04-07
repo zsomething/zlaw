@@ -23,14 +23,15 @@ type Adapter struct {
 	agent        Runner
 	in           io.Reader
 	out          io.Writer
-	systemPrompt string
+	systemPrompt func() string
 	verbose      bool
 	logger       *slog.Logger
 }
 
 // New returns an Adapter wired to the given agent.
+// systemPrompt is called on every turn so callers can hot-reload it.
 // in/out default to os.Stdin/os.Stdout when nil.
-func New(a Runner, systemPrompt string, verbose bool, in io.Reader, out io.Writer, logger *slog.Logger) *Adapter {
+func New(a Runner, systemPrompt func() string, verbose bool, in io.Reader, out io.Writer, logger *slog.Logger) *Adapter {
 	if in == nil {
 		in = os.Stdin
 	}
@@ -81,7 +82,7 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 
 		a.logger.Debug("user input", "session_id", sessionID, "input", input)
 
-		result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt)
+		result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt())
 		if err != nil {
 			fmt.Fprintf(a.out, "error: %v\n", err)
 			continue
@@ -97,7 +98,7 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 // RunOnce sends a single input to the agent and writes the response to out.
 // Suitable for non-interactive / piped usage.
 func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
-	result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt)
+	result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt())
 	if err != nil {
 		return fmt.Errorf("cli: agent run: %w", err)
 	}
