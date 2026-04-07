@@ -2,6 +2,8 @@
 bin/
 dist/
 *.exe
+zlaw-agent
+zlaw-hub
 
 # Go build artifacts
 *.test
@@ -13,6 +15,9 @@ vendor/
 *.local.toml
 .env
 .env.*
+
+# Temporary session notes
+WORKLOG.md
 
 # OS / editor
 .DS_Store
