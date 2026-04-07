@@ -62,8 +62,8 @@ func TestAgent_PlainTextResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "Hello!" {
-		t.Fatalf("expected %q, got %q", "Hello!", got)
+	if got.Text != "Hello!" {
+		t.Fatalf("expected %q, got %q", "Hello!", got.Text)
 	}
 	if len(mock.Requests) != 1 {
 		t.Fatalf("expected 1 llm call, got %d", len(mock.Requests))
@@ -88,8 +88,8 @@ func TestAgent_ToolCallThenResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "It is now 2026-04-07T00:00:00Z" {
-		t.Fatalf("unexpected response: %q", got)
+	if got.Text != "It is now 2026-04-07T00:00:00Z" {
+		t.Fatalf("unexpected response: %q", got.Text)
 	}
 	if len(mock.Requests) != 2 {
 		t.Fatalf("expected 2 llm calls, got %d", len(mock.Requests))

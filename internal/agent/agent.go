@@ -16,6 +16,21 @@ type ToolExecutor interface {
 	ExecuteAll(ctx context.Context, calls []llm.ToolUse) []llm.ToolResult
 }
 
+// ToolCall records a single tool invocation and its result for verbose output.
+type ToolCall struct {
+	Name    string
+	Input   []byte
+	Result  string
+	IsError bool
+}
+
+// Result holds the output of one agent turn.
+type Result struct {
+	Text      string
+	Thinking  []string // one entry per LLM iteration that produced thinking
+	ToolCalls []ToolCall
+}
+
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
 	name    string
@@ -41,13 +56,15 @@ func New(name string, client llm.Client, tools ToolExecutor, history *History, l
 // It appends the user input to history, then drives the ReAct loop until the
 // model emits a final text response, an error occurs, or maxIterations is
 // reached. The final text response is returned and also appended to history.
-func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) (string, error) {
+func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) (Result, error) {
 	log := a.logger.With("agent", a.name, "session_id", sessionID)
 
 	a.history.Append(sessionID, llm.Message{
 		Role:    llm.RoleUser,
 		Content: []llm.ContentBlock{{Text: input}},
 	})
+
+	var result Result
 
 	for i := range maxIterations {
 		log.Debug("llm call", "iteration", i+1)
@@ -60,18 +77,23 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 
 		resp, err := a.client.Complete(ctx, req)
 		if err != nil {
-			return "", fmt.Errorf("agent: llm call: %w", err)
+			return Result{}, fmt.Errorf("agent: llm call: %w", err)
 		}
 
 		log.Debug("llm response", "stop_reason", resp.StopReason,
 			"input_tokens", resp.Usage.InputTokens,
 			"output_tokens", resp.Usage.OutputTokens)
 
+		if t := resp.Message.ThinkingContent(); t != "" {
+			result.Thinking = append(result.Thinking, t)
+		}
+
 		a.history.Append(sessionID, resp.Message)
 
 		switch resp.StopReason {
 		case "end_turn":
-			return resp.Message.TextContent(), nil
+			result.Text = resp.Message.TextContent()
+			return result, nil
 
 		case "tool_use":
 			calls := resp.Message.ToolUses()
@@ -83,6 +105,12 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 			for j, r := range results {
 				r := r // capture
 				blocks[j] = llm.ContentBlock{ToolResult: &r}
+				tc := ToolCall{Result: r.Content, IsError: r.IsError}
+				if j < len(calls) {
+					tc.Name = calls[j].Name
+					tc.Input = calls[j].Input
+				}
+				result.ToolCalls = append(result.ToolCalls, tc)
 				if r.IsError {
 					log.Warn("tool error", "tool_use_id", r.ToolUseID, "error", r.Content)
 				} else {
@@ -95,12 +123,12 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 			})
 
 		case "max_tokens":
-			return "", fmt.Errorf("agent: response truncated (max_tokens reached)")
+			return Result{}, fmt.Errorf("agent: response truncated (max_tokens reached)")
 
 		default:
-			return "", fmt.Errorf("agent: unexpected stop_reason %q", resp.StopReason)
+			return Result{}, fmt.Errorf("agent: unexpected stop_reason %q", resp.StopReason)
 		}
 	}
 
-	return "", fmt.Errorf("agent: exceeded max iterations (%d)", maxIterations)
+	return Result{}, fmt.Errorf("agent: exceeded max iterations (%d)", maxIterations)
 }
