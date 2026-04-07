@@ -1,0 +1,21 @@
+# Binaries
+bin/
+dist/
+*.exe
+
+# Go build artifacts
+*.test
+*.out
+vendor/
+
+# Local config (may contain credentials)
+.fizzy.yaml
+*.local.toml
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
