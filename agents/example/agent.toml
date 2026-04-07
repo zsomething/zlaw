@@ -1,6 +1,6 @@
 [agent]
-name = "default"
-description = "Default zlaw agent"
+name = "example"
+description = "Example agent — copy this directory to agents/<name>/ and customise"
 
 [llm]
 backend = "minimax"

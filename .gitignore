@@ -16,8 +16,16 @@ vendor/
 .env
 .env.*
 
+# Runtime agent directories (use agents/example/ as template)
+agents/*/
+!agents/example/
+!agents/example/**
+
 # Temporary session notes
 WORKLOG.md
+
+# Local Claude instructions (personal workflow, not shared)
+CLAUDE.local.md
 
 # OS / editor
 .DS_Store
