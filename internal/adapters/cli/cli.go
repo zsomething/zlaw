@@ -1,2 +1,158 @@
 // Package cli implements the CLI input/output adapter.
 package cli
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"strings"
+
+	"github.com/chickenzord/zlaw/internal/agent"
+)
+
+// Runner is the subset of agent.Agent used by the CLI adapter.
+type Runner interface {
+	Run(ctx context.Context, sessionID, input, systemPrompt string) (agent.Result, error)
+}
+
+// Adapter connects the agent loop to a terminal or piped stdin.
+type Adapter struct {
+	agent        Runner
+	in           io.Reader
+	out          io.Writer
+	systemPrompt string
+	verbose      bool
+	logger       *slog.Logger
+}
+
+// New returns an Adapter wired to the given agent.
+// in/out default to os.Stdin/os.Stdout when nil.
+func New(a Runner, systemPrompt string, verbose bool, in io.Reader, out io.Writer, logger *slog.Logger) *Adapter {
+	if in == nil {
+		in = os.Stdin
+	}
+	if out == nil {
+		out = os.Stdout
+	}
+	return &Adapter{
+		agent:        a,
+		in:           in,
+		out:          out,
+		systemPrompt: systemPrompt,
+		verbose:      verbose,
+		logger:       logger,
+	}
+}
+
+// RunInteractive starts a REPL loop: prints a prompt, reads a line, calls the
+// agent, and prints the response. Exits when ctx is cancelled or EOF is reached.
+func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
+	scanner := bufio.NewScanner(a.in)
+	for {
+		fmt.Fprint(a.out, "> ")
+
+		// bufio.Scanner doesn't respect context, so check before blocking.
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
+		if !scanner.Scan() {
+			// EOF or error.
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("cli: read input: %w", err)
+			}
+			return nil
+		}
+
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
+		}
+
+		// Check for built-in commands.
+		if input == "/exit" || input == "/quit" {
+			return nil
+		}
+
+		a.logger.Debug("user input", "session_id", sessionID, "input", input)
+
+		result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt)
+		if err != nil {
+			fmt.Fprintf(a.out, "error: %v\n", err)
+			continue
+		}
+
+		if a.verbose {
+			a.printVerbose(result)
+		}
+		fmt.Fprintln(a.out, result.Text)
+	}
+}
+
+// RunOnce sends a single input to the agent and writes the response to out.
+// Suitable for non-interactive / piped usage.
+func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
+	result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt)
+	if err != nil {
+		return fmt.Errorf("cli: agent run: %w", err)
+	}
+	if a.verbose {
+		a.printVerbose(result)
+	}
+	fmt.Fprintln(a.out, result.Text)
+	return nil
+}
+
+// printVerbose writes thinking blocks and tool calls to out before the response.
+func (a *Adapter) printVerbose(r agent.Result) {
+	for i, t := range r.Thinking {
+		fmt.Fprintf(a.out, "[thinking %d]\n%s\n\n", i+1, t)
+	}
+	for _, tc := range r.ToolCalls {
+		fmt.Fprintf(a.out, "[tool: %s]\n", tc.Name)
+		if len(tc.Input) > 0 {
+			fmt.Fprintf(a.out, "input: %s\n", tc.Input)
+		}
+		if tc.IsError {
+			fmt.Fprintf(a.out, "error: %s\n", tc.Result)
+		} else {
+			fmt.Fprintf(a.out, "result: %s\n", tc.Result)
+		}
+		fmt.Fprintln(a.out)
+	}
+}
+
+// RunStdin reads all of stdin as a single input and calls RunOnce.
+func (a *Adapter) RunStdin(ctx context.Context, sessionID string) error {
+	data, err := io.ReadAll(a.in)
+	if err != nil {
+		return fmt.Errorf("cli: read stdin: %w", err)
+	}
+	input := strings.TrimSpace(string(data))
+	if input == "" {
+		return fmt.Errorf("cli: empty input")
+	}
+	return a.RunOnce(ctx, sessionID, input)
+}
+
+// IsTerminal reports whether r is an interactive terminal.
+// Used by callers to decide between RunInteractive and RunStdin.
+func IsTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// compile-time check: *agent.Agent satisfies Runner.
+var _ Runner = (*agent.Agent)(nil)
