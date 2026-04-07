@@ -122,7 +122,9 @@ func (l *Loader) Watch(ctx context.Context) error {
 				l.logger.Error("reload failed", "err", err)
 				continue
 			}
-			l.onChange(cfg, p)
+			if l.onChange != nil {
+				l.onChange(cfg, p)
+			}
 		case err, ok := <-l.watcher.Errors:
 			if !ok {
 				return nil
