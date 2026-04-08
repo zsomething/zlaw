@@ -25,6 +25,9 @@ type Adapter struct {
 	out          io.Writer
 	systemPrompt func() string
 	verbose      bool
+	showUsage    bool
+	sessionIn    int // cumulative input tokens for this session
+	sessionOut   int // cumulative output tokens for this session
 	logger       *slog.Logger
 }
 
@@ -46,6 +49,11 @@ func New(a Runner, systemPrompt func() string, verbose bool, in io.Reader, out i
 		verbose:      verbose,
 		logger:       logger,
 	}
+}
+
+// SetShowUsage enables per-turn token usage reporting after each response.
+func (a *Adapter) SetShowUsage(v bool) {
+	a.showUsage = v
 }
 
 // RunInteractive starts a REPL loop: prints a prompt, reads a line, calls the
@@ -92,6 +100,9 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 			a.printVerbose(result)
 		}
 		fmt.Fprintln(a.out, result.Text)
+		if a.showUsage {
+			a.printUsage(result)
+		}
 	}
 }
 
@@ -106,6 +117,9 @@ func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
 		a.printVerbose(result)
 	}
 	fmt.Fprintln(a.out, result.Text)
+	if a.showUsage {
+		a.printUsage(result)
+	}
 	return nil
 }
 
@@ -126,6 +140,17 @@ func (a *Adapter) printVerbose(r agent.Result) {
 		}
 		fmt.Fprintln(a.out)
 	}
+}
+
+// printUsage writes per-turn and cumulative session token counts to out.
+func (a *Adapter) printUsage(r agent.Result) {
+	a.sessionIn += r.Usage.InputTokens
+	a.sessionOut += r.Usage.OutputTokens
+	fmt.Fprintf(a.out,
+		"[usage] turn: in=%d out=%d | session: in=%d out=%d\n",
+		r.Usage.InputTokens, r.Usage.OutputTokens,
+		a.sessionIn, a.sessionOut,
+	)
 }
 
 // RunStdin reads all of stdin as a single input and calls RunOnce.
