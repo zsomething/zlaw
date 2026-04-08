@@ -1,11 +1,11 @@
 package agent
 
 import (
-	"fmt"
 	"log/slog"
-	"os"
+	"path/filepath"
 	"sync"
 
+	"github.com/chickenzord/zlaw/internal/config"
 	"github.com/chickenzord/zlaw/internal/llm"
 )
 
@@ -92,12 +92,8 @@ func (h *History) Clear(sessionID string) {
 	delete(h.loaded, sessionID)
 }
 
-// SessionDir returns the conventional session directory for a named agent.
-// Path: ~/.zlaw/agents/<agentName>/sessions
+// SessionDir returns the session directory for a named agent.
+// Path: $ZLAW_HOME/sessions/<agentName>
 func SessionDir(agentName string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("history: resolve home: %w", err)
-	}
-	return fmt.Sprintf("%s/.zlaw/agents/%s/sessions", home, agentName), nil
+	return filepath.Join(config.ZlawHome(), "sessions", agentName), nil
 }

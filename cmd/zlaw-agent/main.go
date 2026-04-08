@@ -20,16 +20,20 @@ func main() {
 
 	// Global flags — parsed before the subcommand.
 	fs := flag.NewFlagSet("zlaw-agent", flag.ContinueOnError)
-	agentDir := fs.String("agent-dir", "", "path to agent directory (agent.toml, SOUL.md, IDENTITY.md)")
+	agentName := fs.String("agent", "", "agent name; resolves to $ZLAW_HOME/agents/<name>")
+	agentDir := fs.String("agent-dir", "", "explicit path to agent directory (overrides --agent)")
 	fs.Usage = func() { printUsage(fs) }
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(1)
 	}
 
-	// Fallback to env var.
+	// Env-var fallbacks.
 	if *agentDir == "" {
 		*agentDir = os.Getenv("ZLAW_AGENT_DIR")
+	}
+	if *agentName == "" {
+		*agentName = os.Getenv("ZLAW_AGENT")
 	}
 
 	args := fs.Args()
@@ -43,7 +47,7 @@ func main() {
 	case "auth":
 		err = runAuth(args[1:])
 	case "run":
-		err = runRun(ctx, args[1:], *agentDir, logger)
+		err = runRun(ctx, args[1:], *agentName, *agentDir, logger)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
 		printUsage(fs)
@@ -61,6 +65,12 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "global flags:")
 	fs.PrintDefaults()
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "environment variables:")
+	fmt.Fprintln(os.Stderr, "  ZLAW_HOME          root directory for agents, sessions, and credentials (default: $PWD)")
+	fmt.Fprintln(os.Stderr, "  ZLAW_AGENT         agent name (same as --agent)")
+	fmt.Fprintln(os.Stderr, "  ZLAW_AGENT_DIR     explicit agent directory (same as --agent-dir)")
+	fmt.Fprintln(os.Stderr, "  ZLAW_CREDENTIALS_FILE  override credentials file path")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "commands:")
 	fmt.Fprintln(os.Stderr, "  auth    manage authentication credentials")

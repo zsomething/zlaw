@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/chickenzord/zlaw/internal/config"
 )
 
 // TokenSource returns a bearer token for use in an Authorization header.
@@ -59,17 +60,13 @@ type CredentialStore struct {
 // ErrProfileNotFound is returned when a named profile does not exist in the store.
 var ErrProfileNotFound = errors.New("auth: credential profile not found")
 
-// DefaultCredentialsPath returns the path to credentials.toml, respecting
-// the ZLAW_CREDENTIALS_FILE override.
+// DefaultCredentialsPath returns the path to credentials.toml.
+// Priority: ZLAW_CREDENTIALS_FILE env var → $ZLAW_HOME/credentials.toml.
 func DefaultCredentialsPath() string {
 	if v := os.Getenv("ZLAW_CREDENTIALS_FILE"); v != "" {
 		return v
 	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		dir = os.Getenv("HOME")
-	}
-	return filepath.Join(dir, "zlaw", "credentials.toml")
+	return filepath.Join(config.ZlawHome(), "credentials.toml")
 }
 
 // LoadStore reads and parses credentials.toml from path.

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync/atomic"
 
 	"os"
@@ -30,7 +31,20 @@ func buildHistory(agentName string, logger *slog.Logger) (*agent.History, error)
 	return agent.NewHistoryWithStore(store), nil
 }
 
-func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Logger) error {
+// resolveAgentDir returns the effective agent directory.
+// agentDir (--agent-dir) takes precedence; agentName (--agent) falls back to
+// $ZLAW_HOME/agents/<name>; both empty is an error.
+func resolveAgentDir(agentName, agentDir string) (string, error) {
+	if agentDir != "" {
+		return agentDir, nil
+	}
+	if agentName != "" {
+		return filepath.Join(config.ZlawHome(), "agents", agentName), nil
+	}
+	return "", fmt.Errorf("--agent <name> or --agent-dir <path> is required (or set ZLAW_AGENT / ZLAW_AGENT_DIR)")
+}
+
+func runRun(ctx context.Context, args []string, agentName, agentDir string, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	sessionID := fs.String("session", "default", "session identifier")
 	verbose := fs.Bool("verbose", false, "show thinking and tool calls")
@@ -40,9 +54,11 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 		return err
 	}
 
-	if agentDir == "" {
-		return fmt.Errorf("--agent-dir is required (or set ZLAW_AGENT_DIR)")
+	resolvedDir, err := resolveAgentDir(agentName, agentDir)
+	if err != nil {
+		return err
 	}
+	agentDir = resolvedDir
 
 	// --- Load config ---
 	var promptPtr atomic.Pointer[string]
