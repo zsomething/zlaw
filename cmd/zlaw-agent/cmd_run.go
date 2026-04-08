@@ -17,6 +17,19 @@ import (
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
 )
 
+// buildHistory returns a durable History backed by a JSONLFileStore, falling
+// back to in-memory if the session directory cannot be created.
+func buildHistory(agentName string, logger *slog.Logger) (*agent.History, error) {
+	dir, err := agent.SessionDir(agentName)
+	if err != nil {
+		logger.Warn("cannot resolve session dir, using in-memory history", "error", err)
+		return agent.NewHistory(), nil
+	}
+	store := agent.NewJSONLFileStore(dir)
+	logger.Info("session history", "dir", dir)
+	return agent.NewHistoryWithStore(store), nil
+}
+
 func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	sessionID := fs.String("session", "default", "session identifier")
@@ -67,8 +80,14 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	registry.Register(builtin.Bash{})
 
 	// --- Build agent ---
-	history := agent.NewHistory()
+	history, err := buildHistory(cfg.Agent.Name, logger)
+	if err != nil {
+		return fmt.Errorf("create session history: %w", err)
+	}
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
+	if cfg.LLM.ContextTokenBudget > 0 {
+		ag.SetContextTokenBudget(cfg.LLM.ContextTokenBudget)
+	}
 
 	// --- Start config hot-reload ---
 	go func() {
