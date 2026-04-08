@@ -50,6 +50,15 @@ type LLMConfig struct {
 	// history sent to the LLM. Oldest conversation turns are pruned when the
 	// estimate exceeds this value. Zero disables pruning.
 	ContextTokenBudget int `toml:"context_token_budget"`
+
+	// ContextSummarizeThreshold is the fraction of ContextTokenBudget at which
+	// summarization is triggered before falling back to pruning (e.g. 0.8 = 80%).
+	// Zero disables summarization; summarization only applies when ContextTokenBudget > 0.
+	ContextSummarizeThreshold float64 `toml:"context_summarize_threshold"`
+
+	// ContextSummarizeTurns is how many of the oldest turns to collapse into a
+	// single summary message per summarization pass. Zero uses a default of 10.
+	ContextSummarizeTurns int `toml:"context_summarize_turns"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.
