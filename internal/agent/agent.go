@@ -29,16 +29,17 @@ type Result struct {
 	Text      string
 	Thinking  []string // one entry per LLM iteration that produced thinking
 	ToolCalls []ToolCall
+	Usage     llm.Usage // cumulative token usage across all LLM calls in this turn
 }
 
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
-	name               string
-	client             llm.Client
-	tools              ToolExecutor
-	history            *History
-	logger             *slog.Logger
-	contextTokenBudget int // 0 = no pruning
+	name      string
+	client    llm.Client
+	tools     ToolExecutor
+	history   *History
+	logger    *slog.Logger
+	optimizer *ContextOptimizer // nil = no context optimization
 }
 
 // New creates an Agent. All parameters are required.
@@ -52,11 +53,21 @@ func New(name string, client llm.Client, tools ToolExecutor, history *History, l
 	}
 }
 
-// SetContextTokenBudget configures the maximum estimated token count for the
-// message history sent to the LLM. Oldest turns are pruned when exceeded.
-// Zero (the default) disables pruning.
+// SetContextOptimizer attaches a ContextOptimizer that runs the
+// summarize→prune pipeline before each LLM call. Pass nil to disable.
+func (a *Agent) SetContextOptimizer(o *ContextOptimizer) {
+	a.optimizer = o
+}
+
+// SetContextTokenBudget is a convenience method that configures prune-only
+// context management (no summarization). Use SetContextOptimizer for the full
+// summarize→prune pipeline.
 func (a *Agent) SetContextTokenBudget(budget int) {
-	a.contextTokenBudget = budget
+	a.optimizer = NewContextOptimizer(
+		ContextOptimizerConfig{TokenBudget: budget},
+		nil,   // no summarizer
+		a.logger,
+	)
 }
 
 // Run executes one user turn for the given session.
@@ -78,9 +89,9 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 		log.Debug("llm call", "iteration", i+1)
 
 		allMsgs := a.history.Get(sessionID)
-		msgs := PruneMessages(allMsgs, a.contextTokenBudget)
-		if len(msgs) < len(allMsgs) {
-			log.Debug("context pruned", "full_messages", len(allMsgs), "pruned_messages", len(msgs))
+		msgs := allMsgs
+		if a.optimizer != nil {
+			msgs = a.optimizer.Optimize(ctx, allMsgs)
 		}
 
 		req := llm.Request{
@@ -93,6 +104,9 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 		if err != nil {
 			return Result{}, fmt.Errorf("agent: llm call: %w", err)
 		}
+
+		result.Usage.InputTokens += resp.Usage.InputTokens
+		result.Usage.OutputTokens += resp.Usage.OutputTokens
 
 		log.Debug("llm response", "stop_reason", resp.StopReason,
 			"input_tokens", resp.Usage.InputTokens,
