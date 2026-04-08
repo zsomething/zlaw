@@ -21,6 +21,10 @@ agents/*/
 !agents/example/
 !agents/example/**
 
+# ZLAW_HOME runtime data (credentials and session history)
+credentials.toml
+sessions/
+
 # Temporary session notes
 WORKLOG.md
 
