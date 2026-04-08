@@ -33,11 +33,12 @@ type Result struct {
 
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
-	name    string
-	client  llm.Client
-	tools   ToolExecutor
-	history *History
-	logger  *slog.Logger
+	name               string
+	client             llm.Client
+	tools              ToolExecutor
+	history            *History
+	logger             *slog.Logger
+	contextTokenBudget int // 0 = no pruning
 }
 
 // New creates an Agent. All parameters are required.
@@ -49,6 +50,13 @@ func New(name string, client llm.Client, tools ToolExecutor, history *History, l
 		history: history,
 		logger:  logger,
 	}
+}
+
+// SetContextTokenBudget configures the maximum estimated token count for the
+// message history sent to the LLM. Oldest turns are pruned when exceeded.
+// Zero (the default) disables pruning.
+func (a *Agent) SetContextTokenBudget(budget int) {
+	a.contextTokenBudget = budget
 }
 
 // Run executes one user turn for the given session.
@@ -69,9 +77,15 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 	for i := range maxIterations {
 		log.Debug("llm call", "iteration", i+1)
 
+		allMsgs := a.history.Get(sessionID)
+		msgs := PruneMessages(allMsgs, a.contextTokenBudget)
+		if len(msgs) < len(allMsgs) {
+			log.Debug("context pruned", "full_messages", len(allMsgs), "pruned_messages", len(msgs))
+		}
+
 		req := llm.Request{
 			SystemPrompt: systemPrompt,
-			Messages:     a.history.Get(sessionID),
+			Messages:     msgs,
 			Tools:        a.tools.Definitions(),
 		}
 

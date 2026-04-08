@@ -45,6 +45,11 @@ type LLMConfig struct {
 	AuthProfile string `toml:"auth_profile"` // profile name in credentials.toml
 	MaxTokens   int    `toml:"max_tokens"`
 	TimeoutSec  int    `toml:"timeout_sec"`
+
+	// ContextTokenBudget is the maximum estimated token count of the message
+	// history sent to the LLM. Oldest conversation turns are pruned when the
+	// estimate exceeds this value. Zero disables pruning.
+	ContextTokenBudget int `toml:"context_token_budget"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.
