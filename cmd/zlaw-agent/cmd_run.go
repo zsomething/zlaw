@@ -34,6 +34,7 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	sessionID := fs.String("session", "default", "session identifier")
 	verbose := fs.Bool("verbose", false, "show thinking and tool calls")
+	showUsage := fs.Bool("show-usage", false, "print token usage after each turn (per-turn and cumulative)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -86,7 +87,16 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 	}
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
 	if cfg.LLM.ContextTokenBudget > 0 {
-		ag.SetContextTokenBudget(cfg.LLM.ContextTokenBudget)
+		var summarizer agent.Summarizer
+		if cfg.LLM.ContextSummarizeThreshold > 0 {
+			summarizer = agent.NewLLMSummarizer(llmClient)
+		}
+		opt := agent.NewContextOptimizer(agent.ContextOptimizerConfig{
+			TokenBudget:        cfg.LLM.ContextTokenBudget,
+			SummarizeThreshold: cfg.LLM.ContextSummarizeThreshold,
+			SummarizeTurns:     cfg.LLM.ContextSummarizeTurns,
+		}, summarizer, logger)
+		ag.SetContextOptimizer(opt)
 	}
 
 	// --- Start config hot-reload ---
@@ -98,6 +108,7 @@ func runRun(ctx context.Context, args []string, agentDir string, logger *slog.Lo
 
 	// --- Build CLI adapter ---
 	adapter := cli.New(ag, func() string { return *promptPtr.Load() }, *verbose, nil, nil, logger)
+	adapter.SetShowUsage(*showUsage)
 
 	if cli.IsTerminal(os.Stdin) {
 		return adapter.RunInteractive(ctx, *sessionID)
