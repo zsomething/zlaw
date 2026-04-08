@@ -17,31 +17,31 @@ const (
 
 // ToolUse is a tool call requested by the model.
 type ToolUse struct {
-	ID    string
-	Name  string
-	Input []byte // raw JSON
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Input []byte `json:"input"` // raw JSON
 }
 
 // ToolResult is the response to a prior ToolUse.
 type ToolResult struct {
-	ToolUseID string
-	Content   string
-	IsError   bool
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	IsError   bool   `json:"is_error,omitempty"`
 }
 
 // ContentBlock is one item in a message — text, a tool call, a tool result, or
 // model thinking (extended reasoning). Exactly one field is non-zero.
 type ContentBlock struct {
-	Text       string
-	Thinking   string
-	ToolUse    *ToolUse
-	ToolResult *ToolResult
+	Text       string      `json:"text,omitempty"`
+	Thinking   string      `json:"thinking,omitempty"`
+	ToolUse    *ToolUse    `json:"tool_use,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
 }
 
 // Message is a single turn in the conversation.
 type Message struct {
-	Role    Role
-	Content []ContentBlock
+	Role    Role           `json:"role"`
+	Content []ContentBlock `json:"content"`
 }
 
 // TextContent returns all text blocks concatenated.
