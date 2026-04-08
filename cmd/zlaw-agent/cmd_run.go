@@ -20,7 +20,7 @@ import (
 
 // buildHistory returns a durable History backed by a JSONLFileStore, falling
 // back to in-memory if the session directory cannot be created.
-func buildHistory(agentName string, logger *slog.Logger) (*agent.History, error) {
+func buildHistory(agentName, channel string, logger *slog.Logger) (*agent.History, error) {
 	dir, err := agent.SessionDir(agentName)
 	if err != nil {
 		logger.Warn("cannot resolve session dir, using in-memory history", "error", err)
@@ -28,7 +28,7 @@ func buildHistory(agentName string, logger *slog.Logger) (*agent.History, error)
 	}
 	store := agent.NewJSONLFileStore(dir)
 	logger.Info("session history", "dir", dir)
-	return agent.NewHistoryWithStore(store), nil
+	return agent.NewHistoryWithStore(store, channel), nil
 }
 
 // resolveAgentDir returns the effective agent directory.
@@ -97,7 +97,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.Bash{})
 
 	// --- Build agent ---
-	history, err := buildHistory(cfg.Agent.Name, logger)
+	history, err := buildHistory(cfg.Agent.Name, "cli", logger)
 	if err != nil {
 		return fmt.Errorf("create session history: %w", err)
 	}

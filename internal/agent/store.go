@@ -6,17 +6,38 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/chickenzord/zlaw/internal/llm"
 )
 
-// SessionStore persists per-session message history.
+// SessionMeta holds lightweight metadata about a session stored alongside the
+// JSONL message log as <sessionID>.meta.json.
+type SessionMeta struct {
+	SessionID   string    `json:"session_id"`
+	AgentName   string    `json:"agent_name"`
+	Channel     string    `json:"channel"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	MessageCount int      `json:"message_count"`
+	Title       string    `json:"title"`
+	TotalInputTokens  int `json:"total_input_tokens"`
+	TotalOutputTokens int `json:"total_output_tokens"`
+}
+
+// SessionStore persists per-session message history and metadata.
 type SessionStore interface {
 	// Append writes one message to the session's persistent log.
 	Append(sessionID string, msg llm.Message) error
 	// Load returns all messages previously appended for the session.
 	// Returns nil, nil when the session has no history.
 	Load(sessionID string) ([]llm.Message, error)
+	// LoadMeta returns the metadata for the session.
+	// Returns a zero-value SessionMeta (no error) when no metadata exists yet.
+	LoadMeta(sessionID string) (SessionMeta, error)
+	// UpdateMeta loads the current metadata (or zero value), calls fn to mutate
+	// it, then persists the result. fn must not be nil.
+	UpdateMeta(sessionID string, fn func(*SessionMeta)) error
 }
 
 // JSONLFileStore stores each session as a JSONL file under baseDir.
@@ -34,6 +55,10 @@ func NewJSONLFileStore(baseDir string) *JSONLFileStore {
 
 func (s *JSONLFileStore) filePath(sessionID string) string {
 	return filepath.Join(s.baseDir, sessionID+".jsonl")
+}
+
+func (s *JSONLFileStore) metaFilePath(sessionID string) string {
+	return filepath.Join(s.baseDir, sessionID+".meta.json")
 }
 
 // Append encodes msg as JSON and appends it as a new line to the session file.
@@ -92,4 +117,42 @@ func (s *JSONLFileStore) Load(sessionID string) ([]llm.Message, error) {
 		return nil, fmt.Errorf("session store: scan %s: %w", sessionID, err)
 	}
 	return msgs, nil
+}
+
+// LoadMeta reads the metadata file for the session.
+// Returns a zero-value SessionMeta when the file does not exist.
+func (s *JSONLFileStore) LoadMeta(sessionID string) (SessionMeta, error) {
+	data, err := os.ReadFile(s.metaFilePath(sessionID))
+	if os.IsNotExist(err) {
+		return SessionMeta{}, nil
+	}
+	if err != nil {
+		return SessionMeta{}, fmt.Errorf("session meta: read %s: %w", sessionID, err)
+	}
+	var m SessionMeta
+	if err := json.Unmarshal(data, &m); err != nil {
+		return SessionMeta{}, fmt.Errorf("session meta: decode %s: %w", sessionID, err)
+	}
+	return m, nil
+}
+
+// UpdateMeta loads metadata, applies fn, and writes the result back.
+func (s *JSONLFileStore) UpdateMeta(sessionID string, fn func(*SessionMeta)) error {
+	m, err := s.LoadMeta(sessionID)
+	if err != nil {
+		return err
+	}
+	fn(&m)
+	if err := os.MkdirAll(s.baseDir, 0o700); err != nil {
+		return fmt.Errorf("session meta: mkdir %s: %w", s.baseDir, err)
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("session meta: encode %s: %w", sessionID, err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(s.metaFilePath(sessionID), data, 0o600); err != nil {
+		return fmt.Errorf("session meta: write %s: %w", sessionID, err)
+	}
+	return nil
 }

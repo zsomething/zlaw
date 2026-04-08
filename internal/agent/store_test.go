@@ -95,15 +95,101 @@ func TestJSONLFileStore_ToolUseRoundtrip(t *testing.T) {
 	}
 }
 
+func TestJSONLFileStore_UpdateMetaRoundtrip(t *testing.T) {
+	store := agent.NewJSONLFileStore(t.TempDir())
+
+	// UpdateMeta on a new session starts from zero value.
+	if err := store.UpdateMeta("s1", func(m *agent.SessionMeta) {
+		m.SessionID = "s1"
+		m.Channel = "cli"
+		m.MessageCount = 3
+	}); err != nil {
+		t.Fatalf("UpdateMeta: %v", err)
+	}
+
+	meta, err := store.LoadMeta("s1")
+	if err != nil {
+		t.Fatalf("LoadMeta: %v", err)
+	}
+	if meta.SessionID != "s1" {
+		t.Errorf("session_id = %q, want %q", meta.SessionID, "s1")
+	}
+	if meta.Channel != "cli" {
+		t.Errorf("channel = %q, want %q", meta.Channel, "cli")
+	}
+	if meta.MessageCount != 3 {
+		t.Errorf("message_count = %d, want 3", meta.MessageCount)
+	}
+}
+
+func TestJSONLFileStore_MetaLoadMissing(t *testing.T) {
+	store := agent.NewJSONLFileStore(t.TempDir())
+	meta, err := store.LoadMeta("nonexistent")
+	if err != nil {
+		t.Fatalf("expected nil error for missing meta, got: %v", err)
+	}
+	if !meta.CreatedAt.IsZero() {
+		t.Error("expected zero CreatedAt for missing session")
+	}
+}
+
+func TestHistory_MetaTracking(t *testing.T) {
+	store := agent.NewJSONLFileStore(t.TempDir())
+	h := agent.NewHistoryWithStore(store, "test-channel")
+
+	h.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "What is 2+2?"}}})
+	h.Append("s1", llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Text: "4"}}})
+
+	meta, err := store.LoadMeta("s1")
+	if err != nil {
+		t.Fatalf("LoadMeta: %v", err)
+	}
+	if meta.Channel != "test-channel" {
+		t.Errorf("channel = %q, want %q", meta.Channel, "test-channel")
+	}
+	if meta.MessageCount != 2 {
+		t.Errorf("message_count = %d, want 2", meta.MessageCount)
+	}
+	if meta.Title != "What is 2+2?" {
+		t.Errorf("title = %q, want %q", meta.Title, "What is 2+2?")
+	}
+	if meta.CreatedAt.IsZero() {
+		t.Error("created_at should be set")
+	}
+	if meta.UpdatedAt.IsZero() {
+		t.Error("updated_at should be set")
+	}
+}
+
+func TestHistory_RecordUsage(t *testing.T) {
+	store := agent.NewJSONLFileStore(t.TempDir())
+	h := agent.NewHistoryWithStore(store, "cli")
+
+	h.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}})
+	h.RecordUsage("s1", llm.Usage{InputTokens: 100, OutputTokens: 50})
+	h.RecordUsage("s1", llm.Usage{InputTokens: 200, OutputTokens: 75})
+
+	meta, err := store.LoadMeta("s1")
+	if err != nil {
+		t.Fatalf("LoadMeta: %v", err)
+	}
+	if meta.TotalInputTokens != 300 {
+		t.Errorf("total_input_tokens = %d, want 300", meta.TotalInputTokens)
+	}
+	if meta.TotalOutputTokens != 125 {
+		t.Errorf("total_output_tokens = %d, want 125", meta.TotalOutputTokens)
+	}
+}
+
 func TestHistory_WithStore_Persist(t *testing.T) {
 	store := agent.NewJSONLFileStore(t.TempDir())
 
-	h1 := agent.NewHistoryWithStore(store)
+	h1 := agent.NewHistoryWithStore(store, "")
 	h1.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hello"}}})
 	h1.Append("s1", llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Text: "world"}}})
 
 	// New History with same store should reload from disk.
-	h2 := agent.NewHistoryWithStore(store)
+	h2 := agent.NewHistoryWithStore(store, "")
 	msgs := h2.Get("s1")
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 persisted messages, got %d", len(msgs))

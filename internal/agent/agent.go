@@ -121,6 +121,7 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 		switch resp.StopReason {
 		case "end_turn":
 			result.Text = resp.Message.TextContent()
+			a.history.RecordUsage(sessionID, result.Usage)
 			return result, nil
 
 		case "tool_use":
