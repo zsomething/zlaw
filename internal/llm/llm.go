@@ -80,12 +80,29 @@ type ToolDefinition struct {
 	InputSchema []byte // JSON Schema object
 }
 
+// SystemSection is one piece of the system prompt. When CacheCheckpoint is
+// true, the backend places a prompt-cache breakpoint after this section
+// (Anthropic: cache_control {"type":"ephemeral"}).
+type SystemSection struct {
+	Content         string
+	CacheCheckpoint bool
+}
+
 // Request is the input to a single LLM call.
 type Request struct {
+	// SystemPrompt is a single-string system prompt. Used when SystemSections
+	// is nil. Backends with prompt-caching treat it as one cacheable block.
 	SystemPrompt string
-	Messages     []Message
-	Tools        []ToolDefinition
-	MaxTokens    int
+
+	// SystemSections, when non-nil, replaces SystemPrompt. Each section maps to
+	// a separate block in the Anthropic system array; sections with
+	// CacheCheckpoint=true get cache_control markers when the backend has
+	// prompt caching enabled.
+	SystemSections []SystemSection
+
+	Messages  []Message
+	Tools     []ToolDefinition
+	MaxTokens int
 }
 
 // Response is the output of a single LLM call.

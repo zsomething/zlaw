@@ -62,8 +62,13 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 
 	// --- Load config ---
 	var promptPtr atomic.Pointer[string]
+	// stickyBlocks are fixed at startup (content lives in Go source).
+	// The hot-reload callback only needs to rebuild the personality portion.
+	var stickyBlocks []agent.StickyBlock
+	// (blocks will be populated after cfg is loaded below)
+
 	onChange := func(_ config.AgentConfig, p config.Personality) {
-		s := agent.BuildSystemPrompt(p)
+		s := agent.BuildSystemPrompt(nil, p)
 		promptPtr.Store(&s)
 		logger.Info("system prompt reloaded")
 	}
@@ -76,8 +81,14 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Seed the atomic with the initial prompt.
-	initial := agent.BuildSystemPrompt(personality)
+	// Collect enabled sticky blocks from config.
+	// Each flag enables one named block whose content lives in Go source.
+	// (No built-in blocks are defined yet; first consumer is card #229.)
+	_ = cfg.Sticky // placeholder: blocks will be appended per flag in #229
+
+	// Seed the atomic with the personality-only prompt.
+	// The agent combines it with stickyBlocks at call time.
+	initial := agent.BuildSystemPrompt(nil, personality)
 	promptPtr.Store(&initial)
 
 	// --- Build LLM client ---
@@ -110,6 +121,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 		return fmt.Errorf("create session history: %w", err)
 	}
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
+	ag.SetStickyBlocks(stickyBlocks)
 	if cfg.LLM.ContextTokenBudget > 0 {
 		var summarizer agent.Summarizer
 		if cfg.LLM.ContextSummarizeThreshold > 0 {

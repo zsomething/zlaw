@@ -89,7 +89,8 @@ func (c *anthropicClient) CompleteStream(ctx context.Context, req Request, handl
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-api-key", apiKey)
 	httpReq.Header.Set("anthropic-version", anthropicVersion)
-	if c.cfg.PromptCaching && req.SystemPrompt != "" {
+	hasSystemContent := req.SystemPrompt != "" || len(req.SystemSections) > 0
+	if c.cfg.PromptCaching && hasSystemContent {
 		httpReq.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 	}
 	if handler != nil {
@@ -179,7 +180,28 @@ func toAnthropicRequest(req Request, model string, maxTokens int, stream bool, p
 	}
 
 	var systemJSON json.RawMessage
-	if req.SystemPrompt != "" {
+	if len(req.SystemSections) > 0 {
+		// Structured sections path: each section becomes one block; sections
+		// with CacheCheckpoint=true get cache_control when caching is enabled.
+		var blocks []anthropicSystemBlock
+		for _, sec := range req.SystemSections {
+			if sec.Content == "" {
+				continue
+			}
+			blk := anthropicSystemBlock{Type: "text", Text: sec.Content}
+			if promptCaching && sec.CacheCheckpoint {
+				blk.CacheControl = json.RawMessage(`{"type":"ephemeral"}`)
+			}
+			blocks = append(blocks, blk)
+		}
+		if len(blocks) > 0 {
+			systemJSON, err = json.Marshal(blocks)
+			if err != nil {
+				return anthropicRequest{}, fmt.Errorf("anthropic: marshal system sections: %w", err)
+			}
+		}
+	} else if req.SystemPrompt != "" {
+		// Legacy single-string path.
 		if promptCaching {
 			blocks := []anthropicSystemBlock{{
 				Type:         "text",

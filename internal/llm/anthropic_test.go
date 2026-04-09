@@ -340,6 +340,91 @@ func TestAnthropic_PromptCaching_DisabledSystemAsString(t *testing.T) {
 	}
 }
 
+func TestAnthropic_SystemSections_TwoCheckpoints(t *testing.T) {
+	var capturedBody map[string]interface{}
+	var capturedBetaHeader string
+	client := newAnthropicTestClientWithCaching(t, true, func(w http.ResponseWriter, r *http.Request) {
+		capturedBetaHeader = r.Header.Get("anthropic-beta")
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anthropicTextResponse("ok"))
+	})
+
+	_, err := client.Complete(context.Background(), llm.Request{
+		SystemSections: []llm.SystemSection{
+			{Content: "sticky rules", CacheCheckpoint: true},
+			{Content: "personality", CacheCheckpoint: true},
+		},
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if capturedBetaHeader != "prompt-caching-2024-07-31" {
+		t.Errorf("anthropic-beta = %q, want prompt-caching-2024-07-31", capturedBetaHeader)
+	}
+
+	sysRaw, ok := capturedBody["system"].([]interface{})
+	if !ok {
+		t.Fatalf("system must be an array, got: %T %v", capturedBody["system"], capturedBody["system"])
+	}
+	if len(sysRaw) != 2 {
+		t.Fatalf("system array length = %d, want 2", len(sysRaw))
+	}
+
+	// Both blocks should have cache_control.
+	for i, raw := range sysRaw {
+		blk := raw.(map[string]interface{})
+		cc, ok := blk["cache_control"].(map[string]interface{})
+		if !ok {
+			t.Errorf("block %d missing cache_control", i)
+			continue
+		}
+		if cc["type"] != "ephemeral" {
+			t.Errorf("block %d cache_control.type = %v, want ephemeral", i, cc["type"])
+		}
+	}
+	if sysRaw[0].(map[string]interface{})["text"] != "sticky rules" {
+		t.Errorf("block 0 text = %v, want 'sticky rules'", sysRaw[0].(map[string]interface{})["text"])
+	}
+	if sysRaw[1].(map[string]interface{})["text"] != "personality" {
+		t.Errorf("block 1 text = %v, want 'personality'", sysRaw[1].(map[string]interface{})["text"])
+	}
+}
+
+func TestAnthropic_SystemSections_NoCachingWhenDisabled(t *testing.T) {
+	var capturedBody map[string]interface{}
+	client := newAnthropicTestClientWithCaching(t, false, func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anthropicTextResponse("ok"))
+	})
+
+	_, err := client.Complete(context.Background(), llm.Request{
+		SystemSections: []llm.SystemSection{
+			{Content: "sticky rules", CacheCheckpoint: true},
+			{Content: "personality", CacheCheckpoint: true},
+		},
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sysRaw, ok := capturedBody["system"].([]interface{})
+	if !ok {
+		t.Fatalf("system must be an array, got: %T %v", capturedBody["system"], capturedBody["system"])
+	}
+	// Blocks should NOT have cache_control when caching is disabled.
+	for i, raw := range sysRaw {
+		blk := raw.(map[string]interface{})
+		if _, hasCacheControl := blk["cache_control"]; hasCacheControl {
+			t.Errorf("block %d should not have cache_control when caching disabled", i)
+		}
+	}
+}
+
 func TestAnthropic_PromptCaching_NoHeaderWhenNoSystem(t *testing.T) {
 	var capturedBetaHeader string
 	client := newAnthropicTestClientWithCaching(t, true, func(w http.ResponseWriter, r *http.Request) {

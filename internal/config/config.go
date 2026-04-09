@@ -19,6 +19,16 @@ type AgentConfig struct {
 	Context ContextConfig `toml:"context"`
 	Tools   ToolsConfig   `toml:"tools"`
 	Adapter AdapterConfig `toml:"adapter"`
+	Sticky  StickyConfig  `toml:"sticky"`
+}
+
+// StickyConfig controls which built-in sticky context blocks are injected at
+// the head of every system prompt. Sticky content is defined in Go source;
+// these flags enable individual blocks.
+type StickyConfig struct {
+	// ProactiveMemorySave injects instructions for proactive long-term memory
+	// saving. Implemented by card #229.
+	ProactiveMemorySave bool `toml:"proactive_memory_save"`
 }
 
 // ContextConfig controls what contextual information is injected into the

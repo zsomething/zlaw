@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/chickenzord/zlaw/internal/agent"
+	"github.com/chickenzord/zlaw/internal/config"
 )
 
 func TestBuildPrefill_Empty(t *testing.T) {
@@ -71,5 +72,70 @@ func TestBuildPrefill_MultipleSourcesHeader(t *testing.T) {
 	}
 	if !strings.HasPrefix(out, "[Session context]") {
 		t.Fatalf("expected [Session context] header, got: %q", out)
+	}
+}
+
+func TestBuildSystemPrompt_WithStickyBlocks(t *testing.T) {
+	sticky := []agent.StickyBlock{
+		{Name: "rules", Content: "always be concise"},
+	}
+	p := config.Personality{Soul: "you are helpful", Identity: ""}
+	got := agent.BuildSystemPrompt(sticky, p)
+	if !strings.HasPrefix(got, "always be concise") {
+		t.Errorf("sticky block should be first, got: %q", got)
+	}
+	if !strings.Contains(got, "you are helpful") {
+		t.Errorf("personality should be included, got: %q", got)
+	}
+}
+
+func TestBuildSystemPrompt_NoSticky(t *testing.T) {
+	p := config.Personality{Soul: "you are helpful", Identity: ""}
+	got := agent.BuildSystemPrompt(nil, p)
+	if got != "you are helpful" {
+		t.Errorf("no sticky: want %q, got %q", "you are helpful", got)
+	}
+}
+
+func TestBuildSystemSections_TwoSections(t *testing.T) {
+	sticky := []agent.StickyBlock{
+		{Name: "rules", Content: "always be concise"},
+	}
+	p := config.Personality{Soul: "you are helpful", Identity: "assistant context"}
+	sections := agent.BuildSystemSections(sticky, p)
+	if len(sections) != 2 {
+		t.Fatalf("want 2 sections, got %d", len(sections))
+	}
+	// Section 1: sticky, with cache checkpoint
+	if sections[0].Content != "always be concise" {
+		t.Errorf("section 1 content = %q, want sticky text", sections[0].Content)
+	}
+	if !sections[0].CacheCheckpoint {
+		t.Error("section 1 should have CacheCheckpoint=true")
+	}
+	// Section 2: personality, with cache checkpoint
+	if !strings.Contains(sections[1].Content, "you are helpful") {
+		t.Errorf("section 2 should contain soul, got: %q", sections[1].Content)
+	}
+	if !sections[1].CacheCheckpoint {
+		t.Error("section 2 should have CacheCheckpoint=true")
+	}
+}
+
+func TestBuildSystemSections_NoSticky(t *testing.T) {
+	p := config.Personality{Soul: "helpful", Identity: ""}
+	sections := agent.BuildSystemSections(nil, p)
+	if len(sections) != 1 {
+		t.Fatalf("want 1 section, got %d", len(sections))
+	}
+	if sections[0].Content != "helpful" {
+		t.Errorf("section content = %q, want %q", sections[0].Content, "helpful")
+	}
+}
+
+func TestBuildSystemSections_Empty(t *testing.T) {
+	sections := agent.BuildSystemSections(nil, config.Personality{})
+	if len(sections) != 0 {
+		t.Fatalf("want 0 sections, got %d", len(sections))
 	}
 }

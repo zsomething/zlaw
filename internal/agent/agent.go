@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/chickenzord/zlaw/internal/llm"
 )
@@ -34,12 +35,13 @@ type Result struct {
 
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
-	name      string
-	client    llm.Client
-	tools     ToolExecutor
-	history   *History
-	logger    *slog.Logger
-	optimizer *ContextOptimizer // nil = no context optimization
+	name         string
+	client       llm.Client
+	tools        ToolExecutor
+	history      *History
+	logger       *slog.Logger
+	optimizer    *ContextOptimizer // nil = no context optimization
+	stickyBlocks []StickyBlock
 }
 
 // New creates an Agent. All parameters are required.
@@ -57,6 +59,13 @@ func New(name string, client llm.Client, tools ToolExecutor, history *History, l
 // summarize→prune pipeline before each LLM call. Pass nil to disable.
 func (a *Agent) SetContextOptimizer(o *ContextOptimizer) {
 	a.optimizer = o
+}
+
+// SetStickyBlocks configures framework-level instruction blocks prepended to
+// every system prompt as the stable head (cache checkpoint 1). Blocks are
+// ordered; sticky content lives in Go source, not agent config files.
+func (a *Agent) SetStickyBlocks(blocks []StickyBlock) {
+	a.stickyBlocks = blocks
 }
 
 // SetContextTokenBudget is a convenience method that configures prune-only
@@ -109,9 +118,13 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 		}
 
 		req := llm.Request{
-			SystemPrompt: systemPrompt,
-			Messages:     msgs,
-			Tools:        a.tools.Definitions(),
+			Messages: msgs,
+			Tools:    a.tools.Definitions(),
+		}
+		if len(a.stickyBlocks) > 0 {
+			req.SystemSections = agentSystemSections(a.stickyBlocks, systemPrompt)
+		} else {
+			req.SystemPrompt = systemPrompt
 		}
 
 		var (
@@ -183,4 +196,36 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 	}
 
 	return Result{}, fmt.Errorf("agent: exceeded max iterations (%d)", maxIterations)
+}
+
+// agentSystemSections builds the system prompt as two sections for the LLM
+// request: sticky blocks (cache checkpoint 1) followed by the personality
+// string (cache checkpoint 2). Empty sections are omitted.
+func agentSystemSections(sticky []StickyBlock, systemPrompt string) []llm.SystemSection {
+	var sections []llm.SystemSection
+
+	var sb strings.Builder
+	for _, s := range sticky {
+		if c := strings.TrimSpace(s.Content); c != "" {
+			if sb.Len() > 0 {
+				sb.WriteString("\n\n")
+			}
+			sb.WriteString(c)
+		}
+	}
+	if sb.Len() > 0 {
+		sections = append(sections, llm.SystemSection{
+			Content:         sb.String(),
+			CacheCheckpoint: true,
+		})
+	}
+
+	if systemPrompt != "" {
+		sections = append(sections, llm.SystemSection{
+			Content:         systemPrompt,
+			CacheCheckpoint: true,
+		})
+	}
+
+	return sections
 }
