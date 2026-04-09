@@ -4,11 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/chickenzord/zlaw/internal/llm"
 	"github.com/chickenzord/zlaw/internal/tools"
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
 )
+
+// slowTool sleeps for the given duration then returns its name as the result.
+type slowTool struct {
+	name  string
+	delay time.Duration
+}
+
+func (s slowTool) Definition() llm.ToolDefinition {
+	return llm.ToolDefinition{Name: s.name, InputSchema: json.RawMessage(`{}`)}
+}
+
+func (s slowTool) Execute(_ context.Context, _ json.RawMessage) (string, error) {
+	time.Sleep(s.delay)
+	return s.name, nil
+}
 
 func TestRegistry_Execute_knownTool(t *testing.T) {
 	r := tools.NewRegistry()
@@ -70,6 +86,50 @@ func TestRegistry_ExecuteAll(t *testing.T) {
 	}
 	if !results[1].IsError {
 		t.Errorf("result[1] should be an error")
+	}
+}
+
+func TestRegistry_ExecuteAll_preservesOrder(t *testing.T) {
+	r := tools.NewRegistry()
+	// "slow" finishes last but must appear first in results.
+	r.Register(slowTool{name: "slow", delay: 50 * time.Millisecond})
+	r.Register(slowTool{name: "fast", delay: 0})
+
+	calls := []llm.ToolUse{
+		{ID: "1", Name: "slow", Input: []byte("{}")},
+		{ID: "2", Name: "fast", Input: []byte("{}")},
+	}
+	results := r.ExecuteAll(context.Background(), calls)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].Content != "slow" {
+		t.Errorf("results[0] should be 'slow', got %q", results[0].Content)
+	}
+	if results[1].Content != "fast" {
+		t.Errorf("results[1] should be 'fast', got %q", results[1].Content)
+	}
+}
+
+func TestRegistry_ExecuteAll_runsInParallel(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(slowTool{name: "slow_a", delay: 50 * time.Millisecond})
+	r.Register(slowTool{name: "slow_b", delay: 50 * time.Millisecond})
+
+	calls := []llm.ToolUse{
+		{ID: "1", Name: "slow_a", Input: []byte("{}")},
+		{ID: "2", Name: "slow_b", Input: []byte("{}")},
+	}
+
+	start := time.Now()
+	r.ExecuteAll(context.Background(), calls)
+	elapsed := time.Since(start)
+
+	// Sequential would take ~100ms; parallel should complete in ~50ms.
+	// Allow generous headroom for slow CI.
+	if elapsed > 90*time.Millisecond {
+		t.Errorf("ExecuteAll took %v; expected concurrent execution (~50ms)", elapsed)
 	}
 }
 

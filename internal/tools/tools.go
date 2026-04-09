@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/chickenzord/zlaw/internal/llm"
 )
@@ -105,13 +106,18 @@ func (r *Registry) Execute(ctx context.Context, call llm.ToolUse) llm.ToolResult
 	}
 }
 
-// ExecuteAll dispatches all tool calls in parallel and returns results in the
-// same order.
+// ExecuteAll dispatches all tool calls concurrently and returns results in the
+// same order as calls.
 func (r *Registry) ExecuteAll(ctx context.Context, calls []llm.ToolUse) []llm.ToolResult {
 	results := make([]llm.ToolResult, len(calls))
-	// Execute sequentially for now; parallel execution can be added later.
+	var wg sync.WaitGroup
 	for i, call := range calls {
-		results[i] = r.Execute(ctx, call)
+		wg.Add(1)
+		go func(i int, call llm.ToolUse) {
+			defer wg.Done()
+			results[i] = r.Execute(ctx, call)
+		}(i, call)
 	}
+	wg.Wait()
 	return results
 }
