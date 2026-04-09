@@ -58,6 +58,75 @@ func BuildPrefill(agentDir string, sources []string) (string, error) {
 	return b.String(), nil
 }
 
+// BuildMemoriesSection returns a formatted [Memories] block for injection into
+// the system prompt. Memories are listed in reverse-update order (most recent
+// first). Each entry is formatted as:
+//
+//	- <content> #tag1 #tag2
+//
+// When maxTokens > 0 entries are truncated so the block fits within the budget
+// (1 token ≈ 4 chars). Returns an empty string when store is nil or has no
+// memories.
+func BuildMemoriesSection(store MemoryStore, maxTokens int) (string, error) {
+	if store == nil {
+		return "", nil
+	}
+	memories, err := store.List()
+	if err != nil {
+		return "", fmt.Errorf("memories section: %w", err)
+	}
+	if len(memories) == 0 {
+		return "", nil
+	}
+
+	// Sort: most recently updated first.
+	for i := 0; i < len(memories)-1; i++ {
+		for j := i + 1; j < len(memories); j++ {
+			if memories[j].UpdatedAt.After(memories[i].UpdatedAt) {
+				memories[i], memories[j] = memories[j], memories[i]
+			}
+		}
+	}
+
+	const header = "[Memories]\n"
+	const charsPerToken = 4
+	budgetChars := 0
+	if maxTokens > 0 {
+		budgetChars = maxTokens * charsPerToken
+	}
+
+	var b strings.Builder
+	b.WriteString(header)
+	used := len(header)
+
+	for _, m := range memories {
+		line := formatMemoryLine(m)
+		if budgetChars > 0 && used+len(line) > budgetChars {
+			break
+		}
+		b.WriteString(line)
+		used += len(line)
+	}
+
+	if b.Len() == len(header) {
+		return "", nil // no entries fit
+	}
+	return b.String(), nil
+}
+
+func formatMemoryLine(m Memory) string {
+	var sb strings.Builder
+	sb.WriteString("- ")
+	// Collapse multi-line content to a single line.
+	sb.WriteString(strings.ReplaceAll(strings.TrimSpace(m.Content), "\n", " "))
+	for _, tag := range m.Tags {
+		sb.WriteString(" #")
+		sb.WriteString(tag)
+	}
+	sb.WriteByte('\n')
+	return sb.String()
+}
+
 // BuildSystemPrompt assembles the full system prompt from sticky blocks and
 // personality files. Sticky blocks are prepended before SOUL.md and
 // IDENTITY.md. Pass nil sticky for the personality-only string.

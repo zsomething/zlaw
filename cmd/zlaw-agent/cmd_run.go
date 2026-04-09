@@ -121,7 +121,8 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.WebFetch{})
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
-	if memStore := buildMemoryStore(cfg.Agent.Name, logger); memStore != nil {
+	memStore := buildMemoryStore(cfg.Agent.Name, logger)
+	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
 		registry.Register(builtin.MemoryRecall{Store: memStore})
 		registry.Register(builtin.MemoryDelete{Store: memStore})
@@ -139,6 +140,9 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	}
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
 	ag.SetStickyBlocks(stickyBlocks)
+	if memStore != nil {
+		ag.SetMemoryStore(memStore, cfg.LLM.MaxMemoryTokens)
+	}
 	if cfg.LLM.ContextTokenBudget > 0 {
 		var summarizer agent.Summarizer
 		if cfg.LLM.ContextSummarizeThreshold > 0 {

@@ -139,3 +139,73 @@ func TestBuildSystemSections_Empty(t *testing.T) {
 		t.Fatalf("want 0 sections, got %d", len(sections))
 	}
 }
+
+// stubStore is a minimal MemoryStore backed by a slice, for testing.
+type stubStore struct{ memories []agent.Memory }
+
+func (s *stubStore) Save(m agent.Memory) error    { s.memories = append(s.memories, m); return nil }
+func (s *stubStore) Delete(_ string) error        { return nil }
+func (s *stubStore) List() ([]agent.Memory, error) { return s.memories, nil }
+func (s *stubStore) Search(_ []string) ([]agent.Memory, error) { return s.memories, nil }
+
+func TestBuildMemoriesSection_Format(t *testing.T) {
+	store := &stubStore{memories: []agent.Memory{
+		{ID: "a", Content: "user prefers Go", Tags: []string{"prefs"}},
+		{ID: "b", Content: "project is Phase 1", Tags: []string{"project"}},
+	}}
+	out, err := agent.BuildMemoriesSection(store, 0)
+	if err != nil {
+		t.Fatalf("BuildMemoriesSection: %v", err)
+	}
+	if !strings.HasPrefix(out, "[Memories]\n") {
+		t.Errorf("expected [Memories] header, got: %q", out)
+	}
+	if !strings.Contains(out, "user prefers Go #prefs") {
+		t.Errorf("expected formatted memory line, got: %q", out)
+	}
+}
+
+func TestBuildMemoriesSection_NilStore(t *testing.T) {
+	out, err := agent.BuildMemoriesSection(nil, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "" {
+		t.Errorf("nil store should return empty string, got: %q", out)
+	}
+}
+
+func TestBuildMemoriesSection_EmptyStore(t *testing.T) {
+	store := &stubStore{}
+	out, err := agent.BuildMemoriesSection(store, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "" {
+		t.Errorf("empty store should return empty string, got: %q", out)
+	}
+}
+
+func TestBuildMemoriesSection_TokenBudget(t *testing.T) {
+	// Create a store with a very long memory.
+	longContent := strings.Repeat("x", 1000)
+	store := &stubStore{memories: []agent.Memory{
+		{ID: "long", Content: longContent},
+		{ID: "short", Content: "short"},
+	}}
+	// Budget of 5 tokens = 20 chars — fits the short one but not the long one.
+	out, err := agent.BuildMemoriesSection(store, 5)
+	if err != nil {
+		t.Fatalf("BuildMemoriesSection: %v", err)
+	}
+	if strings.Contains(out, longContent[:10]) {
+		t.Errorf("long memory should be truncated, got: %q", out[:min(len(out), 80)])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

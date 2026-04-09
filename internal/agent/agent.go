@@ -35,13 +35,15 @@ type Result struct {
 
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
-	name         string
-	client       llm.Client
-	tools        ToolExecutor
-	history      *History
-	logger       *slog.Logger
-	optimizer    *ContextOptimizer // nil = no context optimization
-	stickyBlocks []StickyBlock
+	name            string
+	client          llm.Client
+	tools           ToolExecutor
+	history         *History
+	logger          *slog.Logger
+	optimizer       *ContextOptimizer // nil = no context optimization
+	stickyBlocks    []StickyBlock
+	memoryStore     MemoryStore // nil = memories disabled
+	maxMemoryTokens int
 }
 
 // New creates an Agent. All parameters are required.
@@ -66,6 +68,14 @@ func (a *Agent) SetContextOptimizer(o *ContextOptimizer) {
 // ordered; sticky content lives in Go source, not agent config files.
 func (a *Agent) SetStickyBlocks(blocks []StickyBlock) {
 	a.stickyBlocks = blocks
+}
+
+// SetMemoryStore attaches a MemoryStore whose contents are injected as a
+// [Memories] block at the end of each LLM request's system prompt (uncached,
+// intentionally volatile). maxTokens caps the block size; 0 means unlimited.
+func (a *Agent) SetMemoryStore(store MemoryStore, maxTokens int) {
+	a.memoryStore = store
+	a.maxMemoryTokens = maxTokens
 }
 
 // SetContextTokenBudget is a convenience method that configures prune-only
@@ -125,6 +135,22 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 			req.SystemSections = agentSystemSections(a.stickyBlocks, systemPrompt)
 		} else {
 			req.SystemPrompt = systemPrompt
+		}
+		// Append memories as an uncached section after all other system content.
+		if a.memoryStore != nil {
+			memBlock, err := BuildMemoriesSection(a.memoryStore, a.maxMemoryTokens)
+			if err != nil {
+				log.Warn("failed to build memories section", "error", err)
+			} else if memBlock != "" {
+				if len(req.SystemSections) > 0 {
+					req.SystemSections = append(req.SystemSections, llm.SystemSection{
+						Content:         memBlock,
+						CacheCheckpoint: false,
+					})
+				} else {
+					req.SystemPrompt = req.SystemPrompt + "\n\n" + memBlock
+				}
+			}
 		}
 
 		var (

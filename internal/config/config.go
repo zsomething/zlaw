@@ -95,6 +95,12 @@ type LLMConfig struct {
 	// cache_control on the Anthropic backend. Nil or true = enabled (default);
 	// explicitly false = disabled. Other backends ignore this field.
 	PromptCaching *bool `toml:"prompt_caching"`
+
+	// MaxMemoryTokens is the maximum number of tokens to include in the
+	// injected [Memories] block appended to the system prompt. Memories are
+	// ordered by recency (most recent first) and truncated to fit the budget.
+	// Zero means no limit.
+	MaxMemoryTokens int `toml:"max_memory_tokens"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.
