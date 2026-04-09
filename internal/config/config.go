@@ -59,6 +59,11 @@ type LLMConfig struct {
 	// ContextSummarizeTurns is how many of the oldest turns to collapse into a
 	// single summary message per summarization pass. Zero uses a default of 10.
 	ContextSummarizeTurns int `toml:"context_summarize_turns"`
+
+	// ContextPruneLevels is an ordered list of pruning strategies applied after
+	// summarization. Supported values: "strip_thinking", "strip_tool_results",
+	// "drop_pairs". Empty defaults to ["drop_pairs"] for backward compatibility.
+	ContextPruneLevels []string `toml:"context_prune_levels"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.

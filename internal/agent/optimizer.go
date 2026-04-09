@@ -21,6 +21,12 @@ type ContextOptimizerConfig struct {
 	// SummarizeTurns is the number of oldest turns to collapse per summarization
 	// pass. Defaults to 10 when zero.
 	SummarizeTurns int
+
+	// PruneLevels is an ordered list of pruning strategies applied in sequence
+	// after summarization. Each level is tried in turn; iteration stops as soon
+	// as the estimated token count falls within TokenBudget.
+	// Empty defaults to [drop_pairs] for backward compatibility.
+	PruneLevels []PruneLevel
 }
 
 // ContextOptimizer applies the summarize→prune pipeline to a message slice.
@@ -83,11 +89,44 @@ func (o *ContextOptimizer) Optimize(ctx context.Context, msgs []llm.Message, kno
 		}
 	}
 
-	// Step 2: prune if still over budget.
+	// Step 2: apply cascading prune levels if still over budget.
 	if est > o.cfg.TokenBudget {
+		msgs = o.applyPruneLevels(msgs)
+	}
+
+	return msgs
+}
+
+// applyPruneLevels iterates through the configured prune levels in order,
+// applying each one and re-estimating tokens. Stops as soon as the estimate
+// falls within budget. Falls back to drop_pairs when PruneLevels is empty.
+func (o *ContextOptimizer) applyPruneLevels(msgs []llm.Message) []llm.Message {
+	levels := o.cfg.PruneLevels
+	if len(levels) == 0 {
+		levels = []PruneLevel{PruneLevelDropPairs}
+	}
+
+	for _, level := range levels {
+		if EstimateTokens(msgs) <= o.cfg.TokenBudget {
+			break
+		}
 		before := len(msgs)
-		msgs = PruneMessages(msgs, o.cfg.TokenBudget)
-		o.logger.Debug("context pruned", "dropped_messages", before-len(msgs))
+		switch level {
+		case PruneLevelStripThinking:
+			msgs = StripThinking(msgs)
+			o.logger.Debug("prune level applied", "level", level,
+				"estimated_tokens", EstimateTokens(msgs))
+		case PruneLevelStripToolResults:
+			msgs = StripToolResults(msgs)
+			o.logger.Debug("prune level applied", "level", level,
+				"estimated_tokens", EstimateTokens(msgs))
+		case PruneLevelDropPairs:
+			msgs = PruneMessages(msgs, o.cfg.TokenBudget)
+			o.logger.Debug("prune level applied", "level", level,
+				"dropped_messages", before-len(msgs))
+		default:
+			o.logger.Warn("unknown prune level, skipping", "level", level)
+		}
 	}
 
 	return msgs

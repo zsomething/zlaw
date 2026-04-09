@@ -115,10 +115,15 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 		if cfg.LLM.ContextSummarizeThreshold > 0 {
 			summarizer = agent.NewLLMSummarizer(llmClient)
 		}
+		var pruneLevels []agent.PruneLevel
+		for _, s := range cfg.LLM.ContextPruneLevels {
+			pruneLevels = append(pruneLevels, agent.PruneLevel(s))
+		}
 		opt := agent.NewContextOptimizer(agent.ContextOptimizerConfig{
 			TokenBudget:        cfg.LLM.ContextTokenBudget,
 			SummarizeThreshold: cfg.LLM.ContextSummarizeThreshold,
 			SummarizeTurns:     cfg.LLM.ContextSummarizeTurns,
+			PruneLevels:        pruneLevels,
 		}, summarizer, logger)
 		ag.SetContextOptimizer(opt)
 	}

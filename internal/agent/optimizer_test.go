@@ -160,6 +160,61 @@ func TestContextOptimizer_KnownTokensWithinBudgetSkipsOptimization(t *testing.T)
 	}
 }
 
+func TestContextOptimizer_CascadingLevels_StopsWhenWithinBudget(t *testing.T) {
+	// Build history with thinking blocks in the old turn; budget is tight enough
+	// that strip_thinking alone brings us within budget without needing drop_pairs.
+	thinking := strings.Repeat("t", 4000) // 1000 tokens of thinking
+	text := strings.Repeat("a", 400)      // 100 tokens of text
+
+	msgs := []llm.Message{
+		{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Text: text, Thinking: thinking}}},
+		textMsg(llm.RoleUser, "next"),
+		textMsg(llm.RoleAssistant, "reply"),
+	}
+	// Budget = 300 tokens. After strip_thinking old turn drops to ~100 tokens → within budget.
+	opt := agent.NewContextOptimizer(agent.ContextOptimizerConfig{
+		TokenBudget: 300,
+		PruneLevels: []agent.PruneLevel{
+			agent.PruneLevelStripThinking,
+			agent.PruneLevelDropPairs,
+		},
+	}, nil, nil)
+
+	got := opt.Optimize(context.Background(), msgs, 0)
+	// All 3 messages should still be present (drop_pairs not needed).
+	if len(got) != 3 {
+		t.Fatalf("expected 3 messages (strip_thinking sufficient), got %d", len(got))
+	}
+	// Old turn thinking stripped.
+	if got[0].Content[0].Thinking != "" {
+		t.Fatal("expected thinking stripped from old turn")
+	}
+}
+
+func TestContextOptimizer_CascadingLevels_AdvancesToDropPairs(t *testing.T) {
+	// Old turn has large text (no thinking), so strip_thinking does nothing useful.
+	// drop_pairs must be reached.
+	large := strings.Repeat("z", 4000) // 1000 tokens
+	msgs := []llm.Message{
+		textMsg(llm.RoleUser, large),
+		textMsg(llm.RoleAssistant, large),
+		textMsg(llm.RoleUser, "final"),
+		textMsg(llm.RoleAssistant, "ok"),
+	}
+	opt := agent.NewContextOptimizer(agent.ContextOptimizerConfig{
+		TokenBudget: 10,
+		PruneLevels: []agent.PruneLevel{
+			agent.PruneLevelStripThinking,
+			agent.PruneLevelDropPairs,
+		},
+	}, nil, nil)
+
+	got := opt.Optimize(context.Background(), msgs, 0)
+	if len(got) != 2 || got[0].Content[0].Text != "final" {
+		t.Fatalf("expected drop_pairs to fire and keep only last turn, got %d msgs", len(got))
+	}
+}
+
 type errorSummarizer struct{}
 
 func (e *errorSummarizer) Summarize(_ context.Context, _ []llm.Message) (llm.Message, error) {
