@@ -63,7 +63,8 @@ type LLMConfig struct {
 
 // ToolsConfig lists the tools this agent is allowed to invoke.
 type ToolsConfig struct {
-	Allowed []string `toml:"allowed"`
+	Allowed        []string `toml:"allowed"`
+	MaxResultBytes int      `toml:"max_result_bytes"`
 }
 
 // AdapterConfig selects and configures the I/O adapter.

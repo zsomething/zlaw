@@ -203,6 +203,94 @@ func TestRegistry_Allowlist_empty_allowsAll(t *testing.T) {
 	}
 }
 
+// fixedTool always returns a fixed string.
+type fixedTool struct {
+	name   string
+	result string
+}
+
+func (f fixedTool) Definition() llm.ToolDefinition {
+	return llm.ToolDefinition{Name: f.name, InputSchema: json.RawMessage(`{}`)}
+}
+
+func (f fixedTool) Execute(_ context.Context, _ json.RawMessage) (string, error) {
+	return f.result, nil
+}
+
+func TestRegistry_Truncation_default(t *testing.T) {
+	r := tools.NewRegistry()
+	big := string(make([]byte, 15000)) // 15 000-byte result
+	r.Register(fixedTool{name: "big", result: big})
+
+	res := r.Execute(context.Background(), llm.ToolUse{ID: "t1", Name: "big", Input: []byte("{}")})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if len(res.Content) >= 15000 {
+		t.Errorf("result not truncated: len=%d", len(res.Content))
+	}
+	if !containsSubstring(res.Content, "[truncated:") {
+		t.Errorf("truncation notice missing in: %q", res.Content[len(res.Content)-80:])
+	}
+}
+
+func TestRegistry_Truncation_customLimit(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(fixedTool{name: "big", result: "abcdefghij"}) // 10 chars
+	r.SetMaxResultBytes(5)
+
+	res := r.Execute(context.Background(), llm.ToolUse{ID: "t2", Name: "big", Input: []byte("{}")})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if !containsSubstring(res.Content, "abcde") {
+		t.Errorf("unexpected prefix: %q", res.Content)
+	}
+	if !containsSubstring(res.Content, "[truncated:") {
+		t.Errorf("truncation notice missing")
+	}
+}
+
+func TestRegistry_Truncation_disabled(t *testing.T) {
+	r := tools.NewRegistry()
+	big := string(make([]byte, 15000))
+	r.Register(fixedTool{name: "big", result: big})
+	r.SetMaxResultBytes(-1) // disable
+
+	res := r.Execute(context.Background(), llm.ToolUse{ID: "t3", Name: "big", Input: []byte("{}")})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if len(res.Content) != 15000 {
+		t.Errorf("expected full result len=15000, got %d", len(res.Content))
+	}
+}
+
+func TestRegistry_Truncation_withinLimit(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(fixedTool{name: "small", result: "hello"})
+
+	res := r.Execute(context.Background(), llm.ToolUse{ID: "t4", Name: "small", Input: []byte("{}")})
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if res.Content != "hello" {
+		t.Errorf("expected unmodified result, got %q", res.Content)
+	}
+}
+
+func containsSubstring(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		func() bool {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+			return false
+		}())
+}
+
 func TestCurrentTime_schemaIsValidJSON(t *testing.T) {
 	def := builtin.CurrentTime{}.Definition()
 	if !json.Valid(def.InputSchema) {

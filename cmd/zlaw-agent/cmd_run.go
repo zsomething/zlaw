@@ -102,6 +102,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 		registry.SetAllowlist(cfg.Tools.Allowed)
 		logger.Info("tool allowlist enforced", "allowed", cfg.Tools.Allowed)
 	}
+	registry.SetMaxResultBytes(cfg.Tools.MaxResultBytes)
 
 	// --- Build agent ---
 	history, err := buildHistory(cfg.Agent.Name, "cli", logger)

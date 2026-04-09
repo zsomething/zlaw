@@ -19,15 +19,38 @@ type Tool interface {
 	Execute(ctx context.Context, input json.RawMessage) (string, error)
 }
 
+const defaultMaxResultBytes = 10000
+
 // Registry holds a set of named tools.
 type Registry struct {
-	tools    map[string]Tool
-	allowed  map[string]struct{} // nil means all tools are allowed
+	tools          map[string]Tool
+	allowed        map[string]struct{} // nil means all tools are allowed
+	maxResultBytes int                 // 0 means use default; negative means disabled
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
 	return &Registry{tools: make(map[string]Tool)}
+}
+
+// SetMaxResultBytes configures the maximum byte length of a tool result before
+// it is truncated. Zero uses the default (10 000 bytes). Negative disables
+// truncation entirely.
+func (r *Registry) SetMaxResultBytes(n int) {
+	r.maxResultBytes = n
+}
+
+// truncate applies the configured result-size limit to s. If the result
+// exceeds the limit a notice is appended so the model knows output was cut.
+func (r *Registry) truncate(s string) string {
+	limit := r.maxResultBytes
+	if limit == 0 {
+		limit = defaultMaxResultBytes
+	}
+	if limit < 0 || len(s) <= limit {
+		return s
+	}
+	return s[:limit] + fmt.Sprintf("\n[truncated: original %d chars]", len(s))
 }
 
 // SetAllowlist restricts which tools are visible and executable to the named
@@ -102,7 +125,7 @@ func (r *Registry) Execute(ctx context.Context, call llm.ToolUse) llm.ToolResult
 	}
 	return llm.ToolResult{
 		ToolUseID: call.ID,
-		Content:   result,
+		Content:   r.truncate(result),
 	}
 }
 
