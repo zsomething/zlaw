@@ -65,6 +65,12 @@ type LLMConfig struct {
 	// "drop_pairs". Empty defaults to ["drop_pairs"] for backward compatibility.
 	ContextPruneLevels []string `toml:"context_prune_levels"`
 
+	// ContextSummarizeModel is the model to use for summarization. When set,
+	// summarization uses this model (same backend and auth profile) instead of
+	// the main model. Useful for routing summarization to a cheaper/faster model.
+	// Defaults to Model if empty.
+	ContextSummarizeModel string `toml:"context_summarize_model"`
+
 	// PromptCaching controls whether the system prompt is sent with
 	// cache_control on the Anthropic backend. Nil or true = enabled (default);
 	// explicitly false = disabled. Other backends ignore this field.

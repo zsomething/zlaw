@@ -113,7 +113,18 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	if cfg.LLM.ContextTokenBudget > 0 {
 		var summarizer agent.Summarizer
 		if cfg.LLM.ContextSummarizeThreshold > 0 {
-			summarizer = agent.NewLLMSummarizer(llmClient)
+			summarizerClient := llmClient
+			if cfg.LLM.ContextSummarizeModel != "" {
+				summarizeCfg := cfg.LLM
+				summarizeCfg.Model = cfg.LLM.ContextSummarizeModel
+				sc, err := llm.NewClientFromConfig(summarizeCfg, "", logger)
+				if err != nil {
+					return fmt.Errorf("create summarizer llm client: %w", err)
+				}
+				summarizerClient = sc
+				logger.Info("summarizer using separate model", "model", cfg.LLM.ContextSummarizeModel)
+			}
+			summarizer = agent.NewLLMSummarizer(summarizerClient)
 		}
 		var pruneLevels []agent.PruneLevel
 		for _, s := range cfg.LLM.ContextPruneLevels {
