@@ -18,6 +18,18 @@ import (
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
 )
 
+// buildMemoryStore returns a MarkdownFileStore for the agent's long-term
+// memories. Falls back to nil on error (caller should skip memory tools).
+func buildMemoryStore(agentName string, logger *slog.Logger) agent.MemoryStore {
+	dir, err := agent.MemoryDir(agentName)
+	if err != nil {
+		logger.Warn("cannot resolve memory dir, memory tools disabled", "error", err)
+		return nil
+	}
+	logger.Info("memory store", "dir", dir)
+	return agent.NewMarkdownFileStore(dir)
+}
+
 // buildHistory returns a durable History backed by a JSONLFileStore, falling
 // back to in-memory if the session directory cannot be created.
 func buildHistory(agentName, channel string, logger *slog.Logger) (*agent.History, error) {
@@ -109,6 +121,11 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.WebFetch{})
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
+	if memStore := buildMemoryStore(cfg.Agent.Name, logger); memStore != nil {
+		registry.Register(builtin.MemorySave{Store: memStore})
+		registry.Register(builtin.MemoryRecall{Store: memStore})
+		registry.Register(builtin.MemoryDelete{Store: memStore})
+	}
 	if len(cfg.Tools.Allowed) > 0 {
 		registry.SetAllowlist(cfg.Tools.Allowed)
 		logger.Info("tool allowlist enforced", "allowed", cfg.Tools.Allowed)
