@@ -25,6 +25,11 @@ type AnthropicConfig struct {
 	MaxTokens   int
 	Timeout     time.Duration
 	Logger      *slog.Logger
+
+	// PromptCaching enables prompt caching for the system prompt by tagging it
+	// with cache_control {"type":"ephemeral"}. Reduces input token cost and
+	// latency on cache hits. Requires the anthropic-beta header.
+	PromptCaching bool
 }
 
 type anthropicClient struct {
@@ -67,7 +72,7 @@ func (c *anthropicClient) CompleteStream(ctx context.Context, req Request, handl
 		maxTokens = c.cfg.MaxTokens
 	}
 
-	areq, err := toAnthropicRequest(req, c.cfg.Model, maxTokens, handler != nil)
+	areq, err := toAnthropicRequest(req, c.cfg.Model, maxTokens, handler != nil, c.cfg.PromptCaching)
 	if err != nil {
 		return Response{}, err
 	}
@@ -84,6 +89,9 @@ func (c *anthropicClient) CompleteStream(ctx context.Context, req Request, handl
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-api-key", apiKey)
 	httpReq.Header.Set("anthropic-version", anthropicVersion)
+	if c.cfg.PromptCaching && req.SystemPrompt != "" {
+		httpReq.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
+	}
 	if handler != nil {
 		httpReq.Header.Set("Accept", "text/event-stream")
 	}
@@ -113,10 +121,17 @@ func (c *anthropicClient) CompleteStream(ctx context.Context, req Request, handl
 type anthropicRequest struct {
 	Model     string             `json:"model"`
 	MaxTokens int                `json:"max_tokens"`
-	System    string             `json:"system,omitempty"`
+	System    json.RawMessage    `json:"system,omitempty"`
 	Messages  []anthropicMessage `json:"messages"`
 	Tools     []anthropicTool    `json:"tools,omitempty"`
 	Stream    bool               `json:"stream,omitempty"`
+}
+
+// anthropicSystemBlock is a single block in the system array (used for caching).
+type anthropicSystemBlock struct {
+	Type         string          `json:"type"`
+	Text         string          `json:"text"`
+	CacheControl json.RawMessage `json:"cache_control,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -157,16 +172,36 @@ type anthropicUsage struct {
 
 // ── request translation ──────────────────────────────────────────────────────
 
-func toAnthropicRequest(req Request, model string, maxTokens int, stream bool) (anthropicRequest, error) {
+func toAnthropicRequest(req Request, model string, maxTokens int, stream bool, promptCaching bool) (anthropicRequest, error) {
 	msgs, err := toAnthropicMessages(req.Messages)
 	if err != nil {
 		return anthropicRequest{}, err
 	}
 
+	var systemJSON json.RawMessage
+	if req.SystemPrompt != "" {
+		if promptCaching {
+			blocks := []anthropicSystemBlock{{
+				Type:         "text",
+				Text:         req.SystemPrompt,
+				CacheControl: json.RawMessage(`{"type":"ephemeral"}`),
+			}}
+			systemJSON, err = json.Marshal(blocks)
+			if err != nil {
+				return anthropicRequest{}, fmt.Errorf("anthropic: marshal system blocks: %w", err)
+			}
+		} else {
+			systemJSON, err = json.Marshal(req.SystemPrompt)
+			if err != nil {
+				return anthropicRequest{}, fmt.Errorf("anthropic: marshal system prompt: %w", err)
+			}
+		}
+	}
+
 	areq := anthropicRequest{
 		Model:     model,
 		MaxTokens: maxTokens,
-		System:    req.SystemPrompt,
+		System:    systemJSON,
 		Messages:  msgs,
 		Stream:    stream,
 	}

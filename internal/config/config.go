@@ -64,6 +64,11 @@ type LLMConfig struct {
 	// summarization. Supported values: "strip_thinking", "strip_tool_results",
 	// "drop_pairs". Empty defaults to ["drop_pairs"] for backward compatibility.
 	ContextPruneLevels []string `toml:"context_prune_levels"`
+
+	// PromptCaching controls whether the system prompt is sent with
+	// cache_control on the Anthropic backend. Nil or true = enabled (default);
+	// explicitly false = disabled. Other backends ignore this field.
+	PromptCaching *bool `toml:"prompt_caching"`
 }
 
 // ToolsConfig lists the tools this agent is allowed to invoke.

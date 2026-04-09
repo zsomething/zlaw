@@ -249,6 +249,119 @@ func TestAnthropic_Streaming(t *testing.T) {
 	}
 }
 
+func newAnthropicTestClientWithCaching(t *testing.T, promptCaching bool, handler http.HandlerFunc) llm.Client {
+	t.Helper()
+	srv := newTestServer(t, handler)
+	client, err := llm.NewAnthropicClient(llm.AnthropicConfig{
+		BaseURL:       srv.URL,
+		TokenSource:   staticSource{"test-key"},
+		Model:         "claude-test",
+		PromptCaching: promptCaching,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
+}
+
+func TestAnthropic_PromptCaching_SystemAsArray(t *testing.T) {
+	var capturedBody map[string]interface{}
+	var capturedBetaHeader string
+	client := newAnthropicTestClientWithCaching(t, true, func(w http.ResponseWriter, r *http.Request) {
+		capturedBetaHeader = r.Header.Get("anthropic-beta")
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anthropicTextResponse("ok"))
+	})
+
+	_, err := client.Complete(context.Background(), llm.Request{
+		SystemPrompt: "be helpful",
+		Messages:     []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Beta header must be present.
+	if capturedBetaHeader != "prompt-caching-2024-07-31" {
+		t.Errorf("anthropic-beta = %q, want prompt-caching-2024-07-31", capturedBetaHeader)
+	}
+
+	// System field must be an array with cache_control.
+	sysRaw, ok := capturedBody["system"].([]interface{})
+	if !ok {
+		t.Fatalf("system must be an array when prompt caching enabled, got: %T %v", capturedBody["system"], capturedBody["system"])
+	}
+	if len(sysRaw) != 1 {
+		t.Fatalf("system array length = %d, want 1", len(sysRaw))
+	}
+	block := sysRaw[0].(map[string]interface{})
+	if block["type"] != "text" {
+		t.Errorf("system block type = %v, want text", block["type"])
+	}
+	if block["text"] != "be helpful" {
+		t.Errorf("system block text = %v, want 'be helpful'", block["text"])
+	}
+	cc, ok := block["cache_control"].(map[string]interface{})
+	if !ok {
+		t.Fatal("system block missing cache_control")
+	}
+	if cc["type"] != "ephemeral" {
+		t.Errorf("cache_control.type = %v, want ephemeral", cc["type"])
+	}
+}
+
+func TestAnthropic_PromptCaching_DisabledSystemAsString(t *testing.T) {
+	var capturedBody map[string]interface{}
+	var capturedBetaHeader string
+	client := newAnthropicTestClientWithCaching(t, false, func(w http.ResponseWriter, r *http.Request) {
+		capturedBetaHeader = r.Header.Get("anthropic-beta")
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anthropicTextResponse("ok"))
+	})
+
+	_, err := client.Complete(context.Background(), llm.Request{
+		SystemPrompt: "be helpful",
+		Messages:     []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Beta header must NOT be present.
+	if capturedBetaHeader != "" {
+		t.Errorf("anthropic-beta header should not be set when caching disabled, got: %q", capturedBetaHeader)
+	}
+
+	// System field must be a plain string.
+	if capturedBody["system"] != "be helpful" {
+		t.Errorf("system = %v, want plain string 'be helpful'", capturedBody["system"])
+	}
+}
+
+func TestAnthropic_PromptCaching_NoHeaderWhenNoSystem(t *testing.T) {
+	var capturedBetaHeader string
+	client := newAnthropicTestClientWithCaching(t, true, func(w http.ResponseWriter, r *http.Request) {
+		capturedBetaHeader = r.Header.Get("anthropic-beta")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anthropicTextResponse("ok"))
+	})
+
+	_, err := client.Complete(context.Background(), llm.Request{
+		// No SystemPrompt
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Beta header must NOT be present when there is no system prompt.
+	if capturedBetaHeader != "" {
+		t.Errorf("anthropic-beta header should not be set when system prompt is empty, got: %q", capturedBetaHeader)
+	}
+}
+
 func TestAnthropic_StreamingToolUse(t *testing.T) {
 	sseBody := "" +
 		"event: message_start\n" +

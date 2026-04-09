@@ -54,13 +54,15 @@ func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *s
 			Logger:      logger,
 		})
 	case APIFormatAnthropic:
+		promptCaching := cfg.PromptCaching == nil || *cfg.PromptCaching
 		return NewAnthropicClient(AnthropicConfig{
-			BaseURL:     baseURL,
-			TokenSource: src,
-			Model:       cfg.Model,
-			MaxTokens:   cfg.MaxTokens,
-			Timeout:     timeout,
-			Logger:      logger,
+			BaseURL:       baseURL,
+			TokenSource:   src,
+			Model:         cfg.Model,
+			MaxTokens:     cfg.MaxTokens,
+			Timeout:       timeout,
+			Logger:        logger,
+			PromptCaching: promptCaching,
 		})
 	default:
 		return nil, fmt.Errorf("llm: unknown api_format %q (supported: openai, anthropic)", apiFormat)
