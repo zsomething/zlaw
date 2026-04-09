@@ -85,6 +85,64 @@ func TestRegistry_DuplicateRegister_panics(t *testing.T) {
 	r.Register(builtin.CurrentTime{})
 }
 
+func TestRegistry_Allowlist_filtersDefinitions(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(builtin.CurrentTime{})
+	r.Register(builtin.ReadFile{})
+
+	r.SetAllowlist([]string{"current_time"})
+	defs := r.Definitions()
+
+	if len(defs) != 1 {
+		t.Fatalf("expected 1 definition after allowlist, got %d", len(defs))
+	}
+	if defs[0].Name != "current_time" {
+		t.Fatalf("unexpected tool in definitions: %q", defs[0].Name)
+	}
+}
+
+func TestRegistry_Allowlist_blocksExecution(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(builtin.CurrentTime{})
+	r.Register(builtin.ReadFile{})
+
+	r.SetAllowlist([]string{"current_time"})
+	call := llm.ToolUse{ID: "x", Name: "read_file", Input: []byte(`{"path":"/etc/hosts"}`)}
+	res := r.Execute(context.Background(), call)
+
+	if !res.IsError {
+		t.Fatal("expected IsError=true for disallowed tool")
+	}
+}
+
+func TestRegistry_Allowlist_allowsExecution(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(builtin.CurrentTime{})
+
+	r.SetAllowlist([]string{"current_time"})
+	call := llm.ToolUse{ID: "y", Name: "current_time", Input: []byte("{}")}
+	res := r.Execute(context.Background(), call)
+
+	if res.IsError {
+		t.Fatalf("expected success for allowed tool, got: %s", res.Content)
+	}
+}
+
+func TestRegistry_Allowlist_empty_allowsAll(t *testing.T) {
+	r := tools.NewRegistry()
+	r.Register(builtin.CurrentTime{})
+	r.Register(builtin.ReadFile{})
+
+	// Set then clear the allowlist
+	r.SetAllowlist([]string{"current_time"})
+	r.SetAllowlist(nil)
+
+	defs := r.Definitions()
+	if len(defs) != 2 {
+		t.Fatalf("expected 2 definitions after clearing allowlist, got %d", len(defs))
+	}
+}
+
 func TestCurrentTime_schemaIsValidJSON(t *testing.T) {
 	def := builtin.CurrentTime{}.Definition()
 	if !json.Valid(def.InputSchema) {

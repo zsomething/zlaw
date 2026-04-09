@@ -20,12 +20,36 @@ type Tool interface {
 
 // Registry holds a set of named tools.
 type Registry struct {
-	tools map[string]Tool
+	tools    map[string]Tool
+	allowed  map[string]struct{} // nil means all tools are allowed
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
 	return &Registry{tools: make(map[string]Tool)}
+}
+
+// SetAllowlist restricts which tools are visible and executable to the named
+// set. An empty slice clears any previous allowlist (all tools allowed).
+func (r *Registry) SetAllowlist(names []string) {
+	if len(names) == 0 {
+		r.allowed = nil
+		return
+	}
+	r.allowed = make(map[string]struct{}, len(names))
+	for _, n := range names {
+		r.allowed[n] = struct{}{}
+	}
+}
+
+// isAllowed reports whether a tool name is permitted by the allowlist.
+// If no allowlist is set, all tools are permitted.
+func (r *Registry) isAllowed(name string) bool {
+	if r.allowed == nil {
+		return true
+	}
+	_, ok := r.allowed[name]
+	return ok
 }
 
 // Register adds a tool. Panics if name is already registered.
@@ -37,18 +61,27 @@ func (r *Registry) Register(t Tool) {
 	r.tools[name] = t
 }
 
-// Definitions returns tool definitions for all registered tools, suitable for
-// inclusion in an llm.Request.
+// Definitions returns tool definitions for all registered tools that are
+// permitted by the allowlist, suitable for inclusion in an llm.Request.
 func (r *Registry) Definitions() []llm.ToolDefinition {
 	out := make([]llm.ToolDefinition, 0, len(r.tools))
 	for _, t := range r.tools {
-		out = append(out, t.Definition())
+		if r.isAllowed(t.Definition().Name) {
+			out = append(out, t.Definition())
+		}
 	}
 	return out
 }
 
 // Execute dispatches a single tool call and returns an llm.ToolResult.
 func (r *Registry) Execute(ctx context.Context, call llm.ToolUse) llm.ToolResult {
+	if !r.isAllowed(call.Name) {
+		return llm.ToolResult{
+			ToolUseID: call.ID,
+			Content:   fmt.Sprintf("tool %q is not allowed", call.Name),
+			IsError:   true,
+		}
+	}
 	t, ok := r.tools[call.Name]
 	if !ok {
 		return llm.ToolResult{

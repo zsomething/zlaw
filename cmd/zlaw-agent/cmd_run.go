@@ -98,6 +98,10 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.WebFetch{})
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
+	if len(cfg.Tools.Allowed) > 0 {
+		registry.SetAllowlist(cfg.Tools.Allowed)
+		logger.Info("tool allowlist enforced", "allowed", cfg.Tools.Allowed)
+	}
 
 	// --- Build agent ---
 	history, err := buildHistory(cfg.Agent.Name, "cli", logger)
