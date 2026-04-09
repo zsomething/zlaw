@@ -150,6 +150,11 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	adapter := cli.New(ag, func() string { return *promptPtr.Load() }, *verbose, nil, nil, logger)
 	adapter.SetHistoryManager(history)
 	adapter.SetShowUsage(*showUsage)
+	if len(cfg.Context.Prefill) > 0 {
+		adapter.SetPrefill(func() (string, error) {
+			return agent.BuildPrefill(agentDir, cfg.Context.Prefill)
+		})
+	}
 
 	if cli.IsTerminal(os.Stdin) {
 		return adapter.RunInteractive(ctx, *sessionID)

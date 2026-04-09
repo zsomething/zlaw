@@ -41,8 +41,9 @@ type Adapter struct {
 	systemPrompt func() string
 	verbose      bool
 	showUsage    bool
-	sessionIn    int // cumulative input tokens for this session
-	sessionOut   int // cumulative output tokens for this session
+	prefillFn    func() (string, error) // optional; injected into first user message
+	sessionIn    int                    // cumulative input tokens for this session
+	sessionOut   int                    // cumulative output tokens for this session
 	logger       *slog.Logger
 }
 
@@ -75,6 +76,13 @@ func (a *Adapter) SetShowUsage(v bool) {
 // /history REPL commands. Without it those commands print an error.
 func (a *Adapter) SetHistoryManager(h HistoryManager) {
 	a.history = h
+}
+
+// SetPrefill attaches a function that returns a preamble to inject into the
+// first user message of a new session. Called once per session start (when
+// history is empty). No-op when nil or when it returns an empty string.
+func (a *Adapter) SetPrefill(fn func() (string, error)) {
+	a.prefillFn = fn
 }
 
 // RunInteractive starts a REPL loop: prints a prompt, reads a line, calls the
@@ -151,6 +159,10 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 // RunOnce sends a single input to the agent and writes the response to out.
 // Suitable for non-interactive / piped usage.
 func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
+	input, err := a.maybeInjectPrefill(sessionID, input)
+	if err != nil {
+		return fmt.Errorf("cli: build prefill: %w", err)
+	}
 	result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt())
 	if err != nil {
 		return fmt.Errorf("cli: agent run: %w", err)
@@ -168,6 +180,10 @@ func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
 // runTurn dispatches one agent call, using streaming when available.
 // streamed reports whether any text was delivered via the stream handler.
 func (a *Adapter) runTurn(ctx context.Context, sessionID, input string) (result agent.Result, streamed bool, err error) {
+	input, err = a.maybeInjectPrefill(sessionID, input)
+	if err != nil {
+		return result, false, fmt.Errorf("cli: build prefill: %w", err)
+	}
 	if sr, ok := a.agent.(StreamingRunner); ok {
 		result, err = sr.RunStream(ctx, sessionID, input, a.systemPrompt(), func(delta string) {
 			streamed = true
@@ -177,6 +193,25 @@ func (a *Adapter) runTurn(ctx context.Context, sessionID, input string) (result 
 	}
 	result, err = a.agent.Run(ctx, sessionID, input, a.systemPrompt())
 	return result, false, err
+}
+
+// maybeInjectPrefill prepends the prefill preamble to input when a prefillFn
+// is set and the session has no prior history. Returns input unchanged otherwise.
+func (a *Adapter) maybeInjectPrefill(sessionID, input string) (string, error) {
+	if a.prefillFn == nil {
+		return input, nil
+	}
+	if a.history != nil && len(a.history.Get(sessionID)) > 0 {
+		return input, nil // not first message
+	}
+	preamble, err := a.prefillFn()
+	if err != nil {
+		return "", err
+	}
+	if preamble == "" {
+		return input, nil
+	}
+	return preamble + "\n" + input, nil
 }
 
 // printHistory writes a human-readable summary of the session's message

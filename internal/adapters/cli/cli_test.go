@@ -19,6 +19,16 @@ func (s stubRunner) Run(_ context.Context, _, _, _ string) (agent.Result, error)
 	return agent.Result{Text: s.text}, nil
 }
 
+// captureRunner captures the input passed to the last Run call.
+type captureRunner struct {
+	lastInput string
+}
+
+func (c *captureRunner) Run(_ context.Context, _, input, _ string) (agent.Result, error) {
+	c.lastInput = input
+	return agent.Result{Text: "ok"}, nil
+}
+
 // stubHistory is a minimal in-memory HistoryManager for tests.
 type stubHistory struct {
 	msgs map[string][]llm.Message
@@ -137,5 +147,45 @@ func TestREPL_history_withoutHistoryManager(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "error:") {
 		t.Errorf("expected error message when no history manager, got: %q", out.String())
+	}
+}
+
+func TestPrefill_InjectedOnFirstTurn(t *testing.T) {
+	runner := &captureRunner{}
+	hist := newStubHistory()
+	in := strings.NewReader("hello\n/exit\n")
+	out := &bytes.Buffer{}
+	a := cli.New(runner, func() string { return "" }, false, in, out, slog.Default())
+	a.SetHistoryManager(hist)
+	a.SetPrefill(func() (string, error) { return "[Session context]\ncwd: /test\n", nil })
+
+	if err := a.RunInteractive(context.Background(), "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(runner.lastInput, "[Session context]") {
+		t.Errorf("expected prefill prepended on first turn, got: %q", runner.lastInput)
+	}
+	if !strings.Contains(runner.lastInput, "hello") {
+		t.Errorf("expected user input in message, got: %q", runner.lastInput)
+	}
+}
+
+func TestPrefill_NotInjectedWhenHistoryExists(t *testing.T) {
+	runner := &captureRunner{}
+	hist := newStubHistory()
+	// Pre-seed history so this is not the first message.
+	hist.add("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "prior"}}})
+
+	in := strings.NewReader("hello\n/exit\n")
+	out := &bytes.Buffer{}
+	a := cli.New(runner, func() string { return "" }, false, in, out, slog.Default())
+	a.SetHistoryManager(hist)
+	a.SetPrefill(func() (string, error) { return "[Session context]\ncwd: /test\n", nil })
+
+	if err := a.RunInteractive(context.Background(), "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(runner.lastInput, "[Session context]") {
+		t.Errorf("prefill should not be injected when history is non-empty, got: %q", runner.lastInput)
 	}
 }

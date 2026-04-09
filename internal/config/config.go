@@ -14,10 +14,20 @@ import (
 
 // AgentConfig holds all configuration for a single agent instance.
 type AgentConfig struct {
-	Agent   AgentMeta   `toml:"agent"`
-	LLM     LLMConfig   `toml:"llm"`
-	Tools   ToolsConfig `toml:"tools"`
+	Agent   AgentMeta     `toml:"agent"`
+	LLM     LLMConfig     `toml:"llm"`
+	Context ContextConfig `toml:"context"`
+	Tools   ToolsConfig   `toml:"tools"`
 	Adapter AdapterConfig `toml:"adapter"`
+}
+
+// ContextConfig controls what contextual information is injected into the
+// first user message of a new session.
+type ContextConfig struct {
+	// Prefill is an ordered list of context sources to inject at session start.
+	// Supported sources: "cwd", "datetime", "file:<relative-path>".
+	// Empty disables prefill injection (default).
+	Prefill []string `toml:"prefill"`
 }
 
 // AgentMeta contains agent identity metadata.
