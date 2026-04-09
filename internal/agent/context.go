@@ -58,6 +58,14 @@ func BuildPrefill(agentDir string, sources []string) (string, error) {
 	return b.String(), nil
 }
 
+// StickyProactiveMemorySave is the hardcoded instruction block injected as
+// cache checkpoint 1 when memory.proactive_save is enabled in agent.toml.
+// It instructs the agent to call memory_save when it learns something worth
+// retaining. Content is intentionally in Go source (not a user-editable file)
+// so it cannot be silently broken by a personality edit.
+const StickyProactiveMemorySave = `[Memory behavior]
+When you learn something worth retaining — user preferences, facts, decisions, recurring context — call memory_save immediately. Keep memories short, factual, and tagged. Do not save transient info or things already in session history.`
+
 // BuildMemoriesSection returns a formatted [Memories] block for injection into
 // the system prompt. Memories are listed in reverse-update order (most recent
 // first). Each entry is formatted as:

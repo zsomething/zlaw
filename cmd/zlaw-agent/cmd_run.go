@@ -94,9 +94,15 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	}
 
 	// Collect enabled sticky blocks from config.
-	// Each flag enables one named block whose content lives in Go source.
-	// (No built-in blocks are defined yet; first consumer is card #229.)
-	_ = cfg.Sticky // placeholder: blocks will be appended per flag in #229
+	// Each flag enables one named block whose content lives in Go source,
+	// forming a stable cache prefix unaffected by hot-reloads of user files.
+	if cfg.Sticky.ProactiveMemorySave {
+		stickyBlocks = append(stickyBlocks, agent.StickyBlock{
+			Name:    "memory-behavior",
+			Content: agent.StickyProactiveMemorySave,
+		})
+		logger.Info("sticky block enabled", "name", "memory-behavior")
+	}
 
 	// Seed the atomic with the personality-only prompt.
 	// The agent combines it with stickyBlocks at call time.
