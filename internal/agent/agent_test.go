@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/chickenzord/zlaw/internal/agent"
@@ -239,6 +240,54 @@ func TestHistory_GetReturnsCopy(t *testing.T) {
 	original := h.Get("s1")
 	if original[0].Role != llm.RoleUser {
 		t.Fatal("Get should return a copy, not a reference")
+	}
+}
+
+func TestAgent_RunStream_DeliversDeltas(t *testing.T) {
+	mock := &llm.MockClient{
+		Responses: []llm.Response{llm.TextResponse("Hello, world!")},
+	}
+	a := newAgent(mock, noopTools{})
+
+	var deltas []string
+	result, err := a.RunStream(context.Background(), "s1", "hi", "", func(delta string) {
+		deltas = append(deltas, delta)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Text != "Hello, world!" {
+		t.Fatalf("expected result.Text %q, got %q", "Hello, world!", result.Text)
+	}
+	if len(deltas) == 0 {
+		t.Fatal("expected at least one streaming delta")
+	}
+	joined := strings.Join(deltas, "")
+	if joined != "Hello, world!" {
+		t.Fatalf("expected joined deltas %q, got %q", "Hello, world!", joined)
+	}
+}
+
+// clientOnly wraps a Client without exposing StreamingClient,
+// used to test the non-streaming fallback path.
+type clientOnly struct{ llm.Client }
+
+func TestAgent_RunStream_FallsBackWithoutStreaming(t *testing.T) {
+	mock := &llm.MockClient{Responses: []llm.Response{llm.TextResponse("ok")}}
+	a := newAgent(clientOnly{mock}, noopTools{})
+
+	called := false
+	result, err := a.RunStream(context.Background(), "s1", "hi", "", func(_ string) {
+		called = true
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Text != "ok" {
+		t.Fatalf("expected %q, got %q", "ok", result.Text)
+	}
+	if called {
+		t.Fatal("handler should not be called when streaming is not supported")
 	}
 }
 

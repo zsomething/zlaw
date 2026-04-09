@@ -24,6 +24,22 @@ func (m *MockClient) Complete(_ context.Context, req Request) (Response, error) 
 	return resp, nil
 }
 
+// CompleteStream simulates streaming by calling handler once with the full
+// text of the next canned response, then returning it.
+func (m *MockClient) CompleteStream(ctx context.Context, req Request, handler StreamHandler) (Response, error) {
+	resp, err := m.Complete(ctx, req)
+	if err != nil {
+		return resp, err
+	}
+	if t := resp.Message.TextContent(); t != "" {
+		handler(t)
+	}
+	return resp, nil
+}
+
+// compile-time check: *MockClient satisfies StreamingClient.
+var _ StreamingClient = (*MockClient)(nil)
+
 // Reset clears recorded requests and resets the response pointer.
 func (m *MockClient) Reset() {
 	m.Requests = nil

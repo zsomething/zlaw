@@ -11,11 +11,19 @@ import (
 	"strings"
 
 	"github.com/chickenzord/zlaw/internal/agent"
+	"github.com/chickenzord/zlaw/internal/llm"
 )
 
 // Runner is the subset of agent.Agent used by the CLI adapter.
 type Runner interface {
 	Run(ctx context.Context, sessionID, input, systemPrompt string) (agent.Result, error)
+}
+
+// StreamingRunner is an optional extension of Runner for agents that support
+// incremental token streaming.
+type StreamingRunner interface {
+	Runner
+	RunStream(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (agent.Result, error)
 }
 
 // Adapter connects the agent loop to a terminal or piped stdin.
@@ -90,7 +98,7 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 
 		a.logger.Debug("user input", "session_id", sessionID, "input", input)
 
-		result, err := a.agent.Run(ctx, sessionID, input, a.systemPrompt())
+		result, streamed, err := a.runTurn(ctx, sessionID, input)
 		if err != nil {
 			fmt.Fprintf(a.out, "error: %v\n", err)
 			continue
@@ -99,7 +107,11 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 		if a.verbose {
 			a.printVerbose(result)
 		}
-		fmt.Fprintln(a.out, result.Text)
+		if streamed {
+			fmt.Fprintln(a.out) // trailing newline after streamed output
+		} else {
+			fmt.Fprintln(a.out, result.Text)
+		}
 		if a.showUsage {
 			a.printUsage(result)
 		}
@@ -121,6 +133,20 @@ func (a *Adapter) RunOnce(ctx context.Context, sessionID, input string) error {
 		a.printUsage(result)
 	}
 	return nil
+}
+
+// runTurn dispatches one agent call, using streaming when available.
+// streamed reports whether any text was delivered via the stream handler.
+func (a *Adapter) runTurn(ctx context.Context, sessionID, input string) (result agent.Result, streamed bool, err error) {
+	if sr, ok := a.agent.(StreamingRunner); ok {
+		result, err = sr.RunStream(ctx, sessionID, input, a.systemPrompt(), func(delta string) {
+			streamed = true
+			fmt.Fprint(a.out, delta)
+		})
+		return result, streamed, err
+	}
+	result, err = a.agent.Run(ctx, sessionID, input, a.systemPrompt())
+	return result, false, err
 }
 
 // printVerbose writes thinking blocks and tool calls to out before the response.
@@ -180,5 +206,6 @@ func IsTerminal(r io.Reader) bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-// compile-time check: *agent.Agent satisfies Runner.
+// compile-time checks.
 var _ Runner = (*agent.Agent)(nil)
+var _ StreamingRunner = (*agent.Agent)(nil)

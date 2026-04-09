@@ -88,6 +88,16 @@ func (r *RetryClient) Complete(ctx context.Context, req Request) (Response, erro
 	return Response{}, fmt.Errorf("llm: all %d attempts failed: %w", r.cfg.MaxAttempts, lastErr)
 }
 
+// CompleteStream delegates to the inner client's CompleteStream if it supports
+// streaming, otherwise falls back to Complete without streaming.
+// Streaming responses are not retried once the stream begins.
+func (r *RetryClient) CompleteStream(ctx context.Context, req Request, handler StreamHandler) (Response, error) {
+	if sc, ok := r.inner.(StreamingClient); ok {
+		return sc.CompleteStream(ctx, req, handler)
+	}
+	return r.Complete(ctx, req)
+}
+
 // backoffDelay returns the delay before the next attempt.
 // For rate-limit errors it prefers the Retry-After header when present.
 func (r *RetryClient) backoffDelay(attempt int, err error) time.Duration {

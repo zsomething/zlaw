@@ -82,6 +82,43 @@ func (c *openAICompatClient) Complete(ctx context.Context, req Request) (Respons
 	return fromOpenAICompletion(completion)
 }
 
+func (c *openAICompatClient) CompleteStream(ctx context.Context, req Request, handler StreamHandler) (Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.Timeout)
+	defer cancel()
+
+	token, err := c.cfg.TokenSource.Token(ctx)
+	if err != nil {
+		return Response{}, fmt.Errorf("openai_compat: resolve token: %w", err)
+	}
+
+	params, err := toOpenAIParams(req, c.cfg.Model, c.cfg.MaxTokens)
+	if err != nil {
+		return Response{}, err
+	}
+	params.StreamOptions = openai.ChatCompletionStreamOptionsParam{
+		IncludeUsage: openai.Bool(true),
+	}
+
+	stream := c.client.Chat.Completions.NewStreaming(ctx, params, option.WithAPIKey(token))
+	acc := openai.ChatCompletionAccumulator{}
+
+	for stream.Next() {
+		chunk := stream.Current()
+		acc.AddChunk(chunk)
+		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			handler(chunk.Choices[0].Delta.Content)
+		}
+	}
+	if err := stream.Err(); err != nil {
+		if isHTTP429(err) {
+			return Response{}, fmt.Errorf("%w: %w", ErrRateLimit, err)
+		}
+		return Response{}, fmt.Errorf("openai_compat stream: %w", err)
+	}
+
+	return fromOpenAIAccumulator(acc)
+}
+
 func toOpenAIParams(req Request, model string, defaultMaxTokens int) (openai.ChatCompletionNewParams, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
@@ -210,6 +247,37 @@ func fromOpenAICompletion(c *openai.ChatCompletion) (Response, error) {
 		Usage: Usage{
 			InputTokens:  int(c.Usage.PromptTokens),
 			OutputTokens: int(c.Usage.CompletionTokens),
+		},
+	}, nil
+}
+
+func fromOpenAIAccumulator(acc openai.ChatCompletionAccumulator) (Response, error) {
+	if len(acc.Choices) == 0 {
+		return Response{}, fmt.Errorf("openai_compat: empty choices in stream")
+	}
+	choice := acc.Choices[0]
+
+	var blocks []ContentBlock
+	if choice.Message.Content != "" {
+		blocks = append(blocks, ContentBlock{Text: choice.Message.Content})
+	}
+	for _, tc := range choice.Message.ToolCalls {
+		blocks = append(blocks, ContentBlock{ToolUse: &ToolUse{
+			ID:    tc.ID,
+			Name:  tc.Function.Name,
+			Input: []byte(tc.Function.Arguments),
+		}})
+	}
+
+	return Response{
+		Message: Message{
+			Role:    RoleAssistant,
+			Content: blocks,
+		},
+		StopReason: normalizeStopReason(string(choice.FinishReason)),
+		Usage: Usage{
+			InputTokens:  int(acc.Usage.PromptTokens),
+			OutputTokens: int(acc.Usage.CompletionTokens),
 		},
 	}, nil
 }

@@ -76,7 +76,20 @@ func (a *Agent) SetContextTokenBudget(budget int) {
 // model emits a final text response, an error occurs, or maxIterations is
 // reached. The final text response is returned and also appended to history.
 func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) (Result, error) {
+	return a.run(ctx, sessionID, input, systemPrompt, nil)
+}
+
+// RunStream is like Run but calls handler with each text delta as tokens
+// arrive, when the underlying LLM client supports streaming. If streaming is
+// not supported, it falls back to a non-streaming call without error.
+func (a *Agent) RunStream(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (Result, error) {
+	return a.run(ctx, sessionID, input, systemPrompt, handler)
+}
+
+func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (Result, error) {
 	log := a.logger.With("agent", a.name, "session_id", sessionID)
+
+	sc, hasStreaming := a.client.(llm.StreamingClient)
 
 	a.history.Append(sessionID, llm.Message{
 		Role:    llm.RoleUser,
@@ -100,7 +113,15 @@ func (a *Agent) Run(ctx context.Context, sessionID, input, systemPrompt string) 
 			Tools:        a.tools.Definitions(),
 		}
 
-		resp, err := a.client.Complete(ctx, req)
+		var (
+			resp llm.Response
+			err  error
+		)
+		if handler != nil && hasStreaming {
+			resp, err = sc.CompleteStream(ctx, req, handler)
+		} else {
+			resp, err = a.client.Complete(ctx, req)
+		}
 		if err != nil {
 			return Result{}, fmt.Errorf("agent: llm call: %w", err)
 		}

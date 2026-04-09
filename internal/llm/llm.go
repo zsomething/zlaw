@@ -109,3 +109,16 @@ type Client interface {
 	// Complete sends a request and returns the full response.
 	Complete(ctx context.Context, req Request) (Response, error)
 }
+
+// StreamHandler is called for each text delta during streaming.
+// delta is a non-empty fragment of the assistant's response text.
+type StreamHandler func(delta string)
+
+// StreamingClient is an optional extension of Client that supports incremental
+// token streaming. Backends that support streaming implement both interfaces.
+type StreamingClient interface {
+	Client
+	// CompleteStream sends a request and calls handler for each text delta as
+	// tokens arrive. It returns the full Response once the stream ends.
+	CompleteStream(ctx context.Context, req Request, handler StreamHandler) (Response, error)
+}
