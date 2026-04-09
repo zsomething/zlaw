@@ -34,6 +34,11 @@ var presets = map[string]BackendPreset{
 		BaseURL:   "https://openrouter.ai/api/v1",
 		APIFormat: APIFormatOpenAI,
 	},
+	// Anthropic — native Messages API
+	"anthropic": {
+		BaseURL:   "https://api.anthropic.com",
+		APIFormat: APIFormatAnthropic,
+	},
 }
 
 // LookupPreset returns the preset for the given name, or an error if unknown.

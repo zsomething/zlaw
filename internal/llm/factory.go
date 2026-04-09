@@ -54,7 +54,14 @@ func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *s
 			Logger:      logger,
 		})
 	case APIFormatAnthropic:
-		return nil, fmt.Errorf("llm: anthropic api format not yet implemented (see card #178)")
+		return NewAnthropicClient(AnthropicConfig{
+			BaseURL:     baseURL,
+			TokenSource: src,
+			Model:       cfg.Model,
+			MaxTokens:   cfg.MaxTokens,
+			Timeout:     timeout,
+			Logger:      logger,
+		})
 	default:
 		return nil, fmt.Errorf("llm: unknown api_format %q (supported: openai, anthropic)", apiFormat)
 	}
