@@ -97,6 +97,7 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 	})
 
 	var result Result
+	var lastInputTokens int // seeded from resp.Usage after each call
 
 	for i := range maxIterations {
 		log.Debug("llm call", "iteration", i+1)
@@ -104,7 +105,7 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 		allMsgs := a.history.Get(sessionID)
 		msgs := allMsgs
 		if a.optimizer != nil {
-			msgs = a.optimizer.Optimize(ctx, allMsgs)
+			msgs = a.optimizer.Optimize(ctx, allMsgs, lastInputTokens)
 		}
 
 		req := llm.Request{
@@ -128,6 +129,7 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 
 		result.Usage.InputTokens += resp.Usage.InputTokens
 		result.Usage.OutputTokens += resp.Usage.OutputTokens
+		lastInputTokens = resp.Usage.InputTokens
 
 		log.Debug("llm response", "stop_reason", resp.StopReason,
 			"input_tokens", resp.Usage.InputTokens,

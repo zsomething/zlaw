@@ -50,12 +50,20 @@ func NewContextOptimizer(cfg ContextOptimizerConfig, summarizer Summarizer, logg
 //  2. Summarize oldest N turns if approaching the summarize threshold and a
 //     summarizer is configured. Falls back to pruning if summarization fails.
 //  3. Prune oldest turns as a final fallback.
-func (o *ContextOptimizer) Optimize(ctx context.Context, msgs []llm.Message) []llm.Message {
+//
+// knownTokens is the actual input token count from the most recent API
+// response. When > 0 it is used instead of the character-heuristic estimate,
+// giving the optimizer a more accurate baseline. Pass 0 on the first call
+// within a turn (before any response is available).
+func (o *ContextOptimizer) Optimize(ctx context.Context, msgs []llm.Message, knownTokens int) []llm.Message {
 	if o.cfg.TokenBudget <= 0 {
 		return msgs
 	}
 
-	est := EstimateTokens(msgs)
+	est := knownTokens
+	if est <= 0 {
+		est = EstimateTokens(msgs)
+	}
 	if est <= o.cfg.TokenBudget {
 		return msgs // within budget, nothing to do
 	}
