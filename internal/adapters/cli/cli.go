@@ -26,9 +26,16 @@ type StreamingRunner interface {
 	RunStream(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (agent.Result, error)
 }
 
+// HistoryManager is the subset of agent.History used by REPL commands.
+type HistoryManager interface {
+	Clear(sessionID string)
+	Get(sessionID string) []llm.Message
+}
+
 // Adapter connects the agent loop to a terminal or piped stdin.
 type Adapter struct {
 	agent        Runner
+	history      HistoryManager // optional; enables /clear and /history commands
 	in           io.Reader
 	out          io.Writer
 	systemPrompt func() string
@@ -64,6 +71,12 @@ func (a *Adapter) SetShowUsage(v bool) {
 	a.showUsage = v
 }
 
+// SetHistoryManager attaches a HistoryManager that backs the /clear and
+// /history REPL commands. Without it those commands print an error.
+func (a *Adapter) SetHistoryManager(h HistoryManager) {
+	a.history = h
+}
+
 // RunInteractive starts a REPL loop: prints a prompt, reads a line, calls the
 // agent, and prints the response. Exits when ctx is cancelled or EOF is reached.
 func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
@@ -94,6 +107,23 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 		// Check for built-in commands.
 		if input == "/exit" || input == "/quit" {
 			return nil
+		}
+		if input == "/clear" {
+			if a.history == nil {
+				fmt.Fprintln(a.out, "error: history manager not available")
+			} else {
+				a.history.Clear(sessionID)
+				fmt.Fprintln(a.out, "history cleared")
+			}
+			continue
+		}
+		if input == "/history" {
+			if a.history == nil {
+				fmt.Fprintln(a.out, "error: history manager not available")
+			} else {
+				a.printHistory(sessionID)
+			}
+			continue
 		}
 
 		a.logger.Debug("user input", "session_id", sessionID, "input", input)
@@ -147,6 +177,36 @@ func (a *Adapter) runTurn(ctx context.Context, sessionID, input string) (result 
 	}
 	result, err = a.agent.Run(ctx, sessionID, input, a.systemPrompt())
 	return result, false, err
+}
+
+// printHistory writes a human-readable summary of the session's message
+// history to out. Tool-result messages (role=tool) are omitted; tool calls
+// inside assistant messages are shown as [tool: name].
+func (a *Adapter) printHistory(sessionID string) {
+	msgs := a.history.Get(sessionID)
+	if len(msgs) == 0 {
+		fmt.Fprintln(a.out, "(no history)")
+		return
+	}
+	for i, m := range msgs {
+		switch m.Role {
+		case llm.RoleTool:
+			// internal tool-result turn — skip
+		case llm.RoleUser:
+			text := m.TextContent()
+			if text != "" {
+				fmt.Fprintf(a.out, "[%d] you: %s\n", i+1, text)
+			}
+		case llm.RoleAssistant:
+			text := m.TextContent()
+			if text != "" {
+				fmt.Fprintf(a.out, "[%d] assistant: %s\n", i+1, text)
+			}
+			for _, tu := range m.ToolUses() {
+				fmt.Fprintf(a.out, "[%d] assistant: [tool: %s]\n", i+1, tu.Name)
+			}
+		}
+	}
 }
 
 // printVerbose writes thinking blocks and tool calls to out before the response.

@@ -131,6 +131,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 
 	// --- Build CLI adapter ---
 	adapter := cli.New(ag, func() string { return *promptPtr.Load() }, *verbose, nil, nil, logger)
+	adapter.SetHistoryManager(history)
 	adapter.SetShowUsage(*showUsage)
 
 	if cli.IsTerminal(os.Stdin) {
