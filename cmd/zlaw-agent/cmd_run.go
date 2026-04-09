@@ -97,6 +97,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.Bash{})
 	registry.Register(builtin.WebFetch{})
 	registry.Register(builtin.WebSearch{})
+	registry.Register(builtin.HTTPRequest{})
 
 	// --- Build agent ---
 	history, err := buildHistory(cfg.Agent.Name, "cli", logger)
