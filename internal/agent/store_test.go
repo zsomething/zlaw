@@ -161,6 +161,59 @@ func TestHistory_MetaTracking(t *testing.T) {
 	}
 }
 
+func TestJSONLFileStore_Archive(t *testing.T) {
+	dir := t.TempDir()
+	store := agent.NewJSONLFileStore(dir)
+
+	msg := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hello"}}}
+	if err := store.Append("s1", msg); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if err := store.UpdateMeta("s1", func(m *agent.SessionMeta) { m.Channel = "cli" }); err != nil {
+		t.Fatalf("UpdateMeta: %v", err)
+	}
+
+	if err := store.Archive("s1"); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	// Active load should return nothing.
+	msgs, err := store.Load("s1")
+	if err != nil {
+		t.Fatalf("Load after Archive: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages after Archive, got %d", len(msgs))
+	}
+
+	// Archive again on missing file should not error.
+	if err := store.Archive("s1"); err != nil {
+		t.Fatalf("Archive of already-archived session: %v", err)
+	}
+}
+
+func TestHistory_Clear_DoesNotReloadFromDisk(t *testing.T) {
+	store := agent.NewJSONLFileStore(t.TempDir())
+	h := agent.NewHistoryWithStore(store, "test")
+
+	h.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "old message"}}})
+
+	h.Clear("s1")
+
+	// Get must return empty — the file was archived and in-memory cache cleared.
+	msgs := h.Get("s1")
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages after Clear, got %d", len(msgs))
+	}
+
+	// New History (simulates process restart) must also return empty.
+	h2 := agent.NewHistoryWithStore(store, "test")
+	msgs = h2.Get("s1")
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages after restart post-Clear, got %d", len(msgs))
+	}
+}
+
 func TestHistory_RecordUsage(t *testing.T) {
 	store := agent.NewJSONLFileStore(t.TempDir())
 	h := agent.NewHistoryWithStore(store, "cli")

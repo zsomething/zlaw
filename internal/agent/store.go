@@ -38,6 +38,11 @@ type SessionStore interface {
 	// UpdateMeta loads the current metadata (or zero value), calls fn to mutate
 	// it, then persists the result. fn must not be nil.
 	UpdateMeta(sessionID string, fn func(*SessionMeta)) error
+	// Archive moves the session's JSONL and metadata files to an archived/
+	// subdirectory, preserving history without polluting the active session
+	// directory. A subsequent Load returns nil, nil (as if the session is new).
+	// Missing files are silently ignored.
+	Archive(sessionID string) error
 }
 
 // JSONLFileStore stores each session as a JSONL file under baseDir.
@@ -134,6 +139,30 @@ func (s *JSONLFileStore) LoadMeta(sessionID string) (SessionMeta, error) {
 		return SessionMeta{}, fmt.Errorf("session meta: decode %s: %w", sessionID, err)
 	}
 	return m, nil
+}
+
+// Archive moves the session's JSONL and metadata files into an archived/
+// subdirectory under baseDir. A timestamp suffix is appended to the filename
+// so repeated clears of the same session ID do not overwrite each other.
+// Subsequent Load calls return nil, nil (no active file), so the next Append
+// starts a fresh log. Missing files are silently ignored.
+func (s *JSONLFileStore) Archive(sessionID string) error {
+	archiveDir := filepath.Join(s.baseDir, "archived")
+	if err := os.MkdirAll(archiveDir, 0o700); err != nil {
+		return fmt.Errorf("session store: mkdir archived: %w", err)
+	}
+	ts := time.Now().UTC().Format("20060102T150405Z")
+	suffix := sessionID + "-" + ts
+	for _, pair := range [][2]string{
+		{s.filePath(sessionID), filepath.Join(archiveDir, suffix+".jsonl")},
+		{s.metaFilePath(sessionID), filepath.Join(archiveDir, suffix+".meta.json")},
+	} {
+		src, dst := pair[0], pair[1]
+		if err := os.Rename(src, dst); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("session store: archive %s: %w", sessionID, err)
+		}
+	}
+	return nil
 }
 
 // UpdateMeta loads metadata, applies fn, and writes the result back.

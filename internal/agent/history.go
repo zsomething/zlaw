@@ -164,15 +164,23 @@ func (h *History) Lines(sessionID string) []string {
 	return lines
 }
 
-// Clear removes all in-memory messages for the given session.
-// On-disk session files are preserved. After Clear, Get returns nil and will
-// not reload from the store, so the session starts fresh in memory.
+// Clear removes all in-memory messages for the given session and archives
+// the on-disk session files. After Clear, Get returns nil for this session
+// and new Append calls start a fresh log. Archive errors are logged but do
+// not block the clear.
 func (h *History) Clear(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.cache, sessionID)
-	// Mark as loaded so the next Get does not reload stale data from disk.
+	// Mark as loaded so the next Get does not attempt a disk reload before
+	// the first new Append (the archived file is gone, but this avoids the
+	// stat round-trip).
 	h.loaded[sessionID] = true
+	if h.store != nil {
+		if err := h.store.Archive(sessionID); err != nil {
+			h.logger.Warn("history: archive failed", "session_id", sessionID, "error", err)
+		}
+	}
 }
 
 // SessionDir returns the session directory for a named agent.
