@@ -19,8 +19,9 @@ type AgentRunner interface {
 
 // turnInput is a single user message queued for processing.
 type turnInput struct {
-	ctx   context.Context
-	input string
+	ctx    context.Context
+	input  string
+	origin string // e.g. "telegram", "cli-attach"
 }
 
 // Session is a live conversation with its own broadcaster and input queue.
@@ -75,13 +76,14 @@ func (m *Manager) GetOrCreate(ctx context.Context, sessionID string) *Session {
 }
 
 // Submit enqueues an input turn for the session identified by sessionID.
-// The session is created if it does not exist. Non-blocking: drops the turn
-// with a warning if the channel buffer is full. Returns the session so the
-// caller can add sinks before the turn is processed.
-func (m *Manager) Submit(ctx context.Context, sessionID, input string) *Session {
+// origin identifies the channel that submitted the turn (e.g. "telegram", "cli-attach")
+// and is carried through to EventAssistantDone so sinks can adapt their presentation.
+// Non-blocking: drops the turn with a warning if the channel buffer is full.
+// Returns the session so the caller can add sinks before the turn is processed.
+func (m *Manager) Submit(ctx context.Context, sessionID, input, origin string) *Session {
 	s := m.GetOrCreate(ctx, sessionID)
 	select {
-	case s.inputCh <- turnInput{ctx: ctx, input: input}:
+	case s.inputCh <- turnInput{ctx: ctx, input: input, origin: origin}:
 	default:
 		m.logger.Warn("session: input queue full, dropping turn", "session_id", sessionID)
 	}
@@ -131,5 +133,7 @@ func (m *Manager) processTurn(ctx context.Context, s *Session, t turnInput, log 
 		Type:      EventAssistantDone,
 		SessionID: s.ID,
 		Data:      text,
+		Origin:    t.origin,
+		Input:     t.input,
 	})
 }

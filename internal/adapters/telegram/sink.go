@@ -49,15 +49,16 @@ func (s *chatSink) SendTyping(ctx context.Context) error {
 // Send handles incoming session events.
 // EventAssistantDelta: buffer the delta and edit the in-progress message
 // (throttled to editThrottle).
-// EventAssistantDone: perform a final edit with the complete text, then reset
-// state for the next turn.
+// EventAssistantDone: perform a final edit with the complete text (prepending a
+// quote of the original input when the turn originated from a non-Telegram channel),
+// then reset state for the next turn.
 // Other event types are silently ignored.
 func (s *chatSink) Send(ctx context.Context, e session.Event) error {
 	switch e.Type {
 	case session.EventAssistantDelta:
 		return s.handleDelta(ctx, e.Data)
 	case session.EventAssistantDone:
-		return s.handleDone(ctx, e.Data)
+		return s.handleDone(ctx, e)
 	case session.EventError:
 		_, err := s.bot.SendMessage(ctx, s.chatID, "⚠️ "+e.Data)
 		return err
@@ -101,7 +102,7 @@ func (s *chatSink) handleDelta(ctx context.Context, delta string) error {
 	return nil
 }
 
-func (s *chatSink) handleDone(ctx context.Context, text string) error {
+func (s *chatSink) handleDone(ctx context.Context, e session.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -110,12 +111,18 @@ func (s *chatSink) handleDone(ctx context.Context, text string) error {
 		s.buf.Reset()
 	}()
 
-	finalText := text
+	finalText := e.Data
 	if finalText == "" {
 		finalText = s.buf.String()
 	}
 	if finalText == "" {
 		return nil // nothing to send
+	}
+
+	// Prepend a quote of the original input when the turn came from outside Telegram
+	// (e.g. CLI attach), so the Telegram user sees what triggered the response.
+	if e.Origin != "" && e.Origin != "telegram" && e.Input != "" {
+		finalText = "📎 " + e.Input + "\n\n" + finalText
 	}
 
 	if s.msgID == 0 {

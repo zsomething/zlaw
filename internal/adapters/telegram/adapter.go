@@ -99,5 +99,5 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 	}
 	a.mu.Unlock()
 
-	a.manager.Submit(ctx, sid, msg.Text)
+	a.manager.Submit(ctx, sid, msg.Text, "telegram")
 }

@@ -33,4 +33,10 @@ type Event struct {
 	SessionID string    `json:"session_id,omitempty"`
 	// Data carries the payload: delta text, complete response, user input, or error message.
 	Data string `json:"data,omitempty"`
+	// Origin identifies which channel submitted the turn that produced this event.
+	// Set on EventAssistantDone and EventAssistantDelta. Examples: "telegram", "cli-attach".
+	Origin string `json:"origin,omitempty"`
+	// Input is the original user message that triggered this turn.
+	// Set on EventAssistantDone so sinks can attribute the response to a specific query.
+	Input string `json:"input,omitempty"`
 }

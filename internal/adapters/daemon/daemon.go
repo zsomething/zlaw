@@ -132,7 +132,7 @@ func (d *Daemon) handleConn(ctx context.Context, conn net.Conn) {
 			return
 		}
 		if e.Type == session.EventUserTurn && e.Data != "" {
-			d.manager.Submit(ctx, sessionID, e.Data)
+			d.manager.Submit(ctx, sessionID, e.Data, "cli-attach")
 		}
 	}
 }

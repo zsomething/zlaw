@@ -89,7 +89,7 @@ func TestManager_Submit_CallsRunner(t *testing.T) {
 	mgr := session.NewManager(runner, func() string { return "sys" }, nil)
 	ctx := context.Background()
 
-	mgr.Submit(ctx, "sess1", "hello world")
+	mgr.Submit(ctx, "sess1", "hello world", "test")
 
 	// Wait for the runner to be called.
 	select {
@@ -119,7 +119,7 @@ func TestManager_Submit_BroadcastsEvents(t *testing.T) {
 	s := mgr.GetOrCreate(ctx, "sess2")
 	s.Broadcaster.Add(sink)
 
-	mgr.Submit(ctx, "sess2", "ping")
+	mgr.Submit(ctx, "sess2", "ping", "test")
 
 	// Wait for the turn to complete.
 	select {
@@ -159,7 +159,7 @@ func TestManager_Submit_DropWhenFull(t *testing.T) {
 	// Submit 20 turns; the channel holds 8.
 	// The excess should be dropped without panic.
 	for i := 0; i < 20; i++ {
-		mgr.Submit(ctx, "sess3", "msg")
+		mgr.Submit(ctx, "sess3", "msg", "test")
 	}
 	// Drain doneCh to avoid goroutine leak in test.
 	// Only a subset of messages will have been queued.
