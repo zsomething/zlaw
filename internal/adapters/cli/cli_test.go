@@ -3,13 +3,16 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
+
+	"log/slog"
 
 	"github.com/chickenzord/zlaw/internal/adapters/cli"
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/llm"
-	"log/slog"
+	"github.com/chickenzord/zlaw/internal/slashcmd"
 )
 
 // stubRunner always returns a fixed response.
@@ -40,13 +43,34 @@ func newStubHistory() *stubHistory {
 
 func (h *stubHistory) Clear(sessionID string) { delete(h.msgs, sessionID) }
 
+// Get is a test helper — not part of slashcmd.HistoryManager.
 func (h *stubHistory) Get(sessionID string) []llm.Message { return h.msgs[sessionID] }
+
+func (h *stubHistory) Lines(sessionID string) []string {
+	msgs := h.msgs[sessionID]
+	var lines []string
+	for i, m := range msgs {
+		switch m.Role {
+		case llm.RoleTool:
+			// skip
+		case llm.RoleUser:
+			if text := m.TextContent(); text != "" {
+				lines = append(lines, fmt.Sprintf("[%d] you: %s", i+1, text))
+			}
+		case llm.RoleAssistant:
+			if text := m.TextContent(); text != "" {
+				lines = append(lines, fmt.Sprintf("[%d] assistant: %s", i+1, text))
+			}
+		}
+	}
+	return lines
+}
 
 func (h *stubHistory) add(sessionID string, msgs ...llm.Message) {
 	h.msgs[sessionID] = append(h.msgs[sessionID], msgs...)
 }
 
-func newAdapter(input string, hist cli.HistoryManager) (*cli.Adapter, *bytes.Buffer) {
+func newAdapter(input string, hist slashcmd.HistoryManager) (*cli.Adapter, *bytes.Buffer) {
 	in := strings.NewReader(input)
 	out := &bytes.Buffer{}
 	a := cli.New(stubRunner{"ok"}, func() string { return "" }, false, in, out, slog.Default())

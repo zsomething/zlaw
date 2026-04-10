@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -131,6 +132,36 @@ func (h *History) Get(sessionID string) []llm.Message {
 	out := make([]llm.Message, len(msgs))
 	copy(out, msgs)
 	return out
+}
+
+// Lines returns a human-readable representation of the session's conversation
+// history as a slice of strings. Tool-result messages (role=tool) are omitted;
+// tool calls inside assistant messages are shown as [tool: name].
+// Returns nil when there is no history.
+func (h *History) Lines(sessionID string) []string {
+	msgs := h.Get(sessionID)
+	if len(msgs) == 0 {
+		return nil
+	}
+	var lines []string
+	for i, m := range msgs {
+		switch m.Role {
+		case llm.RoleTool:
+			// internal tool-result turn — skip
+		case llm.RoleUser:
+			if text := m.TextContent(); text != "" {
+				lines = append(lines, fmt.Sprintf("[%d] you: %s", i+1, text))
+			}
+		case llm.RoleAssistant:
+			if text := m.TextContent(); text != "" {
+				lines = append(lines, fmt.Sprintf("[%d] assistant: %s", i+1, text))
+			}
+			for _, tu := range m.ToolUses() {
+				lines = append(lines, fmt.Sprintf("[%d] assistant: [tool: %s]", i+1, tu.Name))
+			}
+		}
+	}
+	return lines
 }
 
 // Clear removes all in-memory messages for the given session.

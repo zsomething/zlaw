@@ -190,6 +190,7 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	// --- Start Telegram adapter (if configured) ---
 	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
 		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
+		tgAdapter.SetHistoryManager(history)
 		go func() {
 			if err := tgAdapter.Run(ctx); err != nil {
 				logger.Error("telegram adapter stopped", "error", err)

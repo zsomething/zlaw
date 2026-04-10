@@ -12,6 +12,7 @@ import (
 
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/chickenzord/zlaw/internal/slashcmd"
 )
 
 // Runner is the subset of agent.Agent used by the CLI adapter.
@@ -26,12 +27,6 @@ type StreamingRunner interface {
 	RunStream(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (agent.Result, error)
 }
 
-// HistoryManager is the subset of agent.History used by REPL commands.
-type HistoryManager interface {
-	Clear(sessionID string)
-	Get(sessionID string) []llm.Message
-}
-
 // SkillLoader is called by the REPL when the user types /skill-name.
 // It returns the full skill body for the given name, or an error if not found.
 type SkillLoader func(name string) (string, error)
@@ -39,7 +34,8 @@ type SkillLoader func(name string) (string, error)
 // Adapter connects the agent loop to a terminal or piped stdin.
 type Adapter struct {
 	agent        Runner
-	history      HistoryManager // optional; enables /clear and /history commands
+	cmds         *slashcmd.Registry     // slash command dispatcher
+	history      slashcmd.HistoryManager // optional; backs /clear and /history
 	in           io.Reader
 	out          io.Writer
 	systemPrompt func() string
@@ -62,8 +58,11 @@ func New(a Runner, systemPrompt func() string, verbose bool, in io.Reader, out i
 	if out == nil {
 		out = os.Stdout
 	}
+	r := slashcmd.New()
+	slashcmd.RegisterBuiltins(r)
 	return &Adapter{
 		agent:        a,
+		cmds:         r,
 		in:           in,
 		out:          out,
 		systemPrompt: systemPrompt,
@@ -79,8 +78,14 @@ func (a *Adapter) SetShowUsage(v bool) {
 
 // SetHistoryManager attaches a HistoryManager that backs the /clear and
 // /history REPL commands. Without it those commands print an error.
-func (a *Adapter) SetHistoryManager(h HistoryManager) {
+func (a *Adapter) SetHistoryManager(h slashcmd.HistoryManager) {
 	a.history = h
+}
+
+// Commands returns the slash command registry, allowing callers to register
+// additional commands before the REPL starts.
+func (a *Adapter) Commands() *slashcmd.Registry {
+	return a.cmds
 }
 
 // SetPrefill attaches a function that returns a preamble to inject into the
@@ -124,32 +129,21 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 			continue
 		}
 
-		// Check for built-in commands.
-		if input == "/exit" || input == "/quit" {
-			return nil
-		}
-		if input == "/clear" {
-			if a.history == nil {
-				fmt.Fprintln(a.out, "error: history manager not available")
-			} else {
-				a.history.Clear(sessionID)
-				fmt.Fprintln(a.out, "history cleared")
-			}
-			continue
-		}
-		if input == "/history" {
-			if a.history == nil {
-				fmt.Fprintln(a.out, "error: history manager not available")
-			} else {
-				a.printHistory(sessionID)
-			}
-			continue
-		}
-
-		// /skill-name — user-invoked skill injection.
-		// Loads the skill body and sends it as the user message, bypassing
-		// autonomous skill selection.
+		// Slash commands — dispatch via registry before reaching the agent.
 		if strings.HasPrefix(input, "/") {
+			env := slashcmd.Env{SessionID: sessionID, History: a.history}
+			resp, matched := a.cmds.Dispatch(ctx, input, env)
+			if matched {
+				if resp.Text != "" {
+					fmt.Fprintln(a.out, resp.Text)
+				}
+				if resp.Action == slashcmd.ActionExit {
+					return nil
+				}
+				continue
+			}
+
+			// Not a registered command — try skill loader.
 			skillName := strings.TrimPrefix(input, "/")
 			if a.skillLoader != nil {
 				body, err := a.skillLoader(skillName)
@@ -231,7 +225,7 @@ func (a *Adapter) maybeInjectPrefill(sessionID, input string) (string, error) {
 	if a.prefillFn == nil {
 		return input, nil
 	}
-	if a.history != nil && len(a.history.Get(sessionID)) > 0 {
+	if a.history != nil && len(a.history.Lines(sessionID)) > 0 {
 		return input, nil // not first message
 	}
 	preamble, err := a.prefillFn()
@@ -244,35 +238,6 @@ func (a *Adapter) maybeInjectPrefill(sessionID, input string) (string, error) {
 	return preamble + "\n" + input, nil
 }
 
-// printHistory writes a human-readable summary of the session's message
-// history to out. Tool-result messages (role=tool) are omitted; tool calls
-// inside assistant messages are shown as [tool: name].
-func (a *Adapter) printHistory(sessionID string) {
-	msgs := a.history.Get(sessionID)
-	if len(msgs) == 0 {
-		fmt.Fprintln(a.out, "(no history)")
-		return
-	}
-	for i, m := range msgs {
-		switch m.Role {
-		case llm.RoleTool:
-			// internal tool-result turn — skip
-		case llm.RoleUser:
-			text := m.TextContent()
-			if text != "" {
-				fmt.Fprintf(a.out, "[%d] you: %s\n", i+1, text)
-			}
-		case llm.RoleAssistant:
-			text := m.TextContent()
-			if text != "" {
-				fmt.Fprintf(a.out, "[%d] assistant: %s\n", i+1, text)
-			}
-			for _, tu := range m.ToolUses() {
-				fmt.Fprintf(a.out, "[%d] assistant: [tool: %s]\n", i+1, tu.Name)
-			}
-		}
-	}
-}
 
 // printVerbose writes thinking blocks and tool calls to out before the response.
 func (a *Adapter) printVerbose(r agent.Result) {

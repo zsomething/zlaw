@@ -152,3 +152,19 @@ func (b *Bot) SendChatAction(ctx context.Context, chatID int64, action string) e
 	})
 	return err
 }
+
+// BotCommand is a single entry in the bot's command menu.
+type BotCommand struct {
+	Command     string `json:"command"`     // without leading slash
+	Description string `json:"description"` // max 256 chars
+}
+
+// SetMyCommands registers the bot's command list with Telegram.
+// Telegram displays these in the command picker UI.
+// Passing an empty slice clears all registered commands.
+func (b *Bot) SetMyCommands(ctx context.Context, commands []BotCommand) error {
+	_, err := b.post(ctx, "setMyCommands", map[string]any{
+		"commands": commands,
+	})
+	return err
+}
