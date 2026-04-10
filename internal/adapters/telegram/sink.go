@@ -74,7 +74,7 @@ func (s *chatSink) handleDelta(ctx context.Context, delta string) error {
 	defer s.mu.Unlock()
 
 	s.buf.WriteString(delta)
-	text := s.buf.String()
+	text := mdToHTML(s.buf.String())
 
 	if s.msgID == 0 {
 		// First delta: send the initial message to get a message ID.
@@ -111,19 +111,21 @@ func (s *chatSink) handleDone(ctx context.Context, e session.Event) error {
 		s.buf.Reset()
 	}()
 
-	finalText := e.Data
-	if finalText == "" {
-		finalText = s.buf.String()
+	rawText := e.Data
+	if rawText == "" {
+		rawText = s.buf.String()
 	}
-	if finalText == "" {
+	if rawText == "" {
 		return nil // nothing to send
 	}
 
 	// Prepend a quote of the original input when the turn came from outside Telegram
 	// (e.g. CLI attach), so the Telegram user sees what triggered the response.
 	if e.Origin != "" && e.Origin != "telegram" && e.Input != "" {
-		finalText = "📎 " + e.Input + "\n\n" + finalText
+		rawText = "📎 " + e.Input + "\n\n" + rawText
 	}
+
+	finalText := mdToHTML(rawText)
 
 	if s.msgID == 0 {
 		// No in-progress message (non-streaming path): send the full response.

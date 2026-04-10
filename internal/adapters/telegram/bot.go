@@ -118,8 +118,9 @@ func (b *Bot) GetUpdates(ctx context.Context, offset, timeout int) ([]Update, er
 // SendMessage sends a new text message to chatID and returns the sent message ID.
 func (b *Bot) SendMessage(ctx context.Context, chatID int64, text string) (int, error) {
 	raw, err := b.post(ctx, "sendMessage", map[string]any{
-		"chat_id": strconv.FormatInt(chatID, 10),
-		"text":    text,
+		"chat_id":    strconv.FormatInt(chatID, 10),
+		"text":       text,
+		"parse_mode": "HTML",
 	})
 	if err != nil {
 		return 0, err
@@ -138,6 +139,7 @@ func (b *Bot) EditMessageText(ctx context.Context, chatID int64, messageID int, 
 		"chat_id":    strconv.FormatInt(chatID, 10),
 		"message_id": messageID,
 		"text":       text,
+		"parse_mode": "HTML",
 	})
 	return err
 }
