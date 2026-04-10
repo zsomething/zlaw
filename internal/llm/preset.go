@@ -19,13 +19,23 @@ type BackendPreset struct {
 
 // presets is the built-in registry of named backends.
 var presets = map[string]BackendPreset{
-	// Minimax — global endpoint
+	// Minimax — global endpoint (Anthropic-compatible, recommended)
 	"minimax": {
+		BaseURL:   "https://api.minimax.io/anthropic",
+		APIFormat: APIFormatAnthropic,
+	},
+	// Minimax — global endpoint (OpenAI-compatible)
+	"minimax-openai": {
 		BaseURL:   "https://api.minimax.io/v1",
 		APIFormat: APIFormatOpenAI,
 	},
-	// Minimax — China endpoint
+	// Minimax — China endpoint (Anthropic-compatible, recommended)
 	"minimax-cn": {
+		BaseURL:   "https://api.minimaxi.com/anthropic",
+		APIFormat: APIFormatAnthropic,
+	},
+	// Minimax — China endpoint (OpenAI-compatible)
+	"minimax-cn-openai": {
 		BaseURL:   "https://api.minimaxi.com/v1",
 		APIFormat: APIFormatOpenAI,
 	},
