@@ -21,6 +21,9 @@ agents/*/
 !agents/example/
 !agents/example/**
 
+# Local ZLAW_HOME for development (credentials, sessions, run sockets)
+.zlaw/
+
 # ZLAW_HOME runtime data (credentials and session history)
 credentials.toml
 sessions/
