@@ -8,6 +8,7 @@ import (
 
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/chickenzord/zlaw/internal/skills"
 )
 
 func TestBuildPrefill_Empty(t *testing.T) {
@@ -137,6 +138,30 @@ func TestBuildSystemSections_Empty(t *testing.T) {
 	sections := agent.BuildSystemSections(nil, config.Personality{})
 	if len(sections) != 0 {
 		t.Fatalf("want 0 sections, got %d", len(sections))
+	}
+}
+
+func TestBuildSkillsSection_Format(t *testing.T) {
+	ss := []skills.Skill{
+		{Name: "weather", Description: "Handling weather requests."},
+		{Name: "time", Description: "Handling time/timezone questions."},
+	}
+	out := agent.BuildSkillsSection(ss)
+	if !strings.HasPrefix(out, "[Available Skills]\n") {
+		t.Errorf("expected [Available Skills] header, got: %q", out)
+	}
+	if !strings.Contains(out, "- weather: Handling weather requests.") {
+		t.Errorf("expected weather entry, got: %q", out)
+	}
+	if !strings.Contains(out, "- time: Handling time/timezone questions.") {
+		t.Errorf("expected time entry, got: %q", out)
+	}
+}
+
+func TestBuildSkillsSection_Empty(t *testing.T) {
+	out := agent.BuildSkillsSection(nil)
+	if out != "" {
+		t.Errorf("empty skills should return empty string, got: %q", out)
 	}
 }
 

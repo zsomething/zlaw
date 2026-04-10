@@ -9,6 +9,7 @@ import (
 
 	"github.com/chickenzord/zlaw/internal/config"
 	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/chickenzord/zlaw/internal/skills"
 )
 
 // StickyBlock is a named, framework-level instruction block injected at the
@@ -65,6 +66,24 @@ func BuildPrefill(agentDir string, sources []string) (string, error) {
 // so it cannot be silently broken by a personality edit.
 const StickyProactiveMemorySave = `[Memory behavior]
 When you learn something worth retaining — user preferences, facts, decisions, recurring context — call memory_save immediately. Keep memories short, factual, and tagged. Do not save transient info or things already in session history.`
+
+// BuildSkillsSection returns a formatted [Available Skills] block for injection
+// into the system prompt. Each skill is listed as:
+//
+//	- <name>: <description>
+//
+// Returns an empty string when skills is empty.
+func BuildSkillsSection(discovered []skills.Skill) string {
+	if len(discovered) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("[Available Skills]\n")
+	for _, s := range discovered {
+		fmt.Fprintf(&b, "- %s: %s\n", s.Name, s.Description)
+	}
+	return b.String()
+}
 
 // BuildMemoriesSection returns a formatted [Memories] block for injection into
 // the system prompt. Memories are listed in reverse-update order (most recent

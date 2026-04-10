@@ -42,6 +42,7 @@ type Agent struct {
 	logger          *slog.Logger
 	optimizer       *ContextOptimizer // nil = no context optimization
 	stickyBlocks    []StickyBlock
+	skillsSection   string      // pre-built [Available Skills] block; "" = no skills
 	memoryStore     MemoryStore // nil = memories disabled
 	maxMemoryTokens int
 }
@@ -68,6 +69,13 @@ func (a *Agent) SetContextOptimizer(o *ContextOptimizer) {
 // ordered; sticky content lives in Go source, not agent config files.
 func (a *Agent) SetStickyBlocks(blocks []StickyBlock) {
 	a.stickyBlocks = blocks
+}
+
+// SetSkillsSection sets the pre-built [Available Skills] index block to inject
+// as a stable cached section between personality and memories. Pass an empty
+// string to disable. Use BuildSkillsSection to build the block.
+func (a *Agent) SetSkillsSection(section string) {
+	a.skillsSection = section
 }
 
 // SetMemoryStore attaches a MemoryStore whose contents are injected as a
@@ -131,8 +139,8 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 			Messages: msgs,
 			Tools:    a.tools.Definitions(),
 		}
-		if len(a.stickyBlocks) > 0 {
-			req.SystemSections = agentSystemSections(a.stickyBlocks, systemPrompt)
+		if len(a.stickyBlocks) > 0 || a.skillsSection != "" {
+			req.SystemSections = agentSystemSections(a.stickyBlocks, systemPrompt, a.skillsSection)
 		} else {
 			req.SystemPrompt = systemPrompt
 		}
@@ -224,12 +232,19 @@ func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, 
 	return Result{}, fmt.Errorf("agent: exceeded max iterations (%d)", maxIterations)
 }
 
-// agentSystemSections builds the system prompt as two sections for the LLM
-// request: sticky blocks (cache checkpoint 1) followed by the personality
-// string (cache checkpoint 2). Empty sections are omitted.
-func agentSystemSections(sticky []StickyBlock, systemPrompt string) []llm.SystemSection {
+// agentSystemSections builds the system prompt as structured sections:
+//
+//   - Section 1 (checkpoint 1): sticky blocks — never changes
+//   - Section 2: SOUL+IDENTITY personality string — rarely changes
+//   - Section 3 (checkpoint 2): skills index — stable; cache checkpoint here
+//     so memories (volatile, uncached) don't invalidate the skills cache
+//
+// When no skillsSection is provided the personality section becomes
+// checkpoint 2 (matching the previous behaviour). Empty sections are omitted.
+func agentSystemSections(sticky []StickyBlock, systemPrompt, skillsSection string) []llm.SystemSection {
 	var sections []llm.SystemSection
 
+	// Section 1: sticky blocks (cache checkpoint 1).
 	var sb strings.Builder
 	for _, s := range sticky {
 		if c := strings.TrimSpace(s.Content); c != "" {
@@ -246,11 +261,26 @@ func agentSystemSections(sticky []StickyBlock, systemPrompt string) []llm.System
 		})
 	}
 
-	if systemPrompt != "" {
+	if skillsSection != "" {
+		// With skills: personality has no checkpoint; skills section is checkpoint 2.
+		if systemPrompt != "" {
+			sections = append(sections, llm.SystemSection{
+				Content:         systemPrompt,
+				CacheCheckpoint: false,
+			})
+		}
 		sections = append(sections, llm.SystemSection{
-			Content:         systemPrompt,
+			Content:         skillsSection,
 			CacheCheckpoint: true,
 		})
+	} else {
+		// No skills: personality is checkpoint 2 (original behaviour).
+		if systemPrompt != "" {
+			sections = append(sections, llm.SystemSection{
+				Content:         systemPrompt,
+				CacheCheckpoint: true,
+			})
+		}
 	}
 
 	return sections

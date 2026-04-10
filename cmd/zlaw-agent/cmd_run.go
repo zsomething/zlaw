@@ -14,6 +14,7 @@ import (
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/config"
 	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/chickenzord/zlaw/internal/skills"
 	"github.com/chickenzord/zlaw/internal/tools"
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
 )
@@ -133,6 +134,23 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 		registry.Register(builtin.MemoryRecall{Store: memStore})
 		registry.Register(builtin.MemoryDelete{Store: memStore})
 	}
+
+	// --- Discover skills ---
+	discoveredSkills, err := skills.Discover(config.ZlawHome(), cfg.Agent.Name, logger)
+	if err != nil {
+		logger.Warn("skill discovery failed, continuing without skills", "error", err)
+		discoveredSkills = nil
+	}
+	var skillsMap map[string]skills.Skill
+	if len(discoveredSkills) > 0 {
+		skillsMap = make(map[string]skills.Skill, len(discoveredSkills))
+		for _, s := range discoveredSkills {
+			skillsMap[s.Name] = s
+		}
+		registry.Register(builtin.SkillLoad{Skills: skillsMap})
+		logger.Info("skills discovered", "count", len(discoveredSkills))
+	}
+
 	if len(cfg.Tools.Allowed) > 0 {
 		registry.SetAllowlist(cfg.Tools.Allowed)
 		logger.Info("tool allowlist enforced", "allowed", cfg.Tools.Allowed)
@@ -146,6 +164,9 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	}
 	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
 	ag.SetStickyBlocks(stickyBlocks)
+	if len(discoveredSkills) > 0 {
+		ag.SetSkillsSection(agent.BuildSkillsSection(discoveredSkills))
+	}
 	if memStore != nil {
 		ag.SetMemoryStore(memStore, cfg.LLM.MaxMemoryTokens)
 	}
@@ -189,6 +210,15 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	adapter := cli.New(ag, func() string { return *promptPtr.Load() }, *verbose, nil, nil, logger)
 	adapter.SetHistoryManager(history)
 	adapter.SetShowUsage(*showUsage)
+	if skillsMap != nil {
+		adapter.SetSkillLoader(func(name string) (string, error) {
+			s, ok := skillsMap[name]
+			if !ok {
+				return "", fmt.Errorf("skill %q not found", name)
+			}
+			return s.Body, nil
+		})
+	}
 	if len(cfg.Context.Prefill) > 0 {
 		adapter.SetPrefill(func() (string, error) {
 			return agent.BuildPrefill(agentDir, cfg.Context.Prefill)

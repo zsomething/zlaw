@@ -32,6 +32,10 @@ type HistoryManager interface {
 	Get(sessionID string) []llm.Message
 }
 
+// SkillLoader is called by the REPL when the user types /skill-name.
+// It returns the full skill body for the given name, or an error if not found.
+type SkillLoader func(name string) (string, error)
+
 // Adapter connects the agent loop to a terminal or piped stdin.
 type Adapter struct {
 	agent        Runner
@@ -42,6 +46,7 @@ type Adapter struct {
 	verbose      bool
 	showUsage    bool
 	prefillFn    func() (string, error) // optional; injected into first user message
+	skillLoader  SkillLoader            // optional; handles /skill-name REPL commands
 	sessionIn    int                    // cumulative input tokens for this session
 	sessionOut   int                    // cumulative output tokens for this session
 	logger       *slog.Logger
@@ -83,6 +88,13 @@ func (a *Adapter) SetHistoryManager(h HistoryManager) {
 // history is empty). No-op when nil or when it returns an empty string.
 func (a *Adapter) SetPrefill(fn func() (string, error)) {
 	a.prefillFn = fn
+}
+
+// SetSkillLoader attaches a SkillLoader that handles /skill-name REPL
+// commands. When set, typing /weather (for example) injects the full skill
+// body as the user message and sends it to the agent directly.
+func (a *Adapter) SetSkillLoader(fn SkillLoader) {
+	a.skillLoader = fn
 }
 
 // RunInteractive starts a REPL loop: prints a prompt, reads a line, calls the
@@ -132,6 +144,24 @@ func (a *Adapter) RunInteractive(ctx context.Context, sessionID string) error {
 				a.printHistory(sessionID)
 			}
 			continue
+		}
+
+		// /skill-name — user-invoked skill injection.
+		// Loads the skill body and sends it as the user message, bypassing
+		// autonomous skill selection.
+		if strings.HasPrefix(input, "/") {
+			skillName := strings.TrimPrefix(input, "/")
+			if a.skillLoader != nil {
+				body, err := a.skillLoader(skillName)
+				if err != nil {
+					fmt.Fprintf(a.out, "error: %v\n", err)
+					continue
+				}
+				input = body
+			} else {
+				fmt.Fprintf(a.out, "error: unknown command %q\n", input)
+				continue
+			}
 		}
 
 		a.logger.Debug("user input", "session_id", sessionID, "input", input)
