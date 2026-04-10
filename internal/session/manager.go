@@ -40,6 +40,7 @@ type Manager struct {
 	runner      AgentRunner
 	sysPromptFn func() string
 	logger      *slog.Logger
+	activeTurns sync.WaitGroup // counts in-flight agent turns
 }
 
 // NewManager creates a Manager. logger may be nil (slog.Default() is used).
@@ -108,6 +109,8 @@ func (m *Manager) runSession(ctx context.Context, s *Session) {
 }
 
 func (m *Manager) processTurn(ctx context.Context, s *Session, t turnInput, log *slog.Logger) {
+	m.activeTurns.Add(1)
+	defer m.activeTurns.Done()
 	stopTyping := s.Broadcaster.StartTyping(t.ctx, 4*time.Second)
 	defer stopTyping()
 
@@ -136,4 +139,31 @@ func (m *Manager) processTurn(ctx context.Context, s *Session, t turnInput, log 
 		Origin:    t.origin,
 		Input:     t.input,
 	})
+}
+
+// BroadcastAll sends e to every active session's broadcaster.
+func (m *Manager) BroadcastAll(ctx context.Context, e Event) {
+	m.mu.Lock()
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		sessions = append(sessions, s)
+	}
+	m.mu.Unlock()
+	for _, s := range sessions {
+		s.Broadcaster.Broadcast(ctx, e)
+	}
+}
+
+// Drain blocks until all in-flight agent turns have finished or ctx is
+// cancelled (e.g. the drain timeout fires).
+func (m *Manager) Drain(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		m.activeTurns.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }

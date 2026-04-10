@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/chickenzord/zlaw/internal/session"
 	"github.com/chickenzord/zlaw/internal/transport"
@@ -37,8 +38,13 @@ func New(t transport.Transport, m *session.Manager, pidFile string, logger *slog
 }
 
 // Serve writes a PID file, listens for incoming CLI attach connections, and
-// blocks until ctx is cancelled.
-func (d *Daemon) Serve(ctx context.Context) error {
+// blocks until ctx is cancelled. After the listener closes it drains in-flight
+// turns and broadcasts EventShutdown to all connected sinks before returning.
+// drainTimeout controls how long it waits; 0 uses a default of 60 s.
+func (d *Daemon) Serve(ctx context.Context, drainTimeout time.Duration) error {
+	if drainTimeout <= 0 {
+		drainTimeout = 60 * time.Second
+	}
 	if d.pidFile != "" {
 		if err := os.MkdirAll(filepath.Dir(d.pidFile), 0o755); err != nil {
 			return fmt.Errorf("daemon: create pid dir: %w", err)
@@ -69,13 +75,26 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		conn, err := ln.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil // normal shutdown
+				break // ctx cancelled — fall through to graceful drain
 			}
 			d.logger.Error("daemon: accept error", "error", err)
 			continue
 		}
 		go d.handleConn(ctx, conn)
 	}
+
+	// Graceful drain: notify attached clients and wait for in-flight turns.
+	d.logger.Info("daemon: draining in-flight turns", "timeout", drainTimeout)
+	drainCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer cancel()
+	d.manager.BroadcastAll(drainCtx, session.Event{Type: session.EventShutdown})
+	d.manager.Drain(drainCtx)
+	if drainCtx.Err() != nil {
+		d.logger.Warn("daemon: drain timeout exceeded, forcing shutdown")
+	} else {
+		d.logger.Info("daemon: shutdown complete")
+	}
+	return nil
 }
 
 // handleConn manages a single CLI attach connection.

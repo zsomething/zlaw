@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 
 	clidaemon "github.com/chickenzord/zlaw/internal/adapters/daemon"
 	"github.com/chickenzord/zlaw/internal/adapters/telegram"
@@ -190,6 +191,9 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 
 	logger.Info("daemon starting", "agent", name, "socket", sockPath)
 
-	// Serve blocks until ctx is cancelled (SIGTERM / SIGINT).
-	return d.Serve(ctx)
+	// Derive drain timeout from config (default 60 s).
+	drainTimeout := time.Duration(cfg.Serve.ShutdownTimeoutSec) * time.Second
+
+	// Serve blocks until ctx is cancelled (SIGTERM / SIGINT), then drains.
+	return d.Serve(ctx, drainTimeout)
 }

@@ -20,6 +20,15 @@ type AgentConfig struct {
 	Tools   ToolsConfig   `toml:"tools"`
 	Adapter AdapterConfig `toml:"adapter"`
 	Sticky  StickyConfig  `toml:"sticky"`
+	Serve   ServeConfig   `toml:"serve"`
+}
+
+// ServeConfig controls daemon-mode behaviour.
+type ServeConfig struct {
+	// ShutdownTimeoutSec is how long (in seconds) the daemon waits for
+	// in-flight agent turns to complete after receiving SIGTERM before
+	// force-cancelling them. Defaults to 60.
+	ShutdownTimeoutSec int `toml:"shutdown_timeout"`
 }
 
 // StickyConfig controls which built-in sticky context blocks are injected at
