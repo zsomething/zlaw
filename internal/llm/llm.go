@@ -118,8 +118,12 @@ type Usage struct {
 	OutputTokens int
 }
 
-// ErrRateLimit is returned when the backend signals a rate-limit condition.
+// ErrRateLimit is returned when the backend signals a rate-limit condition (HTTP 429).
 var ErrRateLimit = errors.New("llm: rate limited")
+
+// ErrOverloaded is returned when the backend is temporarily at capacity (HTTP 529).
+// It is retried with a longer delay than ErrRateLimit.
+var ErrOverloaded = errors.New("llm: overloaded")
 
 // Client is the interface every LLM backend must satisfy.
 type Client interface {

@@ -15,20 +15,59 @@ import (
 
 // RetryConfig controls the retry behaviour of RetryClient.
 type RetryConfig struct {
-	// MaxAttempts is the total number of attempts (initial + retries).
-	// Zero or negative values are treated as 3.
+	// MaxAttempts is the total number of attempts (initial + retries) for general
+	// and rate-limit errors. Zero or negative values are treated as 3.
 	MaxAttempts int
-	// BaseDelay is the initial backoff duration before the first retry.
+	// BaseDelay is the initial backoff duration for general and rate-limit errors.
 	// Zero uses 500ms.
 	BaseDelay time.Duration
+
+	// OverloadedMaxRetries is the number of retries for ErrOverloaded (HTTP 529).
+	// Zero uses 2.
+	OverloadedMaxRetries int
+	// OverloadedBaseDelay is the starting delay between overloaded retries.
+	// Zero uses 30s. Delay grows exponentially: BaseDelay * 2^(retry-1).
+	OverloadedBaseDelay time.Duration
+}
+
+func (c RetryConfig) maxAttempts() int {
+	if c.MaxAttempts <= 0 {
+		return 3
+	}
+	return c.MaxAttempts
+}
+
+func (c RetryConfig) baseDelay() time.Duration {
+	if c.BaseDelay == 0 {
+		return 500 * time.Millisecond
+	}
+	return c.BaseDelay
+}
+
+func (c RetryConfig) overloadedMaxRetries() int {
+	if c.OverloadedMaxRetries <= 0 {
+		return 2
+	}
+	return c.OverloadedMaxRetries
+}
+
+func (c RetryConfig) overloadedBaseDelay() time.Duration {
+	if c.OverloadedBaseDelay == 0 {
+		return 30 * time.Second
+	}
+	return c.OverloadedBaseDelay
 }
 
 // RetryClient wraps a Client and retries transient errors with exponential
 // backoff and jitter.
 //
 // Retryable conditions:
-//   - ErrRateLimit (HTTP 429): backs off, honours Retry-After when present
-//   - Any other error: retried with exponential backoff up to MaxAttempts
+//   - ErrRateLimit (HTTP 429): exponential backoff; honours Retry-After when present
+//   - ErrOverloaded (HTTP 529): separate attempt counter, longer exponential backoff
+//   - Any other error: exponential backoff up to MaxAttempts
+//
+// Overloaded retries are tracked independently of general retries so that a
+// burst of 529s does not exhaust the general MaxAttempts budget.
 //
 // Context cancellation and deadline exceeded are never retried.
 type RetryClient struct {
@@ -40,12 +79,6 @@ type RetryClient struct {
 // NewRetryClient wraps inner with retry logic using cfg.
 // If logger is nil, slog.Default() is used.
 func NewRetryClient(inner Client, cfg RetryConfig, logger *slog.Logger) *RetryClient {
-	if cfg.MaxAttempts <= 0 {
-		cfg.MaxAttempts = 3
-	}
-	if cfg.BaseDelay == 0 {
-		cfg.BaseDelay = 500 * time.Millisecond
-	}
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -54,38 +87,49 @@ func NewRetryClient(inner Client, cfg RetryConfig, logger *slog.Logger) *RetryCl
 
 // Complete calls the wrapped client, retrying on transient failures.
 func (r *RetryClient) Complete(ctx context.Context, req Request) (Response, error) {
-	var lastErr error
-	for attempt := 1; attempt <= r.cfg.MaxAttempts; attempt++ {
+	generalAttempt := 0
+	overloadedRetry := 0
+
+	for {
 		resp, err := r.inner.Complete(ctx, req)
 		if err == nil {
 			return resp, nil
 		}
-
-		// Never retry if the context is done.
 		if ctx.Err() != nil {
 			return Response{}, err
 		}
 
-		lastErr = err
-
-		if attempt == r.cfg.MaxAttempts {
-			break
+		if errors.Is(err, ErrOverloaded) {
+			overloadedRetry++
+			if overloadedRetry > r.cfg.overloadedMaxRetries() {
+				return Response{}, fmt.Errorf("llm: overloaded, %d retries exhausted: %w", r.cfg.overloadedMaxRetries(), err)
+			}
+			delay := r.overloadedDelay(overloadedRetry)
+			r.logger.Warn("llm: overloaded, retrying",
+				"retry", overloadedRetry,
+				"max_retries", r.cfg.overloadedMaxRetries(),
+				"delay", delay,
+				"error", err)
+			if err := r.sleep(ctx, delay); err != nil {
+				return Response{}, err
+			}
+			continue
 		}
 
-		delay := r.backoffDelay(attempt, err)
+		generalAttempt++
+		if generalAttempt >= r.cfg.maxAttempts() {
+			return Response{}, fmt.Errorf("llm: all %d attempts failed: %w", r.cfg.maxAttempts(), err)
+		}
+		delay := r.backoffDelay(generalAttempt, err)
 		r.logger.Warn("llm: retrying after error",
-			"attempt", attempt,
-			"max_attempts", r.cfg.MaxAttempts,
+			"attempt", generalAttempt,
+			"max_attempts", r.cfg.maxAttempts(),
 			"delay", delay,
 			"error", err)
-
-		select {
-		case <-ctx.Done():
-			return Response{}, fmt.Errorf("llm: retry cancelled: %w", ctx.Err())
-		case <-time.After(delay):
+		if err := r.sleep(ctx, delay); err != nil {
+			return Response{}, err
 		}
 	}
-	return Response{}, fmt.Errorf("llm: all %d attempts failed: %w", r.cfg.MaxAttempts, lastErr)
 }
 
 // CompleteStream delegates to the inner client's CompleteStream if it supports
@@ -98,7 +142,16 @@ func (r *RetryClient) CompleteStream(ctx context.Context, req Request, handler S
 	return r.Complete(ctx, req)
 }
 
-// backoffDelay returns the delay before the next attempt.
+func (r *RetryClient) sleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("llm: retry cancelled: %w", ctx.Err())
+	case <-time.After(d):
+		return nil
+	}
+}
+
+// backoffDelay returns the delay before the next general/rate-limit attempt.
 // For rate-limit errors it prefers the Retry-After header when present.
 func (r *RetryClient) backoffDelay(attempt int, err error) time.Duration {
 	if errors.Is(err, ErrRateLimit) {
@@ -106,8 +159,17 @@ func (r *RetryClient) backoffDelay(attempt int, err error) time.Duration {
 			return d
 		}
 	}
-	// Exponential backoff with ±25% jitter.
-	exp := r.cfg.BaseDelay * (1 << (attempt - 1))
+	return jitteredExp(r.cfg.baseDelay(), attempt)
+}
+
+// overloadedDelay returns the delay before the next overloaded retry.
+func (r *RetryClient) overloadedDelay(retry int) time.Duration {
+	return jitteredExp(r.cfg.overloadedBaseDelay(), retry)
+}
+
+// jitteredExp returns BaseDelay * 2^(n-1) with ±25% jitter.
+func jitteredExp(base time.Duration, n int) time.Duration {
+	exp := base * (1 << (n - 1))
 	jitter := time.Duration(rand.Int63n(int64(exp) / 2)) // 0..50% of exp
 	if rand.Intn(2) == 0 {
 		return exp + jitter/2

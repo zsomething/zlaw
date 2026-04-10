@@ -76,6 +76,9 @@ func (c *openAICompatClient) Complete(ctx context.Context, req Request) (Respons
 		if isHTTP429(err) {
 			return Response{}, fmt.Errorf("%w: %w", ErrRateLimit, err)
 		}
+		if isHTTP529(err) {
+			return Response{}, fmt.Errorf("%w: %w", ErrOverloaded, err)
+		}
 		return Response{}, fmt.Errorf("openai_compat complete: %w", err)
 	}
 
@@ -112,6 +115,9 @@ func (c *openAICompatClient) CompleteStream(ctx context.Context, req Request, ha
 	if err := stream.Err(); err != nil {
 		if isHTTP429(err) {
 			return Response{}, fmt.Errorf("%w: %w", ErrRateLimit, err)
+		}
+		if isHTTP529(err) {
+			return Response{}, fmt.Errorf("%w: %w", ErrOverloaded, err)
 		}
 		return Response{}, fmt.Errorf("openai_compat stream: %w", err)
 	}
@@ -301,6 +307,14 @@ func isHTTP429(err error) bool {
 	var apiErr *openai.Error
 	if errors.As(err, &apiErr) {
 		return apiErr.StatusCode == http.StatusTooManyRequests
+	}
+	return false
+}
+
+func isHTTP529(err error) bool {
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == 529
 	}
 	return false
 }

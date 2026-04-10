@@ -106,6 +106,9 @@ func (c *anthropicClient) CompleteStream(ctx context.Context, req Request, handl
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return Response{}, fmt.Errorf("%w: HTTP 429 from Anthropic", ErrRateLimit)
 	}
+	if resp.StatusCode == 529 {
+		return Response{}, fmt.Errorf("%w: HTTP 529 from Anthropic", ErrOverloaded)
+	}
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return Response{}, fmt.Errorf("anthropic: HTTP %d: %s", resp.StatusCode, string(data))
