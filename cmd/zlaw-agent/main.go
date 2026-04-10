@@ -8,9 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/chickenzord/zlaw/internal/dotenv"
 )
 
 func main() {
+	// Load .env from cwd before anything else — including logger setup,
+	// so ZLAW_LOG_LEVEL from .env is respected.
+	_ = dotenv.LoadCwd()
+
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: logLevel(),
 	}))
@@ -71,7 +77,7 @@ func printUsage(fs *flag.FlagSet) {
 	fs.PrintDefaults()
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "environment variables:")
-	fmt.Fprintln(os.Stderr, "  ZLAW_HOME          root directory for agents, sessions, and credentials (default: $PWD)")
+	fmt.Fprintln(os.Stderr, "  ZLAW_HOME          root directory for agents, sessions, and credentials (default: $HOME/.zlaw)")
 	fmt.Fprintln(os.Stderr, "  ZLAW_AGENT         agent name (same as --agent)")
 	fmt.Fprintln(os.Stderr, "  ZLAW_AGENT_DIR     explicit agent directory (same as --agent-dir)")
 	fmt.Fprintln(os.Stderr, "  ZLAW_CREDENTIALS_FILE  override credentials file path")
