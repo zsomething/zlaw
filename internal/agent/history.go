@@ -165,12 +165,14 @@ func (h *History) Lines(sessionID string) []string {
 }
 
 // Clear removes all in-memory messages for the given session.
-// Persisted data on disk is not deleted.
+// On-disk session files are preserved. After Clear, Get returns nil and will
+// not reload from the store, so the session starts fresh in memory.
 func (h *History) Clear(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.cache, sessionID)
-	delete(h.loaded, sessionID)
+	// Mark as loaded so the next Get does not reload stale data from disk.
+	h.loaded[sessionID] = true
 }
 
 // SessionDir returns the session directory for a named agent.

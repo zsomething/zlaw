@@ -34,6 +34,10 @@ type Response struct {
 type Env struct {
 	SessionID string
 	History   HistoryManager
+	// AfterClear is called by /clear after history is cleared.
+	// Adapters that derive session IDs deterministically (e.g. Telegram) can
+	// set this to rotate to a new session ID so future messages start fresh.
+	AfterClear func(oldSessionID string)
 }
 
 // HistoryManager is the subset of the history API that slash commands use.

@@ -56,6 +56,9 @@ func clearHandler(_ context.Context, _ string, env Env) Response {
 		return Response{Text: "error: history not available"}
 	}
 	env.History.Clear(env.SessionID)
+	if env.AfterClear != nil {
+		env.AfterClear(env.SessionID)
+	}
 	return Response{Text: "conversation history cleared"}
 }
 

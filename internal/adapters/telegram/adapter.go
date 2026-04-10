@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
@@ -30,9 +31,14 @@ type Adapter struct {
 	token   string
 	logger  *slog.Logger
 
-	// mu protects sinks to avoid creating duplicate chatSinks for the same chat.
-	mu    sync.Mutex
+	// mu protects sinks and sessionOverrides.
+	mu sync.Mutex
+	// sinks holds one chatSink per chat ID.
 	sinks map[int64]*chatSink
+	// sessionOverrides holds per-chat session ID overrides set after /clear.
+	// When present, the override replaces the deterministic session ID so that
+	// the next message starts a new session. The old session files are preserved.
+	sessionOverrides map[int64]string
 }
 
 // NewAdapter creates an Adapter.
@@ -40,13 +46,37 @@ func NewAdapter(token string, manager *session.Manager, logger *slog.Logger) *Ad
 	r := slashcmd.New()
 	slashcmd.RegisterBuiltins(r)
 	return &Adapter{
-		bot:     NewBot(token),
-		manager: manager,
-		cmds:    r,
-		token:   token,
-		logger:  logger,
-		sinks:   make(map[int64]*chatSink),
+		bot:              NewBot(token),
+		manager:          manager,
+		cmds:             r,
+		token:            token,
+		logger:           logger,
+		sinks:            make(map[int64]*chatSink),
+		sessionOverrides: make(map[int64]string),
 	}
+}
+
+// activeSessionID returns the current session ID for chatID.
+// After /clear, this returns the override session ID until the next clear.
+func (a *Adapter) activeSessionID(chatID int64) string {
+	if override, ok := a.sessionOverrides[chatID]; ok {
+		return override
+	}
+	return sessionIDForChat(a.token, chatID)
+}
+
+// rotateSessionID generates a new random session ID for chatID and stores it
+// as the override. Called on /clear so subsequent messages start a new session.
+func (a *Adapter) rotateSessionID(chatID int64) string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// Fallback: use a hash of the old ID + timestamp.
+		h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d", chatID, time.Now().UnixNano())))
+		copy(b[:], h[:8])
+	}
+	newSID := fmt.Sprintf("%x", b)
+	a.sessionOverrides[chatID] = newSID
+	return newSID
 }
 
 // SetHistoryManager attaches a HistoryManager that backs the /clear and
@@ -121,8 +151,11 @@ func (a *Adapter) Run(ctx context.Context) error {
 // it as a slash command if the text starts with "/".
 func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 	chatID := msg.Chat.ID
-	sid := sessionIDForChat(a.token, chatID)
 	text := msg.Text
+
+	a.mu.Lock()
+	sid := a.activeSessionID(chatID)
+	a.mu.Unlock()
 
 	a.logger.Info("telegram: message received",
 		"chat_id", chatID,
@@ -138,7 +171,22 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 			cmdText = cmdText[:idx] + cmdText[strings.IndexByte(cmdText[idx:], ' ')+idx+1:]
 			cmdText = strings.TrimSpace(cmdText)
 		}
-		env := slashcmd.Env{SessionID: sid, History: a.history}
+		env := slashcmd.Env{
+			SessionID: sid,
+			History:   a.history,
+			AfterClear: func(_ string) {
+				// Rotate to a new session ID so the next message starts fresh.
+				// The old session files are preserved on disk.
+				a.mu.Lock()
+				newSID := a.rotateSessionID(chatID)
+				// Drop the stale sink so the next message registers a new one
+				// against the new session.
+				delete(a.sinks, chatID)
+				a.mu.Unlock()
+				a.logger.Info("telegram: session rotated after /clear",
+					"chat_id", chatID, "new_session_id", newSID)
+			},
+		}
 		resp, matched := a.cmds.Dispatch(ctx, cmdText, env)
 		if matched {
 			// ActionExit is not meaningful on Telegram — treat as a no-op.
@@ -155,12 +203,12 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 
 	// Ensure a chatSink exists for this chat and is registered with the session.
 	a.mu.Lock()
+	// Re-read sid under lock in case /clear just rotated it above.
+	sid = a.activeSessionID(chatID)
 	sink, exists := a.sinks[chatID]
 	if !exists {
 		sink = newChatSink(a.bot, chatID, a.logger)
 		a.sinks[chatID] = sink
-		// GetOrCreate before Submit ensures the sink is in the broadcaster
-		// before the session goroutine can pick up the queued turn.
 		s := a.manager.GetOrCreate(ctx, sid)
 		s.Broadcaster.Add(sink)
 	}
