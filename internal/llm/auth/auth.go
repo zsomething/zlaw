@@ -80,7 +80,8 @@ func LoadStore(path string) (CredentialStore, error) {
 		return CredentialStore{}, fmt.Errorf("read credentials: %w", err)
 	}
 	var store CredentialStore
-	if _, err := toml.Decode(string(data), &store); err != nil {
+	expanded := os.Expand(string(data), os.Getenv)
+	if _, err := toml.Decode(expanded, &store); err != nil {
 		return CredentialStore{}, fmt.Errorf("parse credentials: %w", err)
 	}
 	if store.Profiles == nil {
