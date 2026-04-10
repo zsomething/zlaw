@@ -1,17 +1,19 @@
 package config
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
 
 // ZlawHome returns the root directory for all zlaw runtime data.
 // It respects the ZLAW_HOME environment variable; if unset, it defaults to
-// the current working directory.
+// $HOME/.zlaw.
 func ZlawHome() string {
 	if v := os.Getenv("ZLAW_HOME"); v != "" {
 		return v
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "."
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".zlaw")
 	}
-	return cwd
+	return ".zlaw"
 }
