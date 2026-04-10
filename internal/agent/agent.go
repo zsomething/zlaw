@@ -116,6 +116,9 @@ func (a *Agent) RunStream(ctx context.Context, sessionID, input, systemPrompt st
 func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (Result, error) {
 	log := a.logger.With("agent", a.name, "session_id", sessionID)
 
+	log.Debug("turn started", "input_len", len(input), "system_prompt_len", len(systemPrompt))
+	log.Debug("system prompt", "system_prompt", systemPrompt)
+
 	sc, hasStreaming := a.client.(llm.StreamingClient)
 
 	a.history.Append(sessionID, llm.Message{

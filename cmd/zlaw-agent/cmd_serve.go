@@ -49,6 +49,7 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 		return err
 	}
 	agentDir = resolvedDir
+	logger.Info("agent dir resolved", "path", agentDir)
 
 	// --- Load config (same pattern as runRun) ---
 	var promptPtr atomic.Pointer[string]
@@ -57,7 +58,11 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	onChange := func(_ config.AgentConfig, p config.Personality) {
 		s := agent.BuildSystemPrompt(nil, p)
 		promptPtr.Store(&s)
-		logger.Info("system prompt reloaded")
+		logger.Info("system prompt reloaded",
+			"soul_len", len(p.Soul),
+			"identity_len", len(p.Identity),
+			"prompt_len", len(s),
+		)
 	}
 	loader, err := config.NewLoader(agentDir, onChange, logger)
 	if err != nil {
@@ -67,6 +72,14 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	logger.Info("personality loaded",
+		"soul_len", len(personality.Soul),
+		"identity_len", len(personality.Identity),
+	)
+	logger.Debug("personality content",
+		"soul", personality.Soul,
+		"identity", personality.Identity,
+	)
 
 	if cfg.Sticky.ProactiveMemorySave {
 		stickyBlocks = append(stickyBlocks, agent.StickyBlock{
@@ -78,12 +91,14 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 
 	initial := agent.BuildSystemPrompt(nil, personality)
 	promptPtr.Store(&initial)
+	logger.Debug("initial system prompt", "prompt", initial)
 
 	// --- Build LLM client ---
 	llmClient, err := llm.NewClientFromConfig(cfg.LLM, "", logger)
 	if err != nil {
 		return fmt.Errorf("create llm client: %w", err)
 	}
+	logger.Info("llm configured", "backend", cfg.LLM.Backend, "model", cfg.LLM.Model, "auth_profile", cfg.LLM.AuthProfile)
 
 	// --- Build tool registry (same set as runRun) ---
 	registry := tools.NewRegistry()
