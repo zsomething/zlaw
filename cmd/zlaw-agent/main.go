@@ -48,6 +48,10 @@ func main() {
 		err = runAuth(args[1:])
 	case "run":
 		err = runRun(ctx, args[1:], *agentName, *agentDir, logger)
+	case "serve":
+		err = runServe(ctx, args[1:], *agentName, *agentDir, logger)
+	case "attach":
+		err = runAttach(ctx, args[1:], *agentName, *agentDir, logger)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
 		printUsage(fs)
@@ -75,6 +79,8 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintln(os.Stderr, "commands:")
 	fmt.Fprintln(os.Stderr, "  auth    manage authentication credentials")
 	fmt.Fprintln(os.Stderr, "  run     start the agent (interactive or stdin)")
+	fmt.Fprintln(os.Stderr, "  serve   start the agent in daemon mode (Unix socket + optional Telegram)")
+	fmt.Fprintln(os.Stderr, "  attach  attach a terminal to a running daemon session")
 }
 
 // logLevel returns slog.LevelDebug when ZLAW_LOG_LEVEL=debug, else Info.
