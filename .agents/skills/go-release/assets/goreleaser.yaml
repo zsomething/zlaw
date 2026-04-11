@@ -1,0 +1,140 @@
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: <binary-name>
+    main: ./cmd/<binary-name>
+    binary: <binary-name>
+    env:
+      - CGO_ENABLED=0          # set to 1 if CGO required; remove windows from goos if so
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X <module-path>/internal/version.Version={{.Version}}
+      - -X <module-path>/internal/version.GitCommit={{.FullCommit}}
+      - -X <module-path>/internal/version.BuildDate={{.Date}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+      - goos: linux
+        format: tar.gz
+      - goos: darwin
+        format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^nit:'
+      - '^chore:'
+      - '^build:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: 'Enhancements'
+      regexp: "^.*enhancement[(\\w)]*:+.*$"
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## <AppName> {{ .Tag }}
+
+    <app-description>
+
+    ### Installation
+
+    **Binary Download:**
+    Download the appropriate binary for your platform from the assets below.
+
+    # INCLUDE IF homebrew enabled:
+    **Homebrew (macOS/Linux):**
+    ```bash
+    brew install <github-owner>/tap/<binary-name>
+    ```
+
+    **Go Install:**
+    ```bash
+    go install <module-path>/cmd/<binary-name>@{{ .Tag }}
+    ```
+
+    # INCLUDE IF docker enabled:
+    **Docker:**
+    ```bash
+    docker pull ghcr.io/<github-owner>/<github-repo>:{{ .Tag }}
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/<github-owner>/<github-repo>/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+universal_binaries:
+  - replace: false
+
+# INCLUDE IF homebrew enabled:
+brews:
+  - description: <app-description>
+    homepage: https://github.com/<github-owner>/<github-repo>
+    directory: Formula
+    download_strategy: CurlDownloadStrategy
+    license: "<license>"
+    custom_block: |
+      head do
+        url "https://github.com/<github-owner>/<github-repo>.git", branch: "main"
+        depends_on "go" => :build
+      end
+    install: |
+      if build.head?
+        system "go", "build", *std_go_args(ldflags: "-s -w -X <module-path>/internal/version.Version={{.Version}} -X <module-path>/internal/version.GitCommit={{.FullCommit}} -X <module-path>/internal/version.BuildDate={{.Date}}"), "./cmd/<binary-name>"
+      else
+        bin.install "<binary-name>"
+      end
+    repository:
+      owner: <github-owner>
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj

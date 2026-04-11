@@ -1,0 +1,30 @@
+# Build stage — use when CGO_ENABLED=1
+FROM golang:<go-version>-bookworm AS builder
+
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-w -s \
+      -X '<module-path>/internal/version.Version=${VERSION}' \
+      -X '<module-path>/internal/version.GitCommit=${GIT_COMMIT}' \
+      -X '<module-path>/internal/version.BuildDate=${BUILD_DATE}'" \
+    -trimpath \
+    -o <binary-name> ./cmd/<binary-name>
+
+# Runtime stage
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+RUN groupadd -g 1000 appgroup && useradd -u 1000 -g appgroup appuser
+WORKDIR /app
+COPY --from=builder /build/<binary-name> .
+RUN chown -R appuser:appgroup /app
+USER appuser
+ENTRYPOINT ["/app/<binary-name>"]
