@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chickenzord/zlaw/internal/ctxkey"
 	"github.com/chickenzord/zlaw/internal/session"
 	"github.com/chickenzord/zlaw/internal/slashcmd"
 )
@@ -186,5 +187,8 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 	}
 	a.mu.Unlock()
 
-	a.manager.Submit(ctx, sid, text, "telegram")
+	// Inject the source channel address so tools (e.g. create_cronjob) can
+	// use it as a default delivery target without knowing the chat ID.
+	channelCtx := context.WithValue(ctx, ctxkey.SourceChannel, "telegram:"+strconv.FormatInt(chatID, 10))
+	a.manager.Submit(channelCtx, sid, text, "telegram")
 }
