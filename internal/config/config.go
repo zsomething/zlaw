@@ -154,10 +154,11 @@ var runtimeFieldAllowlist = map[string]struct{}{
 
 // Loader loads and watches configuration files for a single agent.
 type Loader struct {
-	dir      string
-	onChange func(AgentConfig, Personality)
-	watcher  *fsnotify.Watcher
-	logger   *slog.Logger
+	dir            string
+	onChange       func(AgentConfig, Personality)
+	onCronChange   func(CronConfig)
+	watcher        *fsnotify.Watcher
+	logger         *slog.Logger
 
 	mu          sync.Mutex
 	staticCfg   AgentConfig // from agent.toml; set once in Load, never mutated
@@ -250,6 +251,12 @@ func (l *Loader) WriteRuntimeField(key, value string) error {
 	return writeRuntimeTOML(l.dir+"/runtime.toml", rt)
 }
 
+// SetCronChangeHandler registers a callback invoked whenever cron.toml changes.
+// Must be called before Watch.
+func (l *Loader) SetCronChangeHandler(fn func(CronConfig)) {
+	l.onCronChange = fn
+}
+
 // Watch starts watching the agent directory for changes. It blocks until ctx
 // is cancelled. Call in a goroutine.
 func (l *Loader) Watch(ctx context.Context) error {
@@ -270,6 +277,10 @@ func (l *Loader) Watch(ctx context.Context) error {
 				continue
 			}
 			l.logger.Info("config file changed, reloading", "file", event.Name)
+			if isCronEvent(event) {
+				l.reloadCron()
+				continue
+			}
 			cfg, p, err := l.Load()
 			if err != nil {
 				l.logger.Error("reload failed", "err", err)
@@ -285,6 +296,19 @@ func (l *Loader) Watch(ctx context.Context) error {
 			l.logger.Error("watcher error", "err", err)
 		}
 	}
+}
+
+// reloadCron reads cron.toml and fires the onCronChange callback.
+func (l *Loader) reloadCron() {
+	if l.onCronChange == nil {
+		return
+	}
+	cfg, err := LoadCronConfig(l.dir)
+	if err != nil {
+		l.logger.Error("cron config reload failed", "err", err)
+		return
+	}
+	l.onCronChange(cfg)
 }
 
 // loadRuntimeTOML parses runtime.toml. A missing file is silently treated as
@@ -379,5 +403,10 @@ func isRelevantEvent(e fsnotify.Event) bool {
 	return strings.HasSuffix(name, "agent.toml") ||
 		strings.HasSuffix(name, "runtime.toml") ||
 		strings.HasSuffix(name, "SOUL.md") ||
-		strings.HasSuffix(name, "IDENTITY.md")
+		strings.HasSuffix(name, "IDENTITY.md") ||
+		strings.HasSuffix(name, "cron.toml")
+}
+
+func isCronEvent(e fsnotify.Event) bool {
+	return strings.HasSuffix(e.Name, "cron.toml")
 }
