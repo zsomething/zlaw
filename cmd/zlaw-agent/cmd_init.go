@@ -20,14 +20,14 @@ auth_profile = "minimax"
 max_tokens = 4096
 timeout_sec = 60
 
-# Semantic (embedding-based) memory search. When backend is set, memory_recall
-# uses vector similarity instead of keyword matching. Remove this section to
-# fall back to keyword search.
+# Semantic memory search — uncomment and fill in your OpenRouter key to enable.
+# Embeddings use OpenAI text-embedding-3-small routed via OpenRouter.
+# Set OPENROUTER_API_KEY in your environment (see credentials.toml).
 #
 # [memory.embedder]
-# backend      = "minimax-openai"      # OpenAI-compat endpoint for embeddings
-# model        = "embo-01"
-# auth_profile = "minimax"             # same credentials as the LLM backend
+# backend      = "openrouter"
+# model        = "openai/text-embedding-3-small"
+# auth_profile = "openrouter"
 
 [tools]
 # allowed = ["bash", "read_file", ...]  # uncomment to restrict tool access

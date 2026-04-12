@@ -31,18 +31,8 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 	}
 	logger.Info("memory store", "dir", dir)
 
-	emb := cfg.Memory.Embedder
-	// Auto-derive the embedder backend from the LLM backend when not explicit.
-	if emb.Backend == "" {
-		if p, err := llm.LookupPreset(cfg.LLM.Backend); err == nil {
-			emb.Backend = p.EmbeddingPreset
-		}
-	}
-
-	if emb.Backend != "" {
-		if emb.Model == "" {
-			emb.Model = cfg.LLM.Model
-		}
+	if cfg.Memory.Embedder.Backend != "" {
+		emb := cfg.Memory.Embedder
 		if emb.AuthProfile == "" {
 			emb.AuthProfile = cfg.LLM.AuthProfile
 		}
