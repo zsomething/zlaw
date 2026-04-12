@@ -101,6 +101,123 @@ type = "cli"
 	}
 }
 
+func TestLoad_RuntimeOverride(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "agent.toml", `
+[agent]
+name = "runtime-test"
+[llm]
+backend = "anthropic"
+model = "claude-haiku-4-5-20251001"
+auth_profile = "default"
+[tools]
+[adapter]
+type = "cli"
+`)
+	writeFile(t, dir, "runtime.toml", `
+[llm]
+model = "claude-opus-4-6"
+`)
+
+	loader, err := config.NewLoader(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loader.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLM.Model != "claude-opus-4-6" {
+		t.Errorf("llm.model = %q, want %q (runtime override not applied)", cfg.LLM.Model, "claude-opus-4-6")
+	}
+}
+
+func TestLoad_MissingRuntimeTOML(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "agent.toml", `
+[agent]
+name = "no-runtime"
+[llm]
+model = "claude-haiku-4-5-20251001"
+auth_profile = "default"
+[tools]
+[adapter]
+type = "cli"
+`)
+	// No runtime.toml — should succeed with static model.
+
+	loader, err := config.NewLoader(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loader.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLM.Model != "claude-haiku-4-5-20251001" {
+		t.Errorf("llm.model = %q, want static value %q", cfg.LLM.Model, "claude-haiku-4-5-20251001")
+	}
+}
+
+func TestWriteRuntimeField_AndReload(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "agent.toml", `
+[agent]
+name = "write-test"
+[llm]
+model = "claude-haiku-4-5-20251001"
+auth_profile = "default"
+[tools]
+[adapter]
+type = "cli"
+`)
+
+	var gotModel string
+	onChange := func(cfg config.AgentConfig, _ config.Personality) {
+		gotModel = cfg.LLM.Model
+	}
+	loader, err := config.NewLoader(dir, onChange, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loader.Load(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := loader.WriteRuntimeField("llm.model", "claude-opus-4-6"); err != nil {
+		t.Fatalf("WriteRuntimeField: %v", err)
+	}
+	if err := loader.ReloadRuntime(); err != nil {
+		t.Fatalf("ReloadRuntime: %v", err)
+	}
+	if gotModel != "claude-opus-4-6" {
+		t.Errorf("onChange got model %q, want %q", gotModel, "claude-opus-4-6")
+	}
+}
+
+func TestWriteRuntimeField_InvalidKey(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "agent.toml", `
+[agent]
+name = "invalid-key-test"
+[llm]
+auth_profile = "default"
+[tools]
+[adapter]
+type = "cli"
+`)
+	loader, err := config.NewLoader(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loader.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if err := loader.WriteRuntimeField("llm.backend", "openai"); err == nil {
+		t.Error("expected error for non-configurable field, got nil")
+	}
+}
+
 func TestLoad_EnvExpansion(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("MY_MODEL", "claude-opus-4-6")

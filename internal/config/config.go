@@ -2,11 +2,13 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
@@ -129,12 +131,37 @@ type Personality struct {
 	Identity string
 }
 
+// RuntimeConfig holds mutable configuration that can be changed at runtime
+// without restarting the process. Its values override the corresponding fields
+// in AgentConfig after being merged in. Missing fields are ignored (zero value
+// = no override).
+type RuntimeConfig struct {
+	LLM RuntimeLLMConfig `toml:"llm"`
+}
+
+// RuntimeLLMConfig holds the runtime-overridable LLM fields.
+type RuntimeLLMConfig struct {
+	// Model overrides LLMConfig.Model when non-empty.
+	Model string `toml:"model"`
+}
+
+// runtimeFieldAllowlist is the canonical set of keys accepted by
+// WriteRuntimeField. The configure tool schema mirrors this as an enum for
+// first-layer validation; WriteRuntimeField re-validates as defense-in-depth.
+var runtimeFieldAllowlist = map[string]struct{}{
+	"llm.model": {},
+}
+
 // Loader loads and watches configuration files for a single agent.
 type Loader struct {
 	dir      string
 	onChange func(AgentConfig, Personality)
 	watcher  *fsnotify.Watcher
 	logger   *slog.Logger
+
+	mu          sync.Mutex
+	staticCfg   AgentConfig // from agent.toml; set once in Load, never mutated
+	personality Personality // from SOUL.md / IDENTITY.md; updated on each Load
 }
 
 // NewLoader creates a Loader for the given agent directory.
@@ -149,10 +176,11 @@ func NewLoader(dir string, onChange func(AgentConfig, Personality), logger *slog
 	return &Loader{dir: dir, onChange: onChange, watcher: w, logger: logger}, nil
 }
 
-// Load reads agent.toml, SOUL.md, and IDENTITY.md from the agent directory
-// and returns the parsed values.
+// Load reads agent.toml, runtime.toml, SOUL.md, and IDENTITY.md from the
+// agent directory, merges the runtime overrides, and returns the result.
+// It also caches the static config and personality for use by ReloadRuntime.
 func (l *Loader) Load() (AgentConfig, Personality, error) {
-	cfg, err := loadTOML(l.dir + "/agent.toml")
+	static, err := loadTOML(l.dir + "/agent.toml")
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
 	}
@@ -160,7 +188,66 @@ func (l *Loader) Load() (AgentConfig, Personality, error) {
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
 	}
-	return cfg, p, nil
+	rt, err := loadRuntimeTOML(l.dir + "/runtime.toml")
+	if err != nil {
+		return AgentConfig{}, Personality{}, err
+	}
+	merged := mergeRuntime(static, rt)
+
+	l.mu.Lock()
+	l.staticCfg = static
+	l.personality = p
+	l.mu.Unlock()
+
+	return merged, p, nil
+}
+
+// ReloadRuntime re-reads runtime.toml, merges it over the cached static
+// config, and calls the onChange callback with the new effective config.
+// It is safe to call concurrently from the fsnotify watcher goroutine and
+// from tool executors (e.g. the configure tool).
+func (l *Loader) ReloadRuntime() error {
+	l.mu.Lock()
+	static := l.staticCfg
+	p := l.personality
+	l.mu.Unlock()
+
+	rt, err := loadRuntimeTOML(l.dir + "/runtime.toml")
+	if err != nil {
+		return fmt.Errorf("reload runtime config: %w", err)
+	}
+	merged := mergeRuntime(static, rt)
+
+	if l.onChange != nil {
+		l.onChange(merged, p)
+	}
+	return nil
+}
+
+// WriteRuntimeField validates key against the allowlist, then atomically
+// writes the updated value to runtime.toml. It does not trigger a reload —
+// the caller is responsible for calling ReloadRuntime() afterward.
+func (l *Loader) WriteRuntimeField(key, value string) error {
+	if _, ok := runtimeFieldAllowlist[key]; !ok {
+		return fmt.Errorf("config: field %q is not runtime-configurable", key)
+	}
+
+	// Read existing runtime.toml (missing file → empty config).
+	existing, err := loadRuntimeTOML(l.dir + "/runtime.toml")
+	if err != nil {
+		return fmt.Errorf("config: read runtime.toml before write: %w", err)
+	}
+
+	rt := existing
+	switch key {
+	case "llm.model":
+		rt.LLM.Model = value
+	default:
+		// Defense-in-depth: allowlist check above should have caught this.
+		return fmt.Errorf("config: field %q is not runtime-configurable", key)
+	}
+
+	return writeRuntimeTOML(l.dir+"/runtime.toml", rt)
 }
 
 // Watch starts watching the agent directory for changes. It blocks until ctx
@@ -198,6 +285,49 @@ func (l *Loader) Watch(ctx context.Context) error {
 			l.logger.Error("watcher error", "err", err)
 		}
 	}
+}
+
+// loadRuntimeTOML parses runtime.toml. A missing file is silently treated as
+// an empty RuntimeConfig (no overrides).
+func loadRuntimeTOML(path string) (RuntimeConfig, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return RuntimeConfig{}, nil
+	}
+	if err != nil {
+		return RuntimeConfig{}, fmt.Errorf("read %s: %w", path, err)
+	}
+	var rt RuntimeConfig
+	if _, err := toml.Decode(string(data), &rt); err != nil {
+		return RuntimeConfig{}, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return rt, nil
+}
+
+// writeRuntimeTOML atomically writes rt to path (write to .tmp, then rename).
+func writeRuntimeTOML(path string, rt RuntimeConfig) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(rt); err != nil {
+		return fmt.Errorf("encode runtime.toml: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s → %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
+// mergeRuntime returns a copy of static with non-empty RuntimeConfig fields
+// applied on top.
+func mergeRuntime(static AgentConfig, rt RuntimeConfig) AgentConfig {
+	merged := static
+	if rt.LLM.Model != "" {
+		merged.LLM.Model = rt.LLM.Model
+	}
+	return merged
 }
 
 // loadTOML parses agent.toml, expanding ${ENV_VAR} references in string values.
@@ -247,6 +377,7 @@ func isRelevantEvent(e fsnotify.Event) bool {
 	}
 	name := e.Name
 	return strings.HasSuffix(name, "agent.toml") ||
+		strings.HasSuffix(name, "runtime.toml") ||
 		strings.HasSuffix(name, "SOUL.md") ||
 		strings.HasSuffix(name, "IDENTITY.md")
 }
