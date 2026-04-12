@@ -15,6 +15,7 @@ import (
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/config"
 	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/chickenzord/zlaw/internal/push"
 	"github.com/chickenzord/zlaw/internal/session"
 	"github.com/chickenzord/zlaw/internal/tools"
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
@@ -188,16 +189,22 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	// --- Build daemon ---
 	d := clidaemon.New(t, sessionManager, pidPath, logger)
 
+	// --- Build push registry ---
+	pushRegistry := push.NewRegistry()
+
 	// --- Start Telegram adapter (if configured) ---
 	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
 		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
 		tgAdapter.SetHistoryManager(history)
+		pushRegistry.Register("telegram", tgAdapter)
 		go func() {
 			if err := tgAdapter.Run(ctx); err != nil {
 				logger.Error("telegram adapter stopped", "error", err)
 			}
 		}()
 	}
+
+	_ = pushRegistry // used by future cronjob/polling/deferred features
 
 	// --- Start config hot-reload ---
 	go func() {

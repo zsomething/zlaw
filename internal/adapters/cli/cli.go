@@ -282,6 +282,13 @@ func (a *Adapter) RunStdin(ctx context.Context, sessionID string) error {
 	return a.RunOnce(ctx, sessionID, input)
 }
 
+// Push writes message to the adapter's output writer. address is ignored.
+// Implements push.Pusher as a stdout fallback for background routines.
+func (a *Adapter) Push(_ context.Context, _ string, message string) error {
+	_, err := fmt.Fprintln(a.out, message)
+	return err
+}
+
 // IsTerminal reports whether r is an interactive terminal.
 // Used by callers to decide between RunInteractive and RunStdin.
 func IsTerminal(r io.Reader) bool {

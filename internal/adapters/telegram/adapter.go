@@ -14,6 +14,17 @@ import (
 	"github.com/chickenzord/zlaw/internal/slashcmd"
 )
 
+// Push delivers message to the Telegram chat identified by address (a chat ID
+// as a decimal string). Implements push.Pusher.
+func (a *Adapter) Push(ctx context.Context, address string, message string) error {
+	chatID, err := strconv.ParseInt(address, 10, 64)
+	if err != nil {
+		return fmt.Errorf("telegram push: invalid chat_id %q: %w", address, err)
+	}
+	_, err = a.bot.SendMessage(ctx, chatID, mdToHTML(message))
+	return err
+}
+
 // sessionIDForChat derives a stable session ID from the bot token and chat ID.
 // Format: first 16 hex characters of sha256(token + ":" + chatID).
 func sessionIDForChat(token string, chatID int64) string {
