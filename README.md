@@ -116,6 +116,13 @@ prompt   = "Give me a brief summary of what I should focus on today."
 
 ---
 
+## Docs
+
+- [Configuration reference](docs/configuration.md) — full `agent.toml` reference, backends, credentials, context engineering
+- [Built-in tools](docs/tools.md) — tool reference, allowlist, resilience
+
+---
+
 ## Coming soon
 
 Multi-agent routing, inter-agent messaging, and a central hub for orchestrating fleets of specialised agents.
