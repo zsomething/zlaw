@@ -8,7 +8,7 @@ A personal AI assistant that runs locally, connects to any LLM, and gets smarter
 
 **Remembers things.** Memories are saved as plain Markdown files you can read, edit, and version-control. When you enable proactive saving, the agent decides on its own what's worth keeping — user preferences, project context, recurring facts — without being asked. Recall is semantic: queries find relevant memories by meaning, not just matching keywords.
 
-**Runs on a schedule.** Define cron jobs in plain text and the agent executes them automatically — send a morning briefing, check for updates, run a recurring task. Jobs are hot-reloadable without a restart.
+**Runs on a schedule.** Define cron jobs in plain text and the agent executes them automatically — send a morning briefing, check for updates, run a recurring task. Jobs are hot-reloadable without a restart. The agent can also create and delete its own scheduled tasks mid-conversation, so it can set reminders or recurring work on its own initiative.
 
 **Talks to you on Telegram.** Connect a Telegram bot and the assistant lives in your pocket. Conversations are session-aware; you can have separate threads for different contexts.
 
@@ -23,7 +23,7 @@ A personal AI assistant that runs locally, connects to any LLM, and gets smarter
 - **Any LLM backend** — Anthropic native, or any OpenAI-compatible endpoint (Minimax, OpenRouter, Ollama, self-hosted)
 - **Long-term memory** — Markdown files on disk, human-readable and git-trackable; semantic search via vector index
 - **Proactive memory saving** — agent saves what matters without being asked, guided by a sticky instruction block
-- **Cron-scheduled tasks** — define recurring agent jobs in `cron.toml`; reloaded without restart
+- **Cron-scheduled tasks** — define recurring jobs in `cron.toml`, or let the agent schedule them itself via built-in tools; reloaded without restart
 - **Telegram adapter** — full session support over Telegram bot API
 - **Hot-reload** — personality files, cron jobs, and runtime model config update live
 - **Context window management** — token budget, multi-tier summarisation, layered pruning (thinking → tool results → turns)
