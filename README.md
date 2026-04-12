@@ -114,6 +114,8 @@ schedule = "0 8 * * *"
 prompt   = "Give me a brief summary of what I should focus on today."
 ```
 
+The agent can also manage its own schedule during a conversation — ask it to remind you about something and it will create the job itself.
+
 ---
 
 ## Docs
