@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -29,6 +30,7 @@ type SemanticMemoryStore struct {
 	markdown *MarkdownFileStore
 	db       *chromem.DB
 	coll     *chromem.Collection
+	logger   *slog.Logger
 }
 
 // NewSemanticMemoryStore creates a SemanticMemoryStore rooted at baseDir.
@@ -40,7 +42,7 @@ type SemanticMemoryStore struct {
 //
 // embedFunc is called for each document that needs (re-)embedding and for every
 // search query. Use NewEmbeddingFunc to build one from agent config.
-func NewSemanticMemoryStore(ctx context.Context, baseDir string, embedFunc chromem.EmbeddingFunc) (*SemanticMemoryStore, error) {
+func NewSemanticMemoryStore(ctx context.Context, baseDir string, embedFunc chromem.EmbeddingFunc, logger *slog.Logger) (*SemanticMemoryStore, error) {
 	indexDir := filepath.Join(baseDir, ".index")
 
 	db, err := chromem.NewPersistentDB(indexDir, false)
@@ -53,10 +55,14 @@ func NewSemanticMemoryStore(ctx context.Context, baseDir string, embedFunc chrom
 		return nil, fmt.Errorf("semantic memory: create collection: %w", err)
 	}
 
+	if logger == nil {
+		logger = slog.Default()
+	}
 	s := &SemanticMemoryStore{
 		markdown: NewMarkdownFileStore(baseDir),
 		db:       db,
 		coll:     coll,
+		logger:   logger,
 	}
 
 	if err := s.rebuildIndex(ctx); err != nil {
@@ -119,6 +125,8 @@ func (s *SemanticMemoryStore) Search(keywords []string) ([]Memory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("semantic search: %w", err)
 	}
+
+	s.logger.Debug("semantic search", "query", query, "index_size", count, "results", len(results))
 
 	memories := make([]Memory, 0, len(results))
 	for _, r := range results {
