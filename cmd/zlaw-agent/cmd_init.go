@@ -20,6 +20,15 @@ auth_profile = "minimax"
 max_tokens = 4096
 timeout_sec = 60
 
+# Semantic (embedding-based) memory search. When backend is set, memory_recall
+# uses vector similarity instead of keyword matching. Remove this section to
+# fall back to keyword search.
+#
+# [memory.embedder]
+# backend      = "minimax-openai"      # OpenAI-compat endpoint for embeddings
+# model        = "text-embedding-3-small"
+# auth_profile = "minimax"             # same credentials as the LLM backend
+
 [tools]
 # allowed = ["bash", "read_file", ...]  # uncomment to restrict tool access
 
