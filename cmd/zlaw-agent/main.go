@@ -52,6 +52,8 @@ func main() {
 	switch args[0] {
 	case "auth":
 		err = runAuth(args[1:])
+	case "init":
+		err = runInit(args[1:])
 	case "run":
 		err = runRun(ctx, args[1:], *agentName, *agentDir, logger)
 	case "serve":
@@ -84,6 +86,7 @@ func printUsage(fs *flag.FlagSet) {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "commands:")
 	fmt.Fprintln(os.Stderr, "  auth    manage authentication credentials")
+	fmt.Fprintln(os.Stderr, "  init    bootstrap a new agent directory")
 	fmt.Fprintln(os.Stderr, "  run     start the agent (interactive or stdin)")
 	fmt.Fprintln(os.Stderr, "  serve   start the agent in daemon mode (Unix socket + optional Telegram)")
 	fmt.Fprintln(os.Stderr, "  attach  attach a terminal to a running daemon session")
