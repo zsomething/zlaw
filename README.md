@@ -1,79 +1,69 @@
 # zlaw
 
-A standalone agentic assistant binary in Go. ReAct loop, any OpenAI-compatible or Anthropic backend, serious context management.
-
-## Status
-
-Phase 1 — standalone `zlaw-agent`. No hub, no NATS, no inter-agent routing yet.
+A personal AI assistant that runs locally, connects to any LLM, and gets smarter the more you use it.
 
 ---
 
-## Context engineering
+## What it does
 
-**Long-term memory.** Facts saved with `memory_save` write to plain markdown files under `$ZLAW_HOME/memories/`. Every new session loads them into the system prompt automatically. Enable `proactive_memory_save` and the agent decides what to save without being asked.
+**Remembers things.** Memories are saved as plain Markdown files you can read, edit, and version-control. When you enable proactive saving, the agent decides on its own what's worth keeping — user preferences, project context, recurring facts — without being asked. Recall is semantic: queries find relevant memories by meaning, not just matching keywords.
 
-**Token budget and pruning.** Set a token limit; as the window fills, old turns get summarised first. If that isn't enough, the agent prunes in layers: extended thinking blocks, then tool outputs, then full conversation turns. Token counts come from the actual API response, not a character estimate.
+**Runs on a schedule.** Define cron jobs in plain text and the agent executes them automatically — send a morning briefing, check for updates, run a recurring task. Jobs are hot-reloadable without a restart.
 
-**Prompt caching (Anthropic).** The system prompt splits into two cached layers. Framework instructions form the stable head with the highest cache hit rate. Personality files get their own checkpoint and reload on file change without invalidating the first layer. Memories load after both, uncached, since they change each session.
+**Talks to you on Telegram.** Connect a Telegram bot and the assistant lives in your pocket. Conversations are session-aware; you can have separate threads for different contexts.
 
-**Session prefill.** Inject working directory, current time, or file contents into the first user message of each session. Keeps the system prompt cache clean.
+**Stays sharp in long conversations.** As the context window fills, the agent summarises old turns to preserve meaning, then prunes selectively — stripping extended thinking first, then tool outputs, then full turns. You set the budget; it manages the window.
+
+**Adapts on the fly.** Edit the agent's personality or behaviour and the change takes effect on the next message — no restart needed. The same applies to scheduled jobs, tool config, and runtime model overrides.
 
 ---
 
 ## Features
 
-- **ReAct loop** — runs up to 20 iterations per turn; stops when done or when tools return nothing new
-- **Any LLM backend** — Anthropic native, or any OpenAI-compatible endpoint (Minimax, OpenRouter, self-hosted)
-- **Parallel tool execution** — multiple tool calls in a single turn run concurrently
+- **Any LLM backend** — Anthropic native, or any OpenAI-compatible endpoint (Minimax, OpenRouter, Ollama, self-hosted)
+- **Long-term memory** — Markdown files on disk, human-readable and git-trackable; semantic search via vector index
+- **Proactive memory saving** — agent saves what matters without being asked, guided by a sticky instruction block
+- **Cron-scheduled tasks** — define recurring agent jobs in `cron.toml`; reloaded without restart
+- **Telegram adapter** — full session support over Telegram bot API
+- **Hot-reload** — personality files, cron jobs, and runtime model config update live
+- **Context window management** — token budget, multi-tier summarisation, layered pruning (thinking → tool results → turns)
+- **Prompt caching** — Anthropic backends split the system prompt into stable cached layers for lower latency and cost
+- **Session persistence** — conversations stored as JSONL; resume any session by ID
 - **Streaming** — tokens stream to the terminal as they arrive
-- **Long-term memory** — `memory_save` writes to plain markdown files; `memory_recall` searches them; all memories load into the system prompt at session start
-- **Session history** — conversations persist as JSONL under `$ZLAW_HOME/sessions/<agent>/`; resume any past session by ID
-- **Personality hot-reload** — edit `SOUL.md` or `IDENTITY.md`; the change takes effect on the next message
-- **Tool guardrails** — allowlist, per-tool result size cap, configurable shell timeout
-- **Resilient** — automatic retry with backoff; respects `Retry-After` on 429
-
-### Built-in tools
-
-| Tool | What it does |
-|------|-------------|
-| `current_time` | Returns the current date and time |
-| `read_file` | Reads a file with optional offset/limit |
-| `write_file` | Writes a file, creating parent directories |
-| `edit_file` | Targeted string-replace within a file |
-| `glob` | Finds files by glob pattern |
-| `grep` | Regex search over file contents with line numbers |
-| `bash` | Runs a shell command (configurable timeout, max 300 s) |
-| `web_fetch` | Fetches a URL and returns the body |
-| `web_search` | Searches the web and returns results |
-| `http_request` | Makes an arbitrary HTTP request |
-| `memory_save` | Persists a fact with optional tags (upserts by ID) |
-| `memory_recall` | Keyword/tag search over stored memories |
-| `memory_delete` | Removes a memory by ID |
+- **Built-in tools** — file read/write/edit, glob, grep, bash, web fetch/search, HTTP requests, memory ops, cron management
 
 ---
 
 ## Quick start
 
 ```sh
-export ZLAW_HOME=~/.zlaw
+# Bootstrap a new agent
+zlaw-agent init --name myagent
 
-zlaw-agent auth login
+# Run interactively
+zlaw-agent --agent myagent run
 
-# Run with a named agent (reads $ZLAW_HOME/agents/<name>/agent.toml)
-zlaw-agent run --agent default
+# Run as a daemon (Unix socket + optional Telegram)
+zlaw-agent --agent myagent serve
+```
+
+Credentials live in `~/.zlaw/credentials.toml`. Add a profile:
+
+```sh
+zlaw-agent auth login --profile myprofile --type apikey --key <key>
 ```
 
 ---
 
 ## Configuration
 
-Each agent lives in a directory with three files:
+Each agent is a directory with three files:
 
 | File | Purpose |
 |------|---------|
-| `agent.toml` | LLM backend, model, auth profile, context settings, tool allowlist |
-| `SOUL.md` | Personality and behavioural guidelines (optional) |
-| `IDENTITY.md` | Agent identity and role description (optional) |
+| `agent.toml` | LLM backend, model, memory, tools, adapter, context settings |
+| `SOUL.md` | Personality and behavioural guidelines |
+| `IDENTITY.md` | Agent role and identity |
 
 ### Minimal `agent.toml`
 
@@ -82,83 +72,50 @@ Each agent lives in a directory with three files:
 name = "myagent"
 
 [llm]
-backend      = "anthropic"
-model        = "claude-sonnet-4-5"
-auth_profile = "anthropic-default"
+backend      = "openrouter"
+model        = "openai/gpt-4o"
+auth_profile = "openrouter"
 max_tokens   = 4096
-timeout_sec  = 60
 ```
+
+### Memory
+
+```toml
+[sticky]
+proactive_memory_save = true   # agent saves facts without being asked
+
+[memory.embedder]
+backend      = "openrouter"
+model        = "openai/text-embedding-3-small"
+auth_profile = "openrouter"    # omit to reuse the LLM auth profile
+```
+
+Memory files are stored under `$ZLAW_HOME/memories/<agent>/` as plain Markdown — readable, editable, and version-controllable. The vector index is a local cache derived from those files; delete it to force a rebuild.
 
 ### Context management
 
 ```toml
 [llm]
-# Hard token budget for the message history.
-# Oldest turns are pruned when the estimate exceeds this value.
-context_token_budget = 80000
-
-# Fraction of budget at which summarisation triggers before pruning.
-# 0 = summarisation disabled.
-context_summarize_threshold = 0.8
-
-# How many of the oldest turns to collapse per summarisation pass.
-context_summarize_turns = 10
-
-# Route summarisation to a cheaper/faster model (same backend and auth profile).
-context_summarize_model = "claude-haiku-4-5-20251001"
-
-# Pruning strategies applied in order after summarisation.
-# strip_thinking → strip_tool_results → drop_pairs
-context_prune_levels = ["strip_thinking", "strip_tool_results", "drop_pairs"]
-
-# Anthropic prompt caching (default: true on Anthropic backend).
-# prompt_caching = true
-
-# Cap the [Memories] block injected into the system prompt.
-max_memory_tokens = 2000
+context_token_budget         = 80000   # hard limit on history size
+context_summarize_threshold  = 0.8     # summarise at 80% of budget
+context_summarize_turns      = 10      # turns to collapse per pass
+context_summarize_model      = "openai/gpt-4o-mini"   # cheaper model for summarisation
+context_prune_levels         = ["strip_thinking", "strip_tool_results", "drop_pairs"]
+max_memory_tokens            = 2000    # cap the [Memories] block in the system prompt
 ```
 
-### Context prefill
-
-Inject dynamic context into the first user message of each new session:
+### Scheduled tasks
 
 ```toml
-[context]
-prefill = ["cwd", "datetime", "file:NOTES.md"]
-```
-
-Supported sources: `cwd` (working directory), `datetime` (RFC3339 timestamp), `file:<path>` (relative to agent directory).
-
-### Long-term memory
-
-Memory files are stored as `$ZLAW_HOME/memories/<agent>/<id>.md` with YAML frontmatter — human-readable and version-controllable. Enable proactive saving with a sticky instruction block:
-
-```toml
-[sticky]
-proactive_memory_save = true
-```
-
-When enabled, a `[Memory behavior]` instruction is prepended to every system prompt as cache checkpoint 1, telling the agent to call `memory_save` whenever it learns something worth retaining (user preferences, project facts, recurring context).
-
-### Tool allowlist
-
-```toml
-[tools]
-allowed = ["read_file", "bash", "memory_save", "memory_recall", "memory_delete"]
-max_result_bytes = 65536
+# cron.toml (in the agent directory)
+[[jobs]]
+id       = "morning-briefing"
+schedule = "0 8 * * *"
+prompt   = "Give me a brief summary of what I should focus on today."
 ```
 
 ---
 
-## Runtime paths
+## Coming soon
 
-All runtime paths derive from `$ZLAW_HOME` (defaults to `$PWD`):
-
-| Path | Contents |
-|------|---------|
-| `$ZLAW_HOME/agents/<name>/` | Agent config files |
-| `$ZLAW_HOME/sessions/<name>/` | Durable session history (JSONL) |
-| `$ZLAW_HOME/memories/<name>/` | Long-term memory files (Markdown) |
-| `$ZLAW_HOME/credentials.toml` | Auth profiles (mode 0600) |
-
-Override the credentials path with `ZLAW_CREDENTIALS_FILE`.
+Multi-agent routing, inter-agent messaging, and a central hub for orchestrating fleets of specialised agents.
