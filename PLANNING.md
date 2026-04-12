@@ -6,48 +6,79 @@ Development is split into two major phases. Phase 1 (standalone agent) must be s
 
 ---
 
-## Phase 1: Standalone Agent (Start Here)
+## Phase 1: Standalone Agent ✓
 
 Goal: a single zlaw-agent binary that accepts input, runs an agentic loop, and emits a response. No zlaw-hub, no NATS, no inter-agent comms.
 
-### P0 — Core Loop (Ship First)
+### P0 — Core Loop
 
-- [ ] **Agent process bootstrap** — load config, SOUL.md, IDENTITY.md, tools manifest, restore history
-- [ ] **LLM client abstraction** — interface supporting multiple backends (Anthropic, OpenAI-compat, Ollama); configured per agent
-- [ ] **ReAct agentic loop** — think → tool call or respond → append to history → repeat
-- [ ] **Response parser** — detect plain text vs tool call(s); support parallel tool calls
-- [ ] **Conversation history manager** — append turns, track token count, trigger summarization near limit
-- [ ] **Session model** — `map[sessionID → history]` from day one, even if only one session is active
-- [ ] **Output emitter** — decoupled from input; same agent responds to stdin now, NATS later
-- [ ] **Input handler (stdin / local HTTP)** — minimal interface for testing without Telegram
+- [x] **Agent process bootstrap** — load config, SOUL.md, IDENTITY.md, tools manifest, restore history
+- [x] **LLM client abstraction** — interface supporting multiple backends (Anthropic, OpenAI-compat); configured per agent
+- [x] **ReAct agentic loop** — think → tool call or respond → append to history → repeat; up to 20 iterations per turn
+- [x] **Response parser** — detect plain text vs tool call(s); parallel tool calls run concurrently
+- [x] **Conversation history manager** — append turns, track token count via API response, trigger summarisation near limit
+- [x] **Session model** — `map[sessionID → history]` with JSONL persistence under `$ZLAW_HOME/sessions/<agent>/`
+- [x] **Output emitter** — streaming tokens to terminal; decoupled from input handler
+- [x] **Input handler** — interactive terminal (stdin) and one-shot stdin pipe; daemon mode over Unix socket
 
 ### P1 — Personality & Config
 
-- [ ] **SOUL.md loading** — injected as system prompt personality block at bootstrap
-- [ ] **IDENTITY.md loading** — agent name, role, capabilities injected into system prompt
-- [ ] **agent.toml config** — model, context limits, tool ACL, isolation level, session settings
-- [ ] **Hot-reload on file change** — inotify-watch config + SOUL/IDENTITY; apply without restart
-- [ ] **Secret injection** — env-var based; no plaintext secrets in config files
+- [x] **SOUL.md loading** — injected as system prompt personality block at bootstrap
+- [x] **IDENTITY.md loading** — agent name, role, capabilities injected into system prompt
+- [x] **agent.toml config** — model, context limits, tool ACL, adapter, session settings; env-var expansion
+- [x] **Hot-reload on file change** — fsnotify watch on SOUL.md, IDENTITY.md, agent.toml, cron.toml; live on next message
+- [x] **Secret injection** — env-var based; no plaintext secrets in config files; credentials.toml with apikey and oauth2 profiles
+- [x] **Runtime config overrides** — `runtime.toml` for hot model switching without full config reload
 
 ### P2 — Tool / Skill System
 
-- [ ] **Tool registry** — agent declares available tools; schemas included in LLM context
-- [ ] **Plugin binary contract** — versioned gRPC or net/rpc interface that skill binaries implement
-- [ ] **Tool executor** — spawn plugin, call over IPC, enforce timeout, return result or error
-- [ ] **Tool ACL** — per-agent whitelist; executor enforces before dispatch
+- [x] **Tool registry** — agent declares available tools; schemas included in LLM context
+- [x] **Tool ACL** — per-agent allowlist; result size cap; executor enforces before dispatch
+- [x] **Built-in tools** — file I/O, bash, glob, grep, web fetch/search, HTTP request, memory ops, cron management, configure
+- [x] **Skills discovery** — scan `$ZLAW_HOME/skills/` for Markdown skill files; inject index into system prompt; load on demand via `skill_load` tool
+- [ ] **Plugin binary contract** — versioned gRPC or net/rpc interface for external skill binaries
+- [ ] **Tool executor (plugin IPC)** — spawn plugin binary, call over IPC, enforce timeout, return result or error
 - [ ] **Plugin hot-reload** — reload skill binaries without restarting agent
 
 ### P3 — Memory
 
-- [ ] **Working memory** — in-memory scratch state per session, cleared on session end
-- [ ] **Long-term memory (disk)** — markdown files or simple key-value store; recalled on context build
-- [ ] **Context summarization** — auto-summarize history when approaching token limit
+- [x] **Long-term memory (disk)** — Markdown files with YAML frontmatter under `$ZLAW_HOME/memories/<agent>/`; human-readable, git-trackable
+- [x] **Semantic memory search** — vector index via chromem-go persisted alongside memory files; embedding backend configurable per agent; content-hash diffing avoids redundant re-embedding
+- [x] **Proactive memory save** — sticky `[Memory behavior]` instruction block tells agent to save without being asked; opt-in via `sticky.proactive_memory_save`
+- [x] **Memory injection** — all memories loaded into system prompt as uncached section at session start; token-capped
+- [x] **Context summarisation** — auto-summarise oldest turns when approaching token budget; configurable threshold, turn count, and optional separate summarisation model
+- [ ] **Working memory** — per-session scratch state separate from conversation history; cleared on session end
 
-### P4 — Observability (Phase 1)
+### P4 — Context Engineering
 
-- [ ] **Structured logging** — JSON logs with session ID and trace ID per agent
-- [ ] **Token usage tracking** — log token counts per LLM call
-- [ ] **Dry-run / sandbox mode** — tools no-op, LLM calls real; for testing agent behavior
+- [x] **Token budget and pruning** — hard token limit; multi-level pruning pipeline: strip extended thinking → strip tool result bodies → drop full turn pairs
+- [x] **Prompt caching (Anthropic)** — system prompt split into stable cached layers; framework instructions, personality, and skills each get their own checkpoint
+- [x] **Session prefill** — inject working directory, current time, or file contents into first user message; keeps system prompt cache clean across sessions
+
+### P5 — Interfaces & Adapters
+
+- [x] **CLI adapter** — interactive REPL and stdin pipe; session ID flag; verbose mode; token usage display
+- [x] **Daemon mode** — `serve` command runs agent as Unix socket server; sessions managed independently per client
+- [x] **Session attach** — `attach` command connects a terminal to a running daemon session
+- [x] **Telegram adapter** — full bot integration; session-per-chat; message formatting; inline streaming
+- [x] **Push notifications** — agent can push messages to Telegram outside of a user turn (e.g. from cron jobs)
+
+### P6 — Scheduled Tasks
+
+- [x] **Cron scheduler** — cron.toml defines recurring agent jobs; Go cron expression parser; jobs run as agent turns
+- [x] **Cron tools** — `list_cronjobs`, `create_cronjob`, `delete_cronjob` let the agent manage its own schedule
+- [x] **Hot-reload** — cron.toml changes apply without restart
+
+### P7 — Observability
+
+- [x] **Structured logging** — slog with `agent`, `session_id` on every line; DEBUG/INFO via `ZLAW_LOG_LEVEL`
+- [x] **Token usage tracking** — cumulative input/output tokens per turn; display on request
+- [ ] **Dry-run / sandbox mode** — tools no-op, LLM calls real; for testing agent behaviour
+
+### P8 — CLI & Bootstrap
+
+- [x] **Agent init** — `zlaw-agent init --name <n>` generates agent.toml, SOUL.md, IDENTITY.md with starter content
+- [x] **Auth management** — `zlaw-agent auth login` stores credentials in credentials.toml
 
 ---
 
@@ -77,21 +108,14 @@ Goal: zlaw-hub process with embedded NATS, agent registry, identity verification
 - [ ] **Capability advertisement** — agents publish skills manifest to registry on connect; zlaw uses for routing
 - [ ] **Planner agent pattern** — designate one agent to receive user input first and delegate to peers
 
-### P3 — Interfaces
-
-- [ ] **Interface adapter contract** — common Go interface for input/output adapters
-- [ ] **Telegram adapter** — primary interface; messages route to planner agent via zlaw
-- [ ] **CLI adapter** — for local testing and scripting
-- [ ] **HTTP adapter** — REST/webhook interface; enables future integrations
-
-### P4 — Execution Isolation
+### P3 — Execution Isolation
 
 - [ ] **Homedir isolation** — agent restricted to virtual home directory
 - [ ] **OS user isolation** — agent spawned as dedicated OS user via sudo drop
-- [ ] **Docker container isolation** — agent runs in container; connects to zlaw NATS via TCP address
-- [ ] **Isolation level config** — `isolation` field in `agent.toml`; zlaw enforces at spawn time
+- [ ] **Docker container isolation** — agent runs in container; connects to zlaw NATS via TCP
+- [ ] **Isolation level config** — `isolation` field in agent.toml; zlaw enforces at spawn time
 
-### P5 — Observability (Phase 2)
+### P4 — Observability (Phase 2)
 
 - [ ] **Distributed trace IDs** — trace ID spans across agent hops and tool calls
 - [ ] **Metrics endpoint** — Prometheus scrape target; token usage, latency, tool call counts per agent
@@ -102,9 +126,9 @@ Goal: zlaw-hub process with embedded NATS, agent registry, identity verification
 
 ## Nice-to-Have (Post Phase 2)
 
-- [ ] **Scheduled task triggers** — agents register cron-style triggers (morning briefing, EOD wrap)
+- [x] ~~**Scheduled task triggers**~~ — done in Phase 1 (cron.toml + scheduler)
+- [x] ~~**Agent scaffolding CLI**~~ — done in Phase 1 (`zlaw-agent init`)
 - [ ] **Human-in-the-loop confirmation** — agent pauses before high-risk tool execution; configurable per tool
-- [ ] **Agent scaffolding CLI** — `zlaw new agent <name>` generates config, SOUL.md, IDENTITY.md, plugin stub
 - [ ] **Local dev mode** — all agents as goroutines in one process, no IPC; for rapid iteration
 - [ ] **Multi-tenancy** — multiple users with isolated agent contexts and session namespaces
 
@@ -124,6 +148,7 @@ Goal: zlaw-hub process with embedded NATS, agent registry, identity verification
 | Personality | SOUL.md + IDENTITY.md per agent | Hot-reloadable, version-controllable, human-readable |
 | Session model | `map[sessionID → history]` | Supports multi-session from day one even in single-user mode |
 | Isolation levels | none → homedir → OS user → Docker | Gradual, configurable per agent |
+| Memory storage | Markdown files (source of truth) + vector index (cache) | Human-readable, git-trackable; index is regenerable |
 
 ---
 
@@ -135,17 +160,22 @@ zlaw/
 │   ├── zlaw-hub/     # zlaw-hub entrypoint
 │   └── zlaw-agent/   # zlaw-agent binary entrypoint
 ├── internal/
-│   ├── agent/        # Agentic loop, history, context builder
+│   ├── agent/        # Agentic loop, history, context builder, memory
 │   ├── llm/          # LLM client abstraction + backends
-│   ├── tools/        # Tool executor, registry, plugin IPC
-│   ├── zlaw/          # zlaw core: registry, router, audit log
-│   ├── nats/         # Embedded NATS setup + subject conventions
-│   ├── identity/     # Keypair management, NKeys, message signing
-│   ├── adapters/     # Interface adapters (Telegram, CLI, HTTP)
-│   └── config/       # Config loading, hot-reload, secret injection
+│   ├── tools/        # Tool executor, registry, built-in tools
+│   ├── cron/         # Cron expression parser + scheduler
+│   ├── skills/       # Skill discovery and loading
+│   ├── session/      # Session manager, sink, events
+│   ├── adapters/     # Interface adapters (CLI, Telegram, daemon)
+│   ├── transport/    # Unix socket transport
+│   ├── config/       # Config loading, hot-reload, secret injection
+│   ├── zlaw/         # zlaw core: registry, router, audit log (Phase 2)
+│   ├── nats/         # Embedded NATS setup + subject conventions (Phase 2)
+│   └── identity/     # Keypair management, NKeys, message signing (Phase 2)
 ├── agents/
 │   └── <agent-name>/  # Per-agent: agent.toml, SOUL.md, IDENTITY.md
-├── plugins/          # Skill plugin binaries and contracts
+├── docs/              # Configuration reference, tools reference
+├── plugins/           # Skill plugin binaries and contracts
 ├── zlaw.toml          # Global zlaw config
 └── README.md
 ```
