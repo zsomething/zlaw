@@ -11,12 +11,16 @@ import (
 	"github.com/chickenzord/zlaw/internal/llm"
 )
 
-// CronWriter is the interface used by cron tools to read and write cron.toml.
-type CronWriter interface {
-	// AgentDir returns the agent directory where cron.toml lives.
+// CronReader is the interface used by read-only cron tools.
+type CronReader interface {
 	AgentDir() string
-	// ReloadCron triggers an immediate scheduler reload after a tool write,
-	// without waiting for the file watcher to fire.
+}
+
+// CronWriter is the interface used by cron tools that mutate cron.toml.
+// It extends CronReader with a reload trigger so the scheduler picks up
+// changes immediately without waiting for the file watcher.
+type CronWriter interface {
+	CronReader
 	ReloadCron()
 }
 
@@ -24,7 +28,7 @@ type CronWriter interface {
 
 // ListCronjobs lists all cron jobs defined in cron.toml.
 type ListCronjobs struct {
-	Writer CronWriter
+	Reader CronReader
 }
 
 func (ListCronjobs) Definition() llm.ToolDefinition {
@@ -36,7 +40,7 @@ func (ListCronjobs) Definition() llm.ToolDefinition {
 }
 
 func (t ListCronjobs) Execute(_ context.Context, _ json.RawMessage) (string, error) {
-	cfg, err := config.LoadCronConfig(t.Writer.AgentDir())
+	cfg, err := config.LoadCronConfig(t.Reader.AgentDir())
 	if err != nil {
 		return "", fmt.Errorf("list_cronjobs: %w", err)
 	}

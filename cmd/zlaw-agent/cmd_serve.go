@@ -151,7 +151,7 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
 	registry.Register(builtin.Configure{Loader: loader})
-	registry.Register(builtin.ListCronjobs{Writer: cronWriter})
+	registry.Register(builtin.ListCronjobs{Reader: cronWriter})
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
 	memStore := buildMemoryStore(cfg.Agent.Name, logger)
