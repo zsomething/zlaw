@@ -14,6 +14,7 @@ import (
 	"github.com/chickenzord/zlaw/internal/adapters/telegram"
 	"github.com/chickenzord/zlaw/internal/agent"
 	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/chickenzord/zlaw/internal/cron"
 	"github.com/chickenzord/zlaw/internal/llm"
 	"github.com/chickenzord/zlaw/internal/push"
 	"github.com/chickenzord/zlaw/internal/session"
@@ -38,6 +39,37 @@ func (w agentWrapper) RunStream(
 
 // compile-time check: agentWrapper satisfies session.AgentRunner.
 var _ session.AgentRunner = agentWrapper{}
+
+// cronAgentRunner adapts *agent.Agent to cron.AgentRunner.
+type cronAgentRunner struct {
+	ag          *agent.Agent
+	sysPromptFn func() string
+}
+
+func (r cronAgentRunner) Run(ctx context.Context, sessionID, input, _ string) (string, error) {
+	result, err := r.ag.Run(ctx, sessionID, input, r.sysPromptFn())
+	return result.Text, err
+}
+
+var _ cron.AgentRunner = cronAgentRunner{}
+
+// cronWriterImpl satisfies builtin.CronWriter, bridging the tools to the
+// scheduler's Reload method and the agent directory path.
+type cronWriterImpl struct {
+	agentDir  string
+	scheduler *cron.Scheduler
+}
+
+func (c *cronWriterImpl) AgentDir() string { return c.agentDir }
+func (c *cronWriterImpl) ReloadCron() {
+	cfg, err := config.LoadCronConfig(c.agentDir)
+	if err != nil {
+		return
+	}
+	c.scheduler.Reload(cfg.Jobs)
+}
+
+var _ builtin.CronWriter = (*cronWriterImpl)(nil)
 
 func runServe(ctx context.Context, args []string, agentName, agentDir string, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
@@ -102,6 +134,11 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	logger.Info("llm configured", "backend", cfg.LLM.Backend, "model", cfg.LLM.Model, "auth_profile", cfg.LLM.AuthProfile)
 
 	// --- Build tool registry (same set as runRun) ---
+	// cronWriter is created early so cron tools are registered before the
+	// allowlist is applied. The scheduler field is assigned after the
+	// scheduler is constructed below.
+	cronWriter := &cronWriterImpl{agentDir: agentDir}
+
 	registry := tools.NewRegistry()
 	registry.Register(builtin.CurrentTime{})
 	registry.Register(builtin.ReadFile{})
@@ -114,6 +151,9 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
 	registry.Register(builtin.Configure{Loader: loader})
+	registry.Register(builtin.ListCronjobs{Writer: cronWriter})
+	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
+	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
 	memStore := buildMemoryStore(cfg.Agent.Name, logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
@@ -204,7 +244,29 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 		}()
 	}
 
-	_ = pushRegistry // used by future cronjob/polling/deferred features
+	// --- Build and start cron scheduler ---
+	sysPromptFn := func() string { return *promptPtr.Load() }
+	scheduler := cron.NewScheduler(
+		cronAgentRunner{ag: ag, sysPromptFn: sysPromptFn},
+		pushRegistry,
+		sysPromptFn,
+		logger,
+	)
+
+	// Load initial cron jobs and wire hot-reload.
+	initialCron, err := config.LoadCronConfig(agentDir)
+	if err != nil {
+		logger.Warn("cron: failed to load initial cron.toml, starting with no jobs", "err", err)
+	} else {
+		scheduler.Reload(initialCron.Jobs)
+	}
+	loader.SetCronChangeHandler(func(c config.CronConfig) {
+		scheduler.Reload(c.Jobs)
+	})
+
+	cronWriter.scheduler = scheduler
+	go scheduler.Run(ctx)
+	logger.Info("cron scheduler started")
 
 	// --- Start config hot-reload ---
 	go func() {
