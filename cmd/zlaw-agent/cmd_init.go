@@ -14,9 +14,9 @@ name = %q
 description = ""
 
 [llm]
-backend = ""
-model = ""
-auth_profile = ""
+backend = "minimax"
+model = "MiniMax-M2.7"
+auth_profile = "minimax"
 max_tokens = 4096
 timeout_sec = 60
 
