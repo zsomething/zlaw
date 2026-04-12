@@ -154,7 +154,7 @@ func runServe(ctx context.Context, args []string, agentName, agentDir string, lo
 	registry.Register(builtin.ListCronjobs{Reader: cronWriter})
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
-	memStore := buildMemoryStore(cfg.Agent.Name, logger)
+	memStore := buildMemoryStore(ctx, cfg, "", logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
 		registry.Register(builtin.MemoryRecall{Store: memStore})

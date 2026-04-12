@@ -127,7 +127,7 @@ func (s *MarkdownFileStore) List() ([]Memory, error) {
 			continue
 		}
 		id := strings.TrimSuffix(e.Name(), ".md")
-		m, err := s.load(id)
+		m, err := s.Load(id)
 		if err != nil {
 			return nil, err
 		}
@@ -177,8 +177,9 @@ func matchesAny(m Memory, lowerKeywords []string) bool {
 	return false
 }
 
-// load parses a single memory file.
-func (s *MarkdownFileStore) load(id string) (Memory, error) {
+// Load parses and returns the memory with the given ID.
+// Returns an error if the file does not exist.
+func (s *MarkdownFileStore) Load(id string) (Memory, error) {
 	data, err := os.ReadFile(s.filePath(id))
 	if err != nil {
 		return Memory{}, fmt.Errorf("memory store: read %s: %w", id, err)

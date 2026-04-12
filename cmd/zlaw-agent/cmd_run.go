@@ -19,15 +19,33 @@ import (
 	"github.com/chickenzord/zlaw/internal/tools/builtin"
 )
 
-// buildMemoryStore returns a MarkdownFileStore for the agent's long-term
-// memories. Falls back to nil on error (caller should skip memory tools).
-func buildMemoryStore(agentName string, logger *slog.Logger) agent.MemoryStore {
-	dir, err := agent.MemoryDir(agentName)
+// buildMemoryStore returns a MemoryStore for the agent's long-term memories.
+// When cfg.Memory.Embedder.Backend is set it builds a SemanticMemoryStore backed
+// by a chromem-go vector index; otherwise it falls back to keyword-search
+// MarkdownFileStore. Returns nil on error (caller should skip memory tools).
+func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath string, logger *slog.Logger) agent.MemoryStore {
+	dir, err := agent.MemoryDir(cfg.Agent.Name)
 	if err != nil {
 		logger.Warn("cannot resolve memory dir, memory tools disabled", "error", err)
 		return nil
 	}
 	logger.Info("memory store", "dir", dir)
+
+	if cfg.Memory.Embedder.Backend != "" {
+		embedFunc, err := agent.NewEmbeddingFunc(cfg.Memory.Embedder, credPath)
+		if err != nil {
+			logger.Warn("failed to build embedder, falling back to keyword search", "error", err)
+			return agent.NewMarkdownFileStore(dir)
+		}
+		store, err := agent.NewSemanticMemoryStore(ctx, dir, embedFunc)
+		if err != nil {
+			logger.Warn("failed to build semantic memory store, falling back to keyword search", "error", err)
+			return agent.NewMarkdownFileStore(dir)
+		}
+		logger.Info("semantic memory store ready", "backend", cfg.Memory.Embedder.Backend, "model", cfg.Memory.Embedder.Model)
+		return store
+	}
+
 	return agent.NewMarkdownFileStore(dir)
 }
 
@@ -129,7 +147,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
 	registry.Register(builtin.Configure{Loader: loader})
-	memStore := buildMemoryStore(cfg.Agent.Name, logger)
+	memStore := buildMemoryStore(ctx, cfg, "", logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
 		registry.Register(builtin.MemoryRecall{Store: memStore})

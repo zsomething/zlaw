@@ -23,6 +23,34 @@ type AgentConfig struct {
 	Adapter AdapterConfig `toml:"adapter"`
 	Sticky  StickyConfig  `toml:"sticky"`
 	Serve   ServeConfig   `toml:"serve"`
+	Memory  MemoryConfig  `toml:"memory"`
+}
+
+// MemoryConfig controls long-term memory behaviour.
+type MemoryConfig struct {
+	// Embedder configures the embedding backend for semantic (vector) search.
+	// When Backend is empty the store falls back to keyword matching.
+	Embedder EmbedderConfig `toml:"embedder"`
+}
+
+// EmbedderConfig selects and configures the embedding backend used by the
+// semantic memory store. Authentication is handled via credentials.toml,
+// the same as the LLM backend.
+type EmbedderConfig struct {
+	// Backend selects a named preset (e.g. "minimax-openai", "openrouter").
+	// The preset must resolve to an OpenAI-compatible endpoint.
+	Backend string `toml:"backend"`
+
+	// Model is the embedding model name (e.g. "text-embedding-3-small").
+	Model string `toml:"model"`
+
+	// BaseURL overrides the endpoint URL from the preset. Leave empty to use the
+	// preset default.
+	BaseURL string `toml:"base_url"`
+
+	// AuthProfile is the credentials.toml profile name. Leave empty to use the
+	// same profile as the LLM backend.
+	AuthProfile string `toml:"auth_profile"`
 }
 
 // ServeConfig controls daemon-mode behaviour.
