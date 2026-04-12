@@ -26,7 +26,7 @@ timeout_sec = 60
 #
 # [memory.embedder]
 # backend      = "minimax-openai"      # OpenAI-compat endpoint for embeddings
-# model        = "text-embedding-3-small"
+# model        = "embo-01"
 # auth_profile = "minimax"             # same credentials as the LLM backend
 
 [tools]

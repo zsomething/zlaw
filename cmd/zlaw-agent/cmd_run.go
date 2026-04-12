@@ -31,18 +31,32 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 	}
 	logger.Info("memory store", "dir", dir)
 
-	if cfg.Memory.Embedder.Backend != "" {
-		embedFunc, err := agent.NewEmbeddingFunc(cfg.Memory.Embedder, credPath)
+	emb := cfg.Memory.Embedder
+	// Auto-derive the embedder backend from the LLM backend when not explicit.
+	if emb.Backend == "" {
+		if p, err := llm.LookupPreset(cfg.LLM.Backend); err == nil {
+			emb.Backend = p.EmbeddingPreset
+		}
+	}
+
+	if emb.Backend != "" {
+		if emb.Model == "" {
+			emb.Model = cfg.LLM.Model
+		}
+		if emb.AuthProfile == "" {
+			emb.AuthProfile = cfg.LLM.AuthProfile
+		}
+		embedFunc, err := agent.NewEmbeddingFunc(emb, credPath)
 		if err != nil {
 			logger.Warn("failed to build embedder, falling back to keyword search", "error", err)
 			return agent.NewMarkdownFileStore(dir)
 		}
-		store, err := agent.NewSemanticMemoryStore(ctx, dir, embedFunc)
+		store, err := agent.NewSemanticMemoryStore(ctx, dir, embedFunc, logger)
 		if err != nil {
 			logger.Warn("failed to build semantic memory store, falling back to keyword search", "error", err)
 			return agent.NewMarkdownFileStore(dir)
 		}
-		logger.Info("semantic memory store ready", "backend", cfg.Memory.Embedder.Backend, "model", cfg.Memory.Embedder.Model)
+		logger.Info("semantic memory store ready", "backend", emb.Backend, "model", emb.Model)
 		return store
 	}
 

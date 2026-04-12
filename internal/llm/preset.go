@@ -13,38 +13,47 @@ const (
 // BackendPreset is a named, well-known backend configuration.
 // A preset defines default values; individual fields can be overridden in agent.toml.
 type BackendPreset struct {
-	BaseURL   string
+	BaseURL string
 	APIFormat APIFormat
+	// EmbeddingPreset is the preset name to use for embedding calls when this
+	// backend is selected as the LLM backend. Empty means embeddings are not
+	// auto-derivable from this backend.
+	EmbeddingPreset string
 }
 
 // presets is the built-in registry of named backends.
 var presets = map[string]BackendPreset{
 	// Minimax — global endpoint (Anthropic-compatible, recommended)
 	"minimax": {
-		BaseURL:   "https://api.minimax.io/anthropic",
-		APIFormat: APIFormatAnthropic,
+		BaseURL:         "https://api.minimax.io/anthropic",
+		APIFormat:       APIFormatAnthropic,
+		EmbeddingPreset: "minimax-openai",
 	},
 	// Minimax — global endpoint (OpenAI-compatible)
 	"minimax-openai": {
-		BaseURL:   "https://api.minimax.io/v1",
-		APIFormat: APIFormatOpenAI,
+		BaseURL:         "https://api.minimax.io/v1",
+		APIFormat:       APIFormatOpenAI,
+		EmbeddingPreset: "minimax-openai",
 	},
 	// Minimax — China endpoint (Anthropic-compatible, recommended)
 	"minimax-cn": {
-		BaseURL:   "https://api.minimaxi.com/anthropic",
-		APIFormat: APIFormatAnthropic,
+		BaseURL:         "https://api.minimaxi.com/anthropic",
+		APIFormat:       APIFormatAnthropic,
+		EmbeddingPreset: "minimax-cn-openai",
 	},
 	// Minimax — China endpoint (OpenAI-compatible)
 	"minimax-cn-openai": {
-		BaseURL:   "https://api.minimaxi.com/v1",
-		APIFormat: APIFormatOpenAI,
+		BaseURL:         "https://api.minimaxi.com/v1",
+		APIFormat:       APIFormatOpenAI,
+		EmbeddingPreset: "minimax-cn-openai",
 	},
 	// OpenRouter — aggregator
 	"openrouter": {
-		BaseURL:   "https://openrouter.ai/api/v1",
-		APIFormat: APIFormatOpenAI,
+		BaseURL:         "https://openrouter.ai/api/v1",
+		APIFormat:       APIFormatOpenAI,
+		EmbeddingPreset: "openrouter",
 	},
-	// Anthropic — native Messages API
+	// Anthropic — native Messages API (no embeddings endpoint)
 	"anthropic": {
 		BaseURL:   "https://api.anthropic.com",
 		APIFormat: APIFormatAnthropic,
