@@ -128,6 +128,7 @@ func runRun(ctx context.Context, args []string, agentName, agentDir string, logg
 	registry.Register(builtin.WebFetch{})
 	registry.Register(builtin.WebSearch{})
 	registry.Register(builtin.HTTPRequest{})
+	registry.Register(builtin.Configure{Loader: loader})
 	memStore := buildMemoryStore(cfg.Agent.Name, logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
