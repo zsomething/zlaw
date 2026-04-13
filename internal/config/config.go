@@ -385,6 +385,12 @@ func mergeRuntime(static AgentConfig, rt RuntimeConfig) AgentConfig {
 	return merged
 }
 
+// LoadAgentConfigFile reads and parses an agent.toml file at path,
+// expanding ${ENV_VAR} references in string values.
+func LoadAgentConfigFile(path string) (AgentConfig, error) {
+	return loadTOML(path)
+}
+
 // loadTOML parses agent.toml, expanding ${ENV_VAR} references in string values.
 func loadTOML(path string) (AgentConfig, error) {
 	data, err := os.ReadFile(path)

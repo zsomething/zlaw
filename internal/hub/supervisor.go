@@ -33,10 +33,11 @@ type AgentStatus struct {
 // It spawns, monitors, and optionally restarts agent processes according
 // to per-agent restart policies.
 type Supervisor struct {
-	cfg     config.HubConfig
-	natsURL string
-	selfBin string // path to the hub's own executable
-	logger  *slog.Logger
+	cfg             config.HubConfig
+	natsURL         string
+	selfBin         string // path to the hub's own executable
+	credentialsPath string // path to credentials.toml; "" → default
+	logger          *slog.Logger
 
 	mu     sync.Mutex
 	agents map[string]*managedAgent
@@ -90,13 +91,16 @@ func (m *managedAgent) status() AgentStatus {
 // natsURL is the NATS client URL that will be injected into each agent process
 // as ZLAW_NATS_URL. selfBin is the path to the hub executable used to spawn
 // agents when no custom binary is set on the AgentEntry.
-func NewSupervisor(cfg config.HubConfig, natsURL, selfBin string, logger *slog.Logger) *Supervisor {
+// credentialsPath is the path to credentials.toml used for credential injection;
+// pass "" to use the default path from the auth package.
+func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, logger *slog.Logger) *Supervisor {
 	return &Supervisor{
-		cfg:     cfg,
-		natsURL: natsURL,
-		selfBin: selfBin,
-		logger:  logger,
-		agents:  make(map[string]*managedAgent),
+		cfg:             cfg,
+		natsURL:         natsURL,
+		selfBin:         selfBin,
+		credentialsPath: credentialsPath,
+		logger:          logger,
+		agents:          make(map[string]*managedAgent),
 	}
 }
 
@@ -309,6 +313,23 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	if agentDir != "" {
 		env = SetEnv(env, "ZLAW_AGENT_DIR", agentDir)
 	}
+
+	// Inject credentials from the hub's credentials store.
+	credEnv, err := BuildCredentialEnv(entry, s.credentialsPath)
+	if err != nil {
+		return nil, fmt.Errorf("credential injection for agent %q: %w", entry.Name, err)
+	}
+	for _, kv := range credEnv {
+		idx := len(kv)
+		for i, c := range kv {
+			if c == '=' {
+				idx = i
+				break
+			}
+		}
+		env = SetEnv(env, kv[:idx], kv[idx+1:])
+	}
+
 	cmd.Env = env
 
 	return cmd, nil
