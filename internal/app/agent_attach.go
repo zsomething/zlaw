@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/chickenzord/zlaw/internal/adapters/cli"
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/transport"
+	"github.com/zsomething/zlaw/internal/adapters/cli"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/transport"
 )
 
 // AttachAgent connects a terminal session to a running agent daemon.

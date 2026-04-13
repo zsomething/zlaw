@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 func TestEditFile_basic(t *testing.T) {

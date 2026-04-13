@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 func textMsg(role llm.Role, text string) llm.Message {

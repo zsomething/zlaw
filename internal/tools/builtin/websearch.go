@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // WebSearch performs a web search and returns a list of results.

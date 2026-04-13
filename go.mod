@@ -1,4 +1,4 @@
-module github.com/chickenzord/zlaw
+module github.com/zsomething/zlaw
 
 go 1.25.5
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 // stubMemoryStore is an in-memory MemoryStore for testing.

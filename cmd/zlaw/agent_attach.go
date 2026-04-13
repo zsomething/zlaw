@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/chickenzord/zlaw/internal/app"
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/app"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 type AgentAttachCmd struct {

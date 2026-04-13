@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/chickenzord/zlaw/internal/app"
+	"github.com/zsomething/zlaw/internal/app"
 )
 
 type AgentServeCmd struct {

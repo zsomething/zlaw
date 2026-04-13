@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // MemorySave upserts a long-term memory for the agent.

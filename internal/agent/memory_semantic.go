@@ -10,9 +10,9 @@ import (
 
 	chromem "github.com/philippgille/chromem-go"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 const (

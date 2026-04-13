@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/skills"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/skills"
 )
 
 // StickyBlock is a named, framework-level instruction block injected at the

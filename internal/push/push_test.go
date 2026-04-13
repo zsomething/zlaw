@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/push"
+	"github.com/zsomething/zlaw/internal/push"
 )
 
 type stubPusher struct {

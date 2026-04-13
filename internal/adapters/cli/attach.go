@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/session"
-	"github.com/chickenzord/zlaw/internal/transport"
+	"github.com/zsomething/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/transport"
 )
 
 // Attach connects to a running daemon, subscribes to a session, and starts

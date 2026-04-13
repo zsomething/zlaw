@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/chickenzord/zlaw/internal/llm"
+import "github.com/zsomething/zlaw/internal/llm"
 
 // PruneLevel identifies a single context-pruning strategy.
 type PruneLevel string

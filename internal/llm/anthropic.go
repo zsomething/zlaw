@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 const anthropicVersion = "2023-06-01"

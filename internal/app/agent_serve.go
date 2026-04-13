@@ -9,16 +9,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	clidaemon "github.com/chickenzord/zlaw/internal/adapters/daemon"
-	"github.com/chickenzord/zlaw/internal/adapters/telegram"
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/cron"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/push"
-	"github.com/chickenzord/zlaw/internal/session"
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
-	"github.com/chickenzord/zlaw/internal/transport"
+	clidaemon "github.com/zsomething/zlaw/internal/adapters/daemon"
+	"github.com/zsomething/zlaw/internal/adapters/telegram"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/cron"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/push"
+	"github.com/zsomething/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/transport"
 )
 
 // ServeAgent wires up an agent from agentDir and runs it as a daemon

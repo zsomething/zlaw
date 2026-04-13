@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // Bash runs a shell command and returns stdout, stderr, and exit code.

@@ -3,8 +3,8 @@ package agent_test
 import (
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 func TestJSONLFileStore_AppendLoad(t *testing.T) {

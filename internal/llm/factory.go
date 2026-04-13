@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 // NewClientFromConfig constructs the appropriate Client based on agent config.

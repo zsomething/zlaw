@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/tools"
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/tools"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 // slowTool sleeps for the given duration then returns its name as the result.

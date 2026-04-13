@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/session"
 )
 
 // mockRunner is a test AgentRunner that records calls and returns a fixed response.

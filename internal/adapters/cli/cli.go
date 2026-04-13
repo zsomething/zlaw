@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/slashcmd"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/slashcmd"
 )
 
 // Runner is the subset of agent.Agent used by the CLI adapter.
