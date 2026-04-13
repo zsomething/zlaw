@@ -40,3 +40,29 @@ chore: add .fizzy.yaml to gitignore
 4. Stage only the relevant files for the current commit
 5. Write the commit message following the format above
 6. Commit. If a pre-commit hook fails, fix the issue and create a new commit — never use `--no-verify`
+
+## Branch workflow
+
+Feature work (Fizzy cards) happens on a dedicated branch, not on `main` directly.
+
+### Starting a card
+Before the first commit for a card, create a feature branch:
+```
+git checkout -b feat/<short-slug>
+```
+- `<short-slug>`: 2–4 lowercase words from the card title, hyphen-separated (e.g. `telegram-adapter`)
+- Example: `feat/telegram-adapter`
+- Never include card numbers, issue references, or tool names in the branch name
+
+### Committing on a feature branch
+Commit normally to the feature branch. Never commit feature work directly to `main`.
+
+### Finishing a card — merge to main
+When the card is fully implemented and all tests pass:
+```
+git checkout main
+git merge --no-ff feat/<short-slug> -m "feat(<scope>): <description>"
+git branch -d feat/<short-slug>
+```
+- Always use `--no-ff` — do not allow fast-forward merges, so the branch history is preserved
+- The merge commit message follows conventional commits — no card numbers or external references
