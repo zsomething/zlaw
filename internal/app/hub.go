@@ -28,7 +28,7 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
-	sup := hub.NewSupervisor(cfg, conn.ConnectedUrl(), selfBin, logger)
+	sup := hub.NewSupervisor(cfg, conn.ConnectedUrl(), selfBin, "", logger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
 	}
