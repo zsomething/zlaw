@@ -105,7 +105,12 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("create run dir: %w", err)
 	}
-	name := cfg.Agent.Name
+	// ZLAW_AGENT is injected by the hub and matches the ACL username exactly.
+	// Prefer it so NATS auth works regardless of what agent.toml says.
+	name := os.Getenv("ZLAW_AGENT")
+	if name == "" {
+		name = cfg.Agent.Name
+	}
 	if name == "" {
 		name = "default"
 	}
