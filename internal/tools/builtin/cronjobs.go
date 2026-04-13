@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/ctxkey"
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/ctxkey"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // CronReader is the interface used by read-only cron tools.

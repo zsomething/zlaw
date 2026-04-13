@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 func writeFile(t *testing.T, dir, name, content string) {

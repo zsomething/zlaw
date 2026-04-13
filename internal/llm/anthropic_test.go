@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 func anthropicTextResponse(text string) map[string]interface{} {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 func TestBash_basic(t *testing.T) {

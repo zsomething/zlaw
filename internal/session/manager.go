@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // AgentRunner is the narrow interface the Manager uses to run agent turns.

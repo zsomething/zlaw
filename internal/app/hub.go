@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // StartHub loads the hub config and starts the hub process.

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/messaging"
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 // TestChanMessenger_PublishSubscribe verifies that published messages reach subscribers.

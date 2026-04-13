@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 func writeTemp(t *testing.T, content string) string {

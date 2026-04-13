@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // CurrentTime returns the current UTC date and time.

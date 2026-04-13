@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/skills"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/skills"
 )
 
 // SkillLoad loads the full body of a named skill so the agent can use it.

@@ -6,7 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 type AuthCmd struct {

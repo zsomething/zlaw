@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/chickenzord/zlaw/internal/app"
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/app"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 type HubCmd struct {

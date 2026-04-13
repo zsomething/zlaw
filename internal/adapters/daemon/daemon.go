@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/session"
-	"github.com/chickenzord/zlaw/internal/transport"
+	"github.com/zsomething/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/transport"
 )
 
 // Daemon listens on a Transport and manages CLI attach connections.

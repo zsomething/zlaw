@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

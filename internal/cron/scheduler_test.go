@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/push"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/push"
 )
 
 // --- stubs ---

@@ -7,13 +7,13 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/chickenzord/zlaw/internal/adapters/cli"
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/skills"
-	"github.com/chickenzord/zlaw/internal/tools"
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/adapters/cli"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/skills"
+	"github.com/zsomething/zlaw/internal/tools"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 // AgentRunOptions holds options for running an agent in interactive / stdin mode.

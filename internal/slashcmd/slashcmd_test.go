@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/slashcmd"
+	"github.com/zsomething/zlaw/internal/slashcmd"
 )
 
 // --- stub helpers ---

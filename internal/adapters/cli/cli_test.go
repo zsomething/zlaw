@@ -9,10 +9,10 @@ import (
 
 	"log/slog"
 
-	"github.com/chickenzord/zlaw/internal/adapters/cli"
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/llm"
-	"github.com/chickenzord/zlaw/internal/slashcmd"
+	"github.com/zsomething/zlaw/internal/adapters/cli"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/slashcmd"
 )
 
 // stubRunner always returns a fixed response.

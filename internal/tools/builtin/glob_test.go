@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/tools/builtin"
+	"github.com/zsomething/zlaw/internal/tools/builtin"
 )
 
 func makeTree(t *testing.T) string {

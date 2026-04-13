@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // RuntimeLoader is the subset of config.Loader used by the Configure tool.

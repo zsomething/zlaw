@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
-	"github.com/chickenzord/zlaw/internal/dotenv"
+	"github.com/zsomething/zlaw/internal/dotenv"
 )
 
 var cli struct {

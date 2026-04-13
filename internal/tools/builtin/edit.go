@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // EditFile performs a targeted string replacement in a file.

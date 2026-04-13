@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 func logLevel() slog.Level {

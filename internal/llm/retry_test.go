@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // failClient returns an error for the first N calls, then succeeds.

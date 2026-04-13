@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/session"
 )
 
 const editThrottle = 1500 * time.Millisecond

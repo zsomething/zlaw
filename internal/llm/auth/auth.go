@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/chickenzord/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // TokenSource returns a bearer token for use in an Authorization header.

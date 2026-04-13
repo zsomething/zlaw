@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // WebFetch fetches a URL and returns its content as readable text.

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // ReadFile reads a file's contents with optional line offset and limit.

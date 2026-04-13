@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/session"
 )
 
 // mockSink is a test OutputSink that records all interactions.

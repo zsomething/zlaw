@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // History stores per-session conversation turns.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 // ---- credential store tests ----

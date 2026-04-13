@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/ctxkey"
-	"github.com/chickenzord/zlaw/internal/session"
-	"github.com/chickenzord/zlaw/internal/slashcmd"
+	"github.com/zsomething/zlaw/internal/ctxkey"
+	"github.com/zsomething/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/slashcmd"
 )
 
 // Push delivers message to the Telegram chat identified by address (a chat ID

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // Tool is the interface every tool must implement.

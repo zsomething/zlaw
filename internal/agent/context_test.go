@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chickenzord/zlaw/internal/agent"
-	"github.com/chickenzord/zlaw/internal/config"
-	"github.com/chickenzord/zlaw/internal/skills"
+	"github.com/zsomething/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/skills"
 )
 
 func TestBuildPrefill_Empty(t *testing.T) {

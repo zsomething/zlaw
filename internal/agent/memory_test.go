@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/agent"
+	"github.com/zsomething/zlaw/internal/agent"
 )
 
 func newTestStore(t *testing.T) *agent.MarkdownFileStore {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // HTTPRequest makes arbitrary HTTP requests and returns status, headers, and body.

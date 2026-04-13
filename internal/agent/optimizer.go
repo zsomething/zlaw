@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/chickenzord/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/llm"
 )
 
 // ContextOptimizerConfig controls the summarize→prune pipeline.
