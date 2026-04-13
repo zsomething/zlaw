@@ -24,6 +24,18 @@ type HubMeta struct {
 	AuditLogPath string `toml:"audit_log_path"`
 }
 
+// RestartPolicy controls when the supervisor restarts a crashed agent process.
+type RestartPolicy string
+
+const (
+	// RestartAlways restarts the agent regardless of exit code.
+	RestartAlways RestartPolicy = "always"
+	// RestartOnFailure restarts the agent only when it exits with a non-zero code.
+	RestartOnFailure RestartPolicy = "on-failure"
+	// RestartNever never restarts the agent.
+	RestartNever RestartPolicy = "never"
+)
+
 // AgentEntry describes a single agent supervised by the hub.
 type AgentEntry struct {
 	// Name is the logical agent name.
@@ -31,6 +43,12 @@ type AgentEntry struct {
 	// Dir is the path to the agent's config directory (agent.toml, SOUL.md, etc.).
 	// When empty, defaults to $ZLAW_HOME/agents/<name>.
 	Dir string `toml:"dir"`
+	// Binary is the path to the agent executable.
+	// When empty, defaults to the hub's own executable (zlaw agent serve).
+	Binary string `toml:"binary"`
+	// RestartPolicy controls when the supervisor restarts a crashed agent.
+	// Valid values: "always", "on-failure", "never". Defaults to "on-failure".
+	RestartPolicy RestartPolicy `toml:"restart_policy"`
 }
 
 // NATSConfig holds embedded NATS server settings.
