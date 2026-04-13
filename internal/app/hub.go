@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
@@ -21,6 +22,16 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("start nats: %w", err)
 	}
 	defer conn.Close()
+
+	selfBin, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve executable path: %w", err)
+	}
+
+	sup := hub.NewSupervisor(cfg, conn.ConnectedUrl(), selfBin, logger)
+	if err := sup.Start(ctx); err != nil {
+		return fmt.Errorf("start supervisor: %w", err)
+	}
 
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
