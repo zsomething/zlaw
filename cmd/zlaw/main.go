@@ -33,7 +33,9 @@ func main() {
 		kong.Description("multi-agent personal assistant platform"),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
+		kong.BindTo(ctx, (*context.Context)(nil)),
+		kong.Bind(logger),
 	)
-	err := kctx.Run(ctx, logger)
+	err := kctx.Run()
 	kctx.FatalIfErrorf(err)
 }
