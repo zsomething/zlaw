@@ -15,10 +15,12 @@ import (
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/cron"
 	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/messaging"
 	"github.com/zsomething/zlaw/internal/push"
 	"github.com/zsomething/zlaw/internal/session"
 	"github.com/zsomething/zlaw/internal/tools/builtin"
 	"github.com/zsomething/zlaw/internal/transport"
+	"github.com/zsomething/zlaw/internal/version"
 )
 
 // ServeAgent wires up an agent from agentDir and runs it as a daemon
@@ -151,6 +153,32 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 			logger.Error("config watcher stopped", "error", err)
 		}
 	}()
+
+	// Hub-connected mode: connect to NATS, publish registration, handle inbox.
+	if natsURL := os.Getenv("ZLAW_NATS_URL"); natsURL != "" {
+		nm, err := messaging.NewNATSMessenger(natsURL)
+		if err != nil {
+			return fmt.Errorf("connect to hub NATS: %w", err)
+		}
+		defer nm.Close()
+
+		caps := toolCapabilities(registry)
+		hubClient := agent.NewHubClient(
+			name,
+			version.Version,
+			caps,
+			nm,
+			cronRunner{ag: ag, sysPromptFn: sysPromptFn},
+			sysPromptFn,
+			logger,
+		)
+		go func() {
+			if err := hubClient.Start(ctx); err != nil {
+				logger.Error("hub client stopped", "err", err)
+			}
+		}()
+		logger.Info("hub client started", "nats_url", natsURL)
+	}
 
 	logger.Info("daemon starting", "agent", name, "socket", sockPath)
 

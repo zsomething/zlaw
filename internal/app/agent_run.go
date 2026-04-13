@@ -222,6 +222,17 @@ func buildHistory(agentName, channel string, logger *slog.Logger) (*agent.Histor
 	return agent.NewHistoryWithStore(store, channel), nil
 }
 
+// toolCapabilities returns the names of all tools currently registered in r.
+// This is used to populate the capabilities field of the hub registration message.
+func toolCapabilities(r *tools.Registry) []string {
+	defs := r.Definitions()
+	names := make([]string, 0, len(defs))
+	for _, d := range defs {
+		names = append(names, d.Name)
+	}
+	return names
+}
+
 func buildContextOptimizer(cfg config.AgentConfig, llmClient llm.Client, logger *slog.Logger) *agent.ContextOptimizer {
 	var summarizer agent.Summarizer
 	if cfg.LLM.ContextSummarizeThreshold > 0 {
