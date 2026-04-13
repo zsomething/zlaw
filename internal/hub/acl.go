@@ -73,13 +73,16 @@ func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
 }
 
 // agentPermissions returns the NATS subject permissions for the given agent.
+//
+// All agents publish heartbeats to zlaw.registry, so both manager and
+// specialist agents are granted publish access to it.
 func agentPermissions(name string, isManager bool) *server.Permissions {
 	inboxSubject := "agent." + name + ".inbox"
 
 	if isManager {
 		return &server.Permissions{
 			Publish: &server.SubjectPermission{
-				Allow: []string{"agent.*.inbox", "zlaw.hub.inbox"},
+				Allow: []string{"agent.*.inbox", "zlaw.hub.inbox", "zlaw.registry"},
 			},
 			Subscribe: &server.SubjectPermission{
 				Allow: []string{inboxSubject, "zlaw.registry"},
@@ -89,7 +92,7 @@ func agentPermissions(name string, isManager bool) *server.Permissions {
 
 	return &server.Permissions{
 		Publish: &server.SubjectPermission{
-			Allow: []string{"agent.manager.inbox"},
+			Allow: []string{"agent.manager.inbox", "zlaw.registry"},
 		},
 		Subscribe: &server.SubjectPermission{
 			Allow: []string{inboxSubject},
