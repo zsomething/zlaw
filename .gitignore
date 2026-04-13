@@ -2,8 +2,7 @@
 bin/
 dist/
 *.exe
-/zlaw-agent
-/zlaw-hub
+/zlaw
 
 # Go build artifacts
 *.test
