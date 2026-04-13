@@ -1,0 +1,53 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Correctness
+    - errcheck        # unchecked errors
+    - govet           # suspicious constructs (printf, copylocks, etc.)
+    - staticcheck     # broad static analysis (SA*, S1*, QF*)
+    - ineffassign     # assignments whose value is never used
+    - unused          # unused code
+
+    # Style / simplification
+    - misspell        # common spelling mistakes in comments/strings
+    - unconvert       # unnecessary type conversions
+    - predeclared     # shadowing of built-in identifiers
+
+    # Bugs
+    - nilerr          # returning nil after checking err != nil
+    - bodyclose       # HTTP response body not closed
+    - sqlclosecheck   # sql.Rows/Stmt not closed
+    - durationcheck   # multiplying two durations (usually a bug)
+    - reassign        # reassigning package-level variables
+
+    # Context discipline (matches project conventions)
+    - contextcheck    # functions receiving context must pass it down
+  settings:
+    errcheck:
+      exclude-functions:
+        # Deferred closes — errors on close are rarely actionable
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*os.File).Close
+        # tabwriter.Writer.Flush — writes to stdout, not actionable
+        - (*text/tabwriter.Writer).Flush
+
+formatters:
+  enable:
+    - goimports       # import grouping + gofmt formatting
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/zsomething/zlaw
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Test files: relax errcheck and contextcheck
+    - path: "_test\\.go"
+      linters:
+        - errcheck
+        - contextcheck
