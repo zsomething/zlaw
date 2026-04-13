@@ -1,0 +1,137 @@
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: zlaw
+    main: ./cmd/zlaw
+    binary: zlaw
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/zsomething/zlaw/internal/version.Version={{.Version}}
+      - -X github.com/zsomething/zlaw/internal/version.GitCommit={{.FullCommit}}
+      - -X github.com/zsomething/zlaw/internal/version.BuildDate={{.Date}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+      - goos: linux
+        format: tar.gz
+      - goos: darwin
+        format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^nit:'
+      - '^chore:'
+      - '^build:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\w)]*:+.*$"
+      order: 1
+    - title: 'Enhancements'
+      regexp: "^.*enhancement[(\w)]*:+.*$"
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Zlaw {{ .Tag }}
+
+    Multi-agent personal assistant platform.
+
+    ### Installation
+
+    **Binary Download:**
+    Download the appropriate binary for your platform from the assets below.
+
+    **Homebrew (macOS/Linux):**
+    ```bash
+    brew install zsomething/tap/zlaw
+    ```
+
+    **Go Install:**
+    ```bash
+    go install github.com/zsomething/zlaw/cmd/zlaw@{{ .Tag }}
+    ```
+
+    **Docker:**
+    ```bash
+    docker pull ghcr.io/zsomething/zlaw:{{ .Tag }}
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/zsomething/zlaw/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+universal_binaries:
+  - replace: false
+
+brews:
+  - description: Multi-agent personal assistant platform
+    homepage: https://github.com/zsomething/zlaw
+    directory: Formula
+    download_strategy: CurlDownloadStrategy
+    license: "MIT"
+    custom_block: |
+      head do
+        url "https://github.com/zsomething/zlaw.git", branch: "main"
+        depends_on "go" => :build
+      end
+    install: |
+      if build.head?
+        system "go", "build", *std_go_args(ldflags: "-s -w -X github.com/zsomething/zlaw/internal/version.Version={{.Version}} -X github.com/zsomething/zlaw/internal/version.GitCommit={{.FullCommit}} -X github.com/zsomething/zlaw/internal/version.BuildDate={{.Date}}"), "./cmd/zlaw"
+      else
+        bin.install "zlaw"
+      end
+    repository:
+      owner: zsomething
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
