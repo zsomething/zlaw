@@ -26,7 +26,7 @@ No zlaw dependencies in Phase 1 agent code. Design for it (e.g. use session IDs 
 
 - **Language**: Go. No other languages in core. Skill plugins any language via gRPC/IPC.
 - **zlaw role**: Broker only — routes, verifies identity, audits. No planning or orchestration.
-- **Planner agent**: One designated agent receive user input, delegate to peers. Planning lives in agent, not zlaw.
+- **Manager agent**: One designated agent receive user input, delegate to peers. Task routing lives in agent, not hub. Regular agent + hub-management tools + self-protection constraint.
 - **A2A routing**: All inter-agent messages via zlaw. Never direct agent-to-agent.
 - **Config format**: TOML. Per-agent `agent.toml`, global `zlaw.toml`.
 - **Personality**: `SOUL.md` + `IDENTITY.md` per agent. Hot-reloaded on file change.
