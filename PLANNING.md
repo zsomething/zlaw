@@ -82,45 +82,66 @@ Goal: a single zlaw-agent binary that accepts input, runs an agentic loop, and e
 
 ---
 
-## Phase 2: zlaw + Inter-Agent Communication
+## Phase 2: zlaw-hub + Inter-Agent Communication
 
-Goal: zlaw-hub process with embedded NATS, agent registry, identity verification, audit log, and pluggable interfaces.
+Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity verification, audit log. Manager agent gets hub-management tools. Specialist agents connect via NATS and receive delegated tasks.
 
-### P0 — zlaw Core
+### P0 — Hub CLI & Bootstrap
 
-- [ ] **zlaw-hub binary** — single process, starts embedded NATS server by default (`--embed-nats`)
-- [ ] **External NATS support** — `--nats-url` flag to connect to existing NATS instance
-- [ ] **Agent registry** — tracks connected agents, capabilities, health status
-- [ ] **Agent connect/disconnect lifecycle** — registration on connect, heartbeat, deregister on disconnect
-- [ ] **NATS subject namespace** — `agent.<n>.inbox`, `agent.<n>.outbox`, `zlaw.audit`, `zlaw.registry`
+- [ ] **`zlaw-hub init`** — generate `$ZLAW_HOME/zlaw.toml` skeleton, `credentials.toml` (0600), and default manager agent scaffold under `agents/manager/`
+- [ ] **`zlaw-hub auth add`** — add credential profiles to credentials.toml (API keys, Telegram bot token, OAuth2); mirrors `zlaw-agent auth` UX
+- [ ] **`zlaw-hub start`** — start hub process, embed NATS, spawn registered agents
+- [ ] **`zlaw-hub status`** — hub health + per-agent status summary
+- [ ] **`zlaw-hub agent list/logs/restart/stop/remove`** — operational management subcommands
 
-### P1 — Identity & Security
+### P1 — Hub Core
 
-- [ ] **Agent keypairs (NKeys)** — each agent has a keypair; zlaw verifies identity on connect
-- [ ] **Message signing** — A2A messages signed by sender; zlaw verifies before routing
-- [ ] **Tool ACL enforcement at zlaw** — zlaw double-checks agent tool permissions on cross-agent delegations
-- [ ] **Audit logger** — append-only structured log of all messages, tool calls, delegations, with trace IDs spanning agent hops
+- [ ] **`zlaw-hub` binary** — single process, `serve` command starts embedded NATS (`--embed-nats` default true; `--nats-url` for external)
+- [ ] **`zlaw.toml` loading** — NATS settings, agent registry table (name → dir), hub keypair path, audit log path
+- [ ] **Agent supervisor** — spawns agent processes at startup; configurable restart policy per agent (`always`, `on-failure`, `never`); health monitoring via heartbeat
+- [ ] **Agent registry** — tracks connected agents, advertised capabilities, last heartbeat, process status
+- [ ] **NATS subject namespace** — `agent.<n>.inbox`, `agent.<n>.outbox`, `zlaw.hub.inbox`, `zlaw.audit`, `zlaw.registry`
+- [ ] **Credential injection** — at agent spawn time, hub reads `credentials.toml` and injects the agent's referenced auth profile as env vars; agents never read credentials.toml directly
 
-### P2 — Inter-Agent Communication
+### P2 — Agent ↔ Hub Integration
 
-- [ ] **A2A message envelope** — structured task delegation format (from, to, task, context, reply_to, session_id)
-- [ ] **Async task + reply inbox** — fire-and-forget with NATS reply subject; agents don't block waiting for peers
-- [ ] **Capability advertisement** — agents publish skills manifest to registry on connect; zlaw uses for routing
-- [ ] **Planner agent pattern** — designate one agent to receive user input first and delegate to peers
+- [ ] **NATS client in zlaw-agent** — agent connects to hub NATS on start; publishes heartbeat to `zlaw.registry`; subscribes to `agent.<name>.inbox`
+- [ ] **Capability advertisement** — agent publishes its tool manifest to `zlaw.registry` on connect; hub stores in registry
+- [ ] **A2A message envelope** — structured delegation format: `{from, to, task, context, reply_to, session_id, trace_id}`
+- [ ] **`agent_delegate` tool** — builtin that publishes task envelope to `agent.<name>.inbox`; hub NATS ACL enforces publish permissions at transport layer; hub audit subscriber logs all traffic
+- [ ] **NATS ACL enforcement** — per-agent publish/subscribe permissions configured by hub at NATS server level; manager gets broad publish ACL, specialists get narrow (reply-only by default)
+- [ ] **`zlaw.hub.inbox` handler** — hub listens for hub-management requests (agent_create, agent_list, agent_configure, agent_stop, agent_restart) and executes them
 
-### P3 — Execution Isolation
+### P3 — Manager Agent Tools
 
-- [ ] **Homedir isolation** — agent restricted to virtual home directory
-- [ ] **OS user isolation** — agent spawned as dedicated OS user via sudo drop
-- [ ] **Docker container isolation** — agent runs in container; connects to zlaw NATS via TCP
-- [ ] **Isolation level config** — `isolation` field in agent.toml; zlaw enforces at spawn time
+Manager agent is a regular agent with `manager: true` in `agent.toml`. Hub grants it the hub-management tool set and enforces self-protection.
 
-### P4 — Observability (Phase 2)
+- [ ] **`agent_create(name, role, description)`** — scaffold `agents/<name>/` dir + files, register in hub, spawn process
+- [ ] **`agent_list()`** — list all registered agents, status, capabilities
+- [ ] **`agent_configure(name, key, value)`** — write to agent's `runtime.toml`, triggers hot-reload
+- [ ] **`agent_stop(name)` / `agent_restart(name)`** — process lifecycle control
+- [ ] **`agent_remove(name)`** — deregister and stop; hub rejects if target == self
+- [ ] **`agent_delegate(name, task, context)`** — publish task envelope; available to all agents, ACL controls reach
 
-- [ ] **Distributed trace IDs** — trace ID spans across agent hops and tool calls
-- [ ] **Metrics endpoint** — Prometheus scrape target; token usage, latency, tool call counts per agent
+### P4 — Identity & Security
+
+- [ ] **Agent keypairs (NKeys)** — generated at `zlaw-hub init` per agent; stored in agent dir; hub verifies identity on NATS connect
+- [ ] **Message signing** — A2A envelopes signed by sender; hub verifies signature before routing via NATS ACL
+- [ ] **Manager self-protection** — hub rejects hub-management requests targeting the manager agent for destructive operations
+- [ ] **Audit logger** — append-only structured log; hub subscribes to all NATS subjects; every message, tool call, and delegation logged with trace ID
+
+### P5 — Execution Isolation
+
+- [ ] **Homedir isolation** — agent restricted to its own virtual home directory at spawn time
+- [ ] **OS user isolation** — agent spawned as dedicated OS user via sudo drop; `isolation: user` in agent.toml
+- [ ] **Docker container isolation** — agent runs in container; connects to hub NATS via TCP; `isolation: container`
+
+### P6 — Observability
+
+- [ ] **Distributed trace IDs** — trace ID generated at user input; propagated through all A2A envelopes and tool calls
+- [ ] **Metrics endpoint** — Prometheus scrape target; token usage, latency, tool call counts, A2A message counts per agent
 - [ ] **Conversation replay** — replay session from audit log for debugging
-- [ ] **Agent status dashboard (optional)** — read-only web UI showing agent status, task queue, recent log
+- [ ] **Agent status dashboard (optional)** — read-only web UI: agent status, task queue, recent audit log
 
 ---
 
@@ -139,9 +160,10 @@ Goal: zlaw-hub process with embedded NATS, agent registry, identity verification
 | Decision | Choice | Rationale |
 |---|---|---|
 | Language | Go | Performance, concurrency, single binary distribution |
-| Message bus | NATS (embedded in zlaw) | Pub/sub native, works across Docker/OS users, already familiar |
-| zlaw role | Broker (not orchestrator) | Simpler zlaw, autonomous agents, planning lives in planner agent |
-| A2A routing | Always via zlaw | Centralized audit, identity verification at one point |
+| Message bus | NATS (embedded in hub) | Pub/sub native, works across Docker/OS users; embedded means zero user-facing ops |
+| Messenger abstraction | `NATSMessenger` only in production; `ChanMessenger` for tests | No throwaway SocketMessenger; NATS embedded = no ops cost; test double uses in-memory channels |
+| Hub role | Broker + process manager (not task orchestrator) | Hub manages processes; task routing lives in the manager agent |
+| A2A routing | Always via hub NATS (subject ACL enforced at broker) | Centralized audit, ACL without hub business logic, composable middleware |
 | Plugin system | Binary plugins over gRPC/IPC | Isolation, language agnostic, versioned contract |
 | Config format | TOML | Human-friendly, Go ecosystem standard |
 | Secrets | Env-var injection | No plaintext in config, works with any secrets manager |
@@ -167,10 +189,11 @@ zlaw/
 │   ├── skills/       # Skill discovery and loading
 │   ├── session/      # Session manager, sink, events
 │   ├── adapters/     # Interface adapters (CLI, Telegram, daemon)
-│   ├── transport/    # Unix socket transport
+│   ├── transport/    # Unix socket transport (CLI attach ↔ daemon)
+│   ├── messaging/    # Messenger interface + NATSMessenger + ChanMessenger (Phase 2)
 │   ├── config/       # Config loading, hot-reload, secret injection
-│   ├── zlaw/         # zlaw core: registry, router, audit log (Phase 2)
-│   ├── nats/         # Embedded NATS setup + subject conventions (Phase 2)
+│   ├── hub/          # Hub core: supervisor, registry, audit log, hub.inbox handler (Phase 2)
+│   ├── nats/         # Embedded NATS setup + subject conventions + ACL (Phase 2)
 │   └── identity/     # Keypair management, NKeys, message signing (Phase 2)
 ├── agents/
 │   └── <agent-name>/  # Per-agent: agent.toml, SOUL.md, IDENTITY.md

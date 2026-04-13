@@ -83,6 +83,9 @@ type ContextConfig struct {
 type AgentMeta struct {
 	Name        string `toml:"name"`
 	Description string `toml:"description"`
+	// Manager marks this agent as the designated hub manager agent.
+	// The manager receives user input and can delegate to peer agents.
+	Manager bool `toml:"manager"`
 }
 
 // LLMConfig holds LLM backend settings.
