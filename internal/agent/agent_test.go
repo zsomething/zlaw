@@ -291,5 +291,108 @@ func TestAgent_RunStream_FallsBackWithoutStreaming(t *testing.T) {
 	}
 }
 
+// contextCheckClient respects context cancellation before serving a response.
+type contextCheckClient struct {
+	resp llm.Response
+}
+
+func (c *contextCheckClient) Complete(ctx context.Context, _ llm.Request) (llm.Response, error) {
+	select {
+	case <-ctx.Done():
+		return llm.Response{}, ctx.Err()
+	default:
+		return c.resp, nil
+	}
+}
+
+func TestAgent_ContextCancelled(t *testing.T) {
+	client := &contextCheckClient{resp: llm.TextResponse("too late")}
+	a := newAgent(client, noopTools{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run
+
+	_, err := a.Run(ctx, "s1", "hello", "")
+	if err == nil {
+		t.Fatal("expected error when context is cancelled")
+	}
+}
+
+func TestHistory_Lines_Empty(t *testing.T) {
+	h := agent.NewHistory()
+	if lines := h.Lines("s1"); lines != nil {
+		t.Fatalf("expected nil for empty session, got %v", lines)
+	}
+}
+
+func TestHistory_Lines_UserAndAssistant(t *testing.T) {
+	h := agent.NewHistory()
+	h.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "hello"}}})
+	h.Append("s1", llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Text: "hi there"}}})
+
+	lines := h.Lines("s1")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "you: hello") {
+		t.Errorf("line[0] should contain 'you: hello', got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "assistant: hi there") {
+		t.Errorf("line[1] should contain 'assistant: hi there', got %q", lines[1])
+	}
+}
+
+func TestHistory_Lines_SkipsToolRoleMessages(t *testing.T) {
+	h := agent.NewHistory()
+	h.Append("s1", llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Text: "run it"}}})
+	h.Append("s1", llm.Message{Role: llm.RoleTool, Content: []llm.ContentBlock{{Text: "tool output"}}})
+	h.Append("s1", llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Text: "done"}}})
+
+	lines := h.Lines("s1")
+	if len(lines) != 2 {
+		t.Fatalf("tool role should be skipped: expected 2 lines, got %d: %v", len(lines), lines)
+	}
+}
+
+func TestHistory_Lines_ShowsToolCallsInAssistantMessages(t *testing.T) {
+	h := agent.NewHistory()
+	toolUse := &llm.ToolUse{ID: "tu1", Name: "current_time"}
+	h.Append("s1", llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: []llm.ContentBlock{{ToolUse: toolUse}},
+	})
+
+	lines := h.Lines("s1")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line for tool use, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "[tool: current_time]") {
+		t.Errorf("line should show tool call name, got %q", lines[0])
+	}
+}
+
+func TestHistory_Lines_TextAndToolUseInSameMessage(t *testing.T) {
+	h := agent.NewHistory()
+	toolUse := &llm.ToolUse{ID: "tu1", Name: "bash"}
+	h.Append("s1", llm.Message{
+		Role: llm.RoleAssistant,
+		Content: []llm.ContentBlock{
+			{Text: "let me check"},
+			{ToolUse: toolUse},
+		},
+	})
+
+	lines := h.Lines("s1")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines (text + tool call), got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "let me check") {
+		t.Errorf("first line should contain text, got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "[tool: bash]") {
+		t.Errorf("second line should show tool call, got %q", lines[1])
+	}
+}
+
 // ensure errors package used (suppress unused import)
 var _ = errors.New
