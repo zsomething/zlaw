@@ -37,6 +37,7 @@ type Supervisor struct {
 	natsURL         string
 	selfBin         string // path to the hub's own executable
 	credentialsPath string // path to credentials.toml; "" → default
+	agentTokens     AgentTokens
 	logger          *slog.Logger
 
 	mu     sync.Mutex
@@ -93,12 +94,17 @@ func (m *managedAgent) status() AgentStatus {
 // agents when no custom binary is set on the AgentEntry.
 // credentialsPath is the path to credentials.toml used for credential injection;
 // pass "" to use the default path from the auth package.
-func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, logger *slog.Logger) *Supervisor {
+// agentTokens maps agent name to its NATS token; pass nil to skip token injection.
+func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger) *Supervisor {
+	if agentTokens == nil {
+		agentTokens = make(AgentTokens)
+	}
 	return &Supervisor{
 		cfg:             cfg,
 		natsURL:         natsURL,
 		selfBin:         selfBin,
 		credentialsPath: credentialsPath,
+		agentTokens:     agentTokens,
 		logger:          logger,
 		agents:          make(map[string]*managedAgent),
 	}
@@ -328,6 +334,11 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 			}
 		}
 		env = SetEnv(env, kv[:idx], kv[idx+1:])
+	}
+
+	// Inject the NATS token for this agent so NATSMessenger can authenticate.
+	if token, ok := s.agentTokens[entry.Name]; ok && token != "" {
+		env = SetEnv(env, "ZLAW_NATS_CREDS", token)
 	}
 
 	cmd.Env = env

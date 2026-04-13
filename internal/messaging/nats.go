@@ -15,8 +15,14 @@ type NATSMessenger struct {
 }
 
 // NewNATSMessenger connects to the NATS server at url and returns a NATSMessenger.
-func NewNATSMessenger(url string) (*NATSMessenger, error) {
-	conn, err := nats.Connect(url)
+// agentName and token are used for authentication when non-empty; the NATS server
+// must have been configured with a matching username/password entry.
+func NewNATSMessenger(url, agentName, token string) (*NATSMessenger, error) {
+	var opts []nats.Option
+	if agentName != "" && token != "" {
+		opts = append(opts, nats.UserInfo(agentName, token))
+	}
+	conn, err := nats.Connect(url, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats connect %s: %w", url, err)
 	}

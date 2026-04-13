@@ -52,7 +52,7 @@ func TestSetEnv(t *testing.T) {
 
 func TestNewSupervisor_EmptyAgents(t *testing.T) {
 	cfg := config.HubConfig{}
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", "", nil, slog.Default())
 	if sup == nil {
 		t.Fatal("NewSupervisor returned nil")
 	}
@@ -64,7 +64,7 @@ func TestNewSupervisor_EmptyAgents(t *testing.T) {
 
 func TestSupervisor_StatusUnknownAgent(t *testing.T) {
 	cfg := config.HubConfig{}
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", "", nil, slog.Default())
 	_, err := sup.Status("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for unknown agent")
@@ -73,7 +73,7 @@ func TestSupervisor_StatusUnknownAgent(t *testing.T) {
 
 func TestSupervisor_StopUnknownAgent(t *testing.T) {
 	cfg := config.HubConfig{}
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", "", nil, slog.Default())
 	err := sup.Stop("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for unknown agent")
@@ -82,7 +82,7 @@ func TestSupervisor_StopUnknownAgent(t *testing.T) {
 
 func TestSupervisor_RestartUnknownAgent(t *testing.T) {
 	cfg := config.HubConfig{}
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "/bin/zlaw", "", nil, slog.Default())
 	err := sup.Restart("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for unknown agent")
@@ -113,7 +113,7 @@ func TestSupervisor_SpawnAndStop(t *testing.T) {
 	// Simpler: just use the sleep binary directly and verify it stops.
 	cfg.Agents[0].Binary = sleepBin
 
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -155,7 +155,7 @@ func TestSupervisor_RestartOnFailure(t *testing.T) {
 		},
 	}
 
-	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", slog.Default())
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
