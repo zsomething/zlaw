@@ -11,22 +11,26 @@ import (
 // HubConfig holds the top-level configuration for a zlaw-hub instance.
 // It is loaded from $ZLAW_HOME/zlaw.toml.
 type HubConfig struct {
-	Hub    HubMeta    `toml:"hub"`
-	Agents HubAgents  `toml:"agents"`
-	NATS   NATSConfig `toml:"nats"`
+	Hub    HubMeta      `toml:"hub"`
+	Agents []AgentEntry `toml:"agents"`
+	NATS   NATSConfig   `toml:"nats"`
 }
 
 // HubMeta holds hub identity metadata.
 type HubMeta struct {
-	Name        string `toml:"name"`
-	Description string `toml:"description"`
+	Name         string `toml:"name"`
+	Description  string `toml:"description"`
+	KeypairPath  string `toml:"keypair_path"`
+	AuditLogPath string `toml:"audit_log_path"`
 }
 
-// HubAgents lists the agents supervised by this hub.
-type HubAgents struct {
-	// Names is the list of agent names to supervise.
-	// Each name maps to $ZLAW_HOME/agents/<name>/.
-	Names []string `toml:"names"`
+// AgentEntry describes a single agent supervised by the hub.
+type AgentEntry struct {
+	// Name is the logical agent name.
+	Name string `toml:"name"`
+	// Dir is the path to the agent's config directory (agent.toml, SOUL.md, etc.).
+	// When empty, defaults to $ZLAW_HOME/agents/<name>.
+	Dir string `toml:"dir"`
 }
 
 // NATSConfig holds embedded NATS server settings.

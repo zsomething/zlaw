@@ -9,14 +9,15 @@ import (
 )
 
 type HubCmd struct {
-	Start  HubStartCmd  `cmd:"" help:"start the hub (stub — Phase 2)"`
-	Status HubStatusCmd `cmd:"" help:"show hub status (stub — Phase 2)"`
+	Start  HubStartCmd  `cmd:"" help:"start the hub"`
+	Status HubStatusCmd `cmd:"" help:"show hub status"`
 }
 
 // ── hub start ─────────────────────────────────────────────────────────────────
 
 type HubStartCmd struct {
-	Config string `help:"path to zlaw.toml"`
+	Config  string `help:"path to zlaw.toml"`
+	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
 }
 
 func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
@@ -24,7 +25,7 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	return app.StartHub(ctx, configPath, logger)
+	return app.StartHub(ctx, configPath, c.NatsURL, logger)
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
