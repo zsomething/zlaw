@@ -15,26 +15,40 @@ import (
 	"github.com/zsomething/zlaw/internal/config"
 )
 
+// NATSResult holds the hub NATS connection and the generated ACL, which
+// contains per-agent tokens to inject at spawn time.
+type NATSResult struct {
+	Conn *nats.Conn
+	ACL  *HubACL
+}
+
 const (
 	defaultNATSListen = "127.0.0.1:4222"
 	natsReadyTimeout  = 5 * time.Second
 )
 
 // StartNATS starts an embedded NATS server using the hub config and returns a
-// connected *nats.Conn for hub-internal use. The server is stopped when ctx
-// is cancelled.
+// NATSResult containing the hub-internal connection and the generated ACL.
+// The ACL carries per-agent tokens that the Supervisor injects at spawn time.
+// The server is stopped when ctx is cancelled.
 //
 // If externalURL is non-empty the embedded server is not started; the function
-// connects directly to that URL instead.
-func StartNATS(ctx context.Context, cfg config.HubConfig, externalURL string, logger *slog.Logger) (*nats.Conn, error) {
+// connects directly to that URL instead (ACL.AgentTokens will be empty and no
+// auth is enforced in that case).
+func StartNATS(ctx context.Context, cfg config.HubConfig, externalURL string, logger *slog.Logger) (*NATSResult, error) {
 	if externalURL != "" {
-		return connectExternal(ctx, externalURL, logger)
+		conn, err := connectExternal(ctx, externalURL, logger)
+		if err != nil {
+			return nil, err
+		}
+		return &NATSResult{Conn: conn, ACL: &HubACL{AgentTokens: make(AgentTokens)}}, nil
 	}
 	return startEmbedded(ctx, cfg, logger)
 }
 
-// startEmbedded starts the embedded nats-server and returns an in-process conn.
-func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logger) (*nats.Conn, error) {
+// startEmbedded starts the embedded nats-server with per-agent ACL and returns
+// a NATSResult containing the hub connection and the generated ACL.
+func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logger) (*NATSResult, error) {
 	listen := cfg.NATS.Listen
 	if listen == "" {
 		listen = defaultNATSListen
@@ -45,12 +59,18 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		return nil, fmt.Errorf("parse nats listen address %q: %w", listen, err)
 	}
 
+	acl, err := BuildHubACL(cfg.Agents)
+	if err != nil {
+		return nil, fmt.Errorf("build NATS ACL: %w", err)
+	}
+
 	opts := &server.Options{
 		Host:           host,
 		Port:           port,
 		NoLog:          true,
 		NoSigs:         true,
 		MaxControlLine: 4096,
+		Users:          acl.Users,
 	}
 
 	srv, err := server.NewServer(opts)
@@ -67,7 +87,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 
 	logger.Info("embedded NATS server started", "listen", listen)
 
-	conn, err := nats.Connect(srv.ClientURL())
+	conn, err := nats.Connect(srv.ClientURL(), nats.UserInfo(hubUsername, acl.HubToken))
 	if err != nil {
 		srv.Shutdown()
 		return nil, fmt.Errorf("connect to embedded nats: %w", err)
@@ -81,7 +101,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		logger.Info("embedded NATS server stopped")
 	}()
 
-	return conn, nil
+	return &NATSResult{Conn: conn, ACL: acl}, nil
 }
 
 // connectExternal connects to an existing NATS server at url.

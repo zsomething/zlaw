@@ -17,18 +17,18 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("load hub config: %w", err)
 	}
 
-	conn, err := hub.StartNATS(ctx, cfg, externalNATSURL, logger)
+	result, err := hub.StartNATS(ctx, cfg, externalNATSURL, logger)
 	if err != nil {
 		return fmt.Errorf("start nats: %w", err)
 	}
-	defer conn.Close()
+	defer result.Conn.Close()
 
 	selfBin, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
-	sup := hub.NewSupervisor(cfg, conn.ConnectedUrl(), selfBin, "", logger)
+	sup := hub.NewSupervisor(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
 	}

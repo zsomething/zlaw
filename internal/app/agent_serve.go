@@ -156,7 +156,8 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 
 	// Hub-connected mode: connect to NATS, publish registration, handle inbox.
 	if natsURL := os.Getenv("ZLAW_NATS_URL"); natsURL != "" {
-		nm, err := messaging.NewNATSMessenger(natsURL)
+		natsToken := os.Getenv("ZLAW_NATS_CREDS")
+		nm, err := messaging.NewNATSMessenger(natsURL, name, natsToken)
 		if err != nil {
 			return fmt.Errorf("connect to hub NATS: %w", err)
 		}

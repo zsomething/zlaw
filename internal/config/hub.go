@@ -49,6 +49,11 @@ type AgentEntry struct {
 	// RestartPolicy controls when the supervisor restarts a crashed agent.
 	// Valid values: "always", "on-failure", "never". Defaults to "on-failure".
 	RestartPolicy RestartPolicy `toml:"restart_policy"`
+	// Manager marks this agent as the manager agent.
+	// Manager agents receive broader NATS publish permissions (agent.*.inbox,
+	// zlaw.hub.inbox) and can subscribe to zlaw.registry.
+	// Only one agent per hub should be marked as manager.
+	Manager bool `toml:"manager"`
 }
 
 // NATSConfig holds embedded NATS server settings.
