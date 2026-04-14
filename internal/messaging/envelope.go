@@ -1,19 +1,31 @@
 package messaging
 
-// TaskEnvelope is the payload sent to an agent's inbox subject when a task is
-// delegated via the hub. The format will be formalised in the A2A card; this
-// version carries the minimum needed to run an agent turn and route the reply.
+// TaskEnvelope is the wire format for inter-agent task delegation over the hub.
+// From and To carry the stable agent ID (not display name). The receiving agent
+// uses SessionID to look up or create the appropriate history, runs the Task as
+// an agent turn, and publishes a TaskReply to ReplyTo when done.
 type TaskEnvelope struct {
-	// SessionID identifies the conversation session. The receiving agent uses
-	// this to look up or create the appropriate history.
+	// From is the agent ID of the delegating agent.
+	From string `json:"from"`
+
+	// To is the agent ID of the target agent.
+	To string `json:"to"`
+
+	// Task is the instruction text for the agent turn.
+	Task string `json:"task"`
+
+	// Context holds optional structured metadata passed from the delegating agent.
+	Context map[string]any `json:"context,omitempty"`
+
+	// ReplyTo is the NATS subject the receiving agent must publish its TaskReply
+	// to once the turn completes. Required.
+	ReplyTo string `json:"reply_to"`
+
+	// SessionID identifies the conversation session.
 	SessionID string `json:"session_id"`
 
-	// Input is the user message / instruction text for the agent turn.
-	Input string `json:"input"`
-
-	// ReplyTo is the NATS subject the agent must publish its TaskReply to once
-	// the turn completes. Required.
-	ReplyTo string `json:"reply_to"`
+	// TraceID propagates a distributed trace identifier across agent hops.
+	TraceID string `json:"trace_id,omitempty"`
 }
 
 // TaskReply is the response published back to ReplyTo after the agent turn

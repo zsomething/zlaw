@@ -130,17 +130,19 @@ func (h *HubClient) handleInbox(ctx context.Context, data []byte) {
 		h.logger.Warn("hub: malformed task envelope", "agent", h.name, "err", err)
 		return
 	}
-	if env.SessionID == "" || env.ReplyTo == "" {
+	if env.SessionID == "" || env.ReplyTo == "" || env.Task == "" {
 		h.logger.Warn("hub: task envelope missing required fields",
 			"agent", h.name,
 			"session_id", env.SessionID,
 			"reply_to", env.ReplyTo,
+			"task_empty", env.Task == "",
 		)
 		return
 	}
 
 	h.logger.Info("hub: received task",
 		"agent", h.name,
+		"from", env.From,
 		"session_id", env.SessionID,
 		"reply_to", env.ReplyTo,
 	)
@@ -150,7 +152,7 @@ func (h *HubClient) handleInbox(ctx context.Context, data []byte) {
 		sysPrompt = h.sysPromptFn()
 	}
 
-	output, runErr := h.runner.Run(ctx, env.SessionID, env.Input, sysPrompt)
+	output, runErr := h.runner.Run(ctx, env.SessionID, env.Task, sysPrompt)
 
 	reply := messaging.TaskReply{SessionID: env.SessionID}
 	if runErr != nil {

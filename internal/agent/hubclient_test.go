@@ -117,7 +117,7 @@ func TestHubClient_HandlesInboxTask(t *testing.T) {
 
 	env := messaging.TaskEnvelope{
 		SessionID: "session123",
-		Input:     "hello",
+		Task:      "hello",
 		ReplyTo:   "reply.session123",
 	}
 	data, _ := json.Marshal(env)
