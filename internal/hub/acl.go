@@ -83,10 +83,21 @@ func agentPermissions(name string, isManager bool) *server.Permissions {
 	if isManager {
 		return &server.Permissions{
 			Publish: &server.SubjectPermission{
-				Allow: []string{"agent.*.inbox", "zlaw.hub.inbox", "zlaw.registry"},
+				Allow: []string{
+					"agent.*.inbox",
+					"zlaw.hub.inbox",
+					"zlaw.registry",
+					"$JS.API.>", // JetStream management API
+					"_INBOX.>",  // NATS inbox for request/reply
+				},
 			},
 			Subscribe: &server.SubjectPermission{
-				Allow: []string{inboxSubject, "zlaw.registry"},
+				Allow: []string{
+					inboxSubject,
+					"zlaw.registry",
+					"$JS.API.>", // JetStream API responses
+					"_INBOX.>",  // NATS inbox responses
+				},
 			},
 		}
 	}
