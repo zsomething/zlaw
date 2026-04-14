@@ -129,6 +129,25 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	return nil
 }
 
+// Spawn adds a new agent entry and starts monitoring it. It returns an error if
+// an agent with the same name is already supervised.
+func (s *Supervisor) Spawn(ctx context.Context, entry config.AgentEntry) error {
+	s.mu.Lock()
+	if _, exists := s.agents[entry.Name]; exists {
+		s.mu.Unlock()
+		return fmt.Errorf("supervisor: agent %q is already supervised", entry.Name)
+	}
+	ma := &managedAgent{
+		entry:  entry,
+		stopCh: make(chan struct{}),
+	}
+	s.agents[entry.Name] = ma
+	s.mu.Unlock()
+
+	go s.monitor(ctx, ma)
+	return nil
+}
+
 // Stop signals the named agent to stop and does not restart it.
 func (s *Supervisor) Stop(name string) error {
 	ma := s.get(name)

@@ -297,6 +297,31 @@ func (l *Loader) WriteRuntimeField(key, value string) error {
 	return writeRuntimeTOML(l.dir+"/runtime.toml", rt)
 }
 
+// WriteRuntimeFieldToDir updates a runtime-configurable field in the
+// runtime.toml located in agentDir. It validates the key against the allowlist.
+// This is the hub-side equivalent of Loader.WriteRuntimeField for cases where
+// no Loader instance is available (e.g. hub management API).
+func WriteRuntimeFieldToDir(agentDir, key, value string) error {
+	if _, ok := runtimeFieldAllowlist[key]; !ok {
+		return fmt.Errorf("config: field %q is not runtime-configurable", key)
+	}
+
+	existing, err := loadRuntimeTOML(agentDir + "/runtime.toml")
+	if err != nil {
+		return fmt.Errorf("config: read runtime.toml before write: %w", err)
+	}
+
+	rt := existing
+	switch key {
+	case "llm.model":
+		rt.LLM.Model = value
+	default:
+		return fmt.Errorf("config: field %q is not runtime-configurable", key)
+	}
+
+	return writeRuntimeTOML(agentDir+"/runtime.toml", rt)
+}
+
 // SetCronChangeHandler registers a callback invoked whenever cron.toml changes.
 // Must be called before Watch.
 func (l *Loader) SetCronChangeHandler(fn func(CronConfig)) {

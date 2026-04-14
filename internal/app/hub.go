@@ -28,20 +28,52 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
+	reg := hub.NewRegistry(logger)
+	if err := reg.Start(ctx, result.Conn); err != nil {
+		return fmt.Errorf("start registry: %w", err)
+	}
+
 	sup := hub.NewSupervisor(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
 	}
 
+	managerName := managerAgentName(cfg)
+	mgmtHandler := hub.NewManagementHandler(
+		result.Conn,
+		sup,
+		reg,
+		managerName,
+		config.ZlawHome(),
+		logger,
+	)
+	go func() {
+		if err := mgmtHandler.Start(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("hub management handler stopped unexpectedly", "err", err)
+		}
+	}()
+
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
 		"agents", len(cfg.Agents),
+		"manager", managerName,
 	)
 
 	// Block until context is cancelled (signal or parent shutdown).
 	<-ctx.Done()
 	logger.Info("hub shutting down")
 	return nil
+}
+
+// managerAgentName returns the name of the first agent entry marked Manager,
+// or empty string if none.
+func managerAgentName(cfg config.HubConfig) string {
+	for _, a := range cfg.Agents {
+		if a.Manager {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // HubStatus prints the current hub status.
