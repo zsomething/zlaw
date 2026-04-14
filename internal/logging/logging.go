@@ -163,7 +163,7 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 		} else {
 			sb.WriteString(Colorize(ColorGray, timeStr))
 		}
-		sb.WriteString("  ")
+		sb.WriteString(" ")
 	}
 
 	// Label
@@ -173,18 +173,18 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 		} else {
 			sb.WriteString(Colorize(h.opts.Color, h.opts.Label))
 		}
-		sb.WriteString("  ")
+		sb.WriteString(" ")
 	}
 
 	// Level
 	levelStr := strings.ToUpper(r.Level.String())
 	if h.opts.NoColor {
-		sb.WriteString(fmt.Sprintf("%-5s", levelStr))
+		sb.WriteString(levelStr)
 	} else {
 		color := LevelColors[r.Level]
-		sb.WriteString(Colorize(color, fmt.Sprintf("%-5s", levelStr)))
+		sb.WriteString(Colorize(color, levelStr))
 	}
-	sb.WriteString("  ")
+	sb.WriteString(" ")
 
 	// Message
 	sb.WriteString(r.Message)
@@ -200,7 +200,7 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 	})
 
 	for _, a := range attrs {
-		sb.WriteString("  ")
+		sb.WriteString(" ")
 		sb.WriteString(a.Key)
 		sb.WriteString("=")
 		sb.WriteString(formatAttrValue(a.Value))

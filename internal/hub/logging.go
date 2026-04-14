@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/zsomething/zlaw/internal/logging"
 	"github.com/zsomething/zlaw/internal/messaging"
@@ -198,14 +199,16 @@ type agentLogWriter struct {
 	mu        sync.Mutex
 	messenger messaging.Messenger
 	agentName string
+	timeColor Color // color for timestamp (gray)
 }
 
 // newAgentLogWriter creates a writer that reformats agent JSON logs.
 func newAgentLogWriter(label string, color Color, noColor bool) *agentLogWriter {
 	return &agentLogWriter{
-		label:   label,
-		color:   color,
-		noColor: noColor,
+		label:     label,
+		color:     color,
+		noColor:   noColor,
+		timeColor: ColorGray,
 	}
 }
 
@@ -256,7 +259,7 @@ func (w *agentLogWriter) writeLine(line string) {
 		return
 	}
 
-	var level, msg string
+	var level, msg, timeStr string
 	var attrs []string
 
 	if v, ok := raw["level"]; ok {
@@ -264,6 +267,9 @@ func (w *agentLogWriter) writeLine(line string) {
 	}
 	if v, ok := raw["msg"]; ok {
 		json.Unmarshal(v, &msg)
+	}
+	if v, ok := raw["time"]; ok {
+		json.Unmarshal(v, &timeStr)
 	}
 
 	agent := w.agentName
@@ -286,9 +292,7 @@ func (w *agentLogWriter) writeLine(line string) {
 		logData["agent"] = agent
 		logData["level"] = level
 		logData["msg"] = msg
-		if t, ok := raw["time"]; ok {
-			var timeStr string
-			json.Unmarshal(t, &timeStr)
+		if timeStr != "" {
 			logData["time"] = timeStr
 		}
 		for k, v := range raw {
@@ -305,26 +309,56 @@ func (w *agentLogWriter) writeLine(line string) {
 	}
 
 	var sb strings.Builder
+
+	// Timestamp (from agent JSON or current time)
+	if timeStr != "" {
+		if t, err := time.Parse(time.RFC3339Nano, timeStr); err == nil {
+			timeStr = t.Format("15:04:05")
+		}
+	} else {
+		timeStr = time.Now().Format("15:04:05")
+	}
+
+	if w.noColor {
+		sb.WriteString(timeStr)
+	} else {
+		sb.WriteString(Colorize(w.timeColor, timeStr))
+	}
+	sb.WriteString(" ")
+
+	// Label and level
 	sb.WriteString(w.prefix(level))
-	sb.WriteString("  ")
+	sb.WriteString(" ")
+
+	// Message and attrs
 	sb.WriteString(msg)
 	for _, a := range attrs {
-		sb.WriteString("  ")
+		sb.WriteString(" ")
 		sb.WriteString(a)
 	}
 	fmt.Fprintln(os.Stdout, sb.String())
 }
 
 func (w *agentLogWriter) prefix(level string) string {
+	var sb strings.Builder
+
+	// Label
 	if w.noColor {
-		return w.label + " " + strings.ToUpper(fmt.Sprintf("%-5s", level))
+		sb.WriteString(w.label)
+	} else {
+		sb.WriteString(Colorize(w.color, w.label))
+	}
+	sb.WriteString(" ")
+
+	// Level
+	if w.noColor {
+		sb.WriteString(strings.ToUpper(level))
+	} else {
+		levelColor := levelColorFor(level)
+		sb.WriteString(Colorize(levelColor, strings.ToUpper(level)))
 	}
 
-	coloredLabel := Colorize(w.color, w.label)
-	levelColor := levelColorFor(level)
-	coloredLevel := Colorize(levelColor, strings.ToUpper(fmt.Sprintf("%-5s", level)))
-
-	return coloredLabel + " " + coloredLevel
+	return sb.String()
 }
 
 func levelColorFor(level string) Color {
