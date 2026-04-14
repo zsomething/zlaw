@@ -86,7 +86,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		return nil, fmt.Errorf("embedded nats server did not become ready within %s", natsReadyTimeout)
 	}
 
-	logger.Info("embedded NATS server started", "listen", listen)
+	logger.Info("embedded NATS server started", "listen", listen, "jetstream", jsEnabled)
 
 	conn, err := nats.Connect(srv.ClientURL(), nats.UserInfo(hubUsername, acl.HubToken))
 	if err != nil {

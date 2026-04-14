@@ -6,7 +6,7 @@ BINARY    := $(CURDIR)/zlaw
 -include .env
 export
 
-.PHONY: build serve attach auth-login auth-list test clean hooks help
+.PHONY: build serve attach auth-login auth-list test clean hooks vibe-pi help
 
 ## build: compile the zlaw binary
 build:
@@ -32,6 +32,10 @@ auth-login: build
 ## auth-list: list stored credential profiles
 auth-list: build
 	ZLAW_HOME=$(ZLAW_HOME) $(BINARY) auth list
+
+## vibe-pi: run pi with env from agent.dev
+vibe-pi:
+	@set -a && . ./agent.env && set +a && pi
 
 ## hooks: install git hooks from .githooks/
 hooks:
