@@ -3,6 +3,7 @@ package messaging
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -50,11 +51,24 @@ type JetMsg struct {
 	msg *nats.Msg
 }
 
-// Data returns the raw message payload.
-func (m *JetMsg) Data() []byte { return m.msg.Data }
+// Data returns the raw message payload, or nil if msg is nil.
+func (m *JetMsg) Data() []byte {
+	if m.msg == nil {
+		return nil
+	}
+	return m.msg.Data
+}
 
-// Ack acknowledges the message (marks as processed).
-func (m *JetMsg) Ack() error { return m.msg.Ack() }
+func (m *JetMsg) Ack() error {
+	if m.msg == nil {
+		return fmt.Errorf("ack: nil message")
+	}
+	return m.msg.Ack()
+}
 
-// Nak negatively acknowledges the message (requests redelivery).
-func (m *JetMsg) Nak() error { return m.msg.Nak() }
+func (m *JetMsg) Nak() error {
+	if m.msg == nil {
+		return fmt.Errorf("nak: nil message")
+	}
+	return m.msg.Nak()
+}
