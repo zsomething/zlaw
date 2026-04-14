@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -28,7 +29,7 @@ const (
 	ColorWhite   Color = 97
 )
 
-// Level colors for pretty output.
+// LevelColors maps log levels to their display colors.
 var LevelColors = map[slog.Level]Color{
 	slog.LevelDebug: ColorGray,
 	slog.LevelInfo:  ColorGreen,
@@ -106,7 +107,7 @@ func DetectTimeFormat() TimeFormat {
 	case "full":
 		return TimeFormatFull
 	default:
-		return TimeFormatShort // default to short
+		return TimeFormatShort
 	}
 }
 
@@ -123,134 +124,170 @@ func isTTY(f *os.File) bool {
 
 // Options configures a Handler.
 type Options struct {
-	Label    string // e.g., "[hub]" or "[agent:name]"
-	Color    Color  // color for label
-	NoColor  bool   // disable colors
-	Time     TimeFormat
-	LevelKey string // attribute key for level (default "level")
-	TimeKey  string // attribute key for time (default "time")
-	MsgKey   string // attribute key for message (default "msg")
+	Label   string     // e.g., "[hub]" or "[agent:name]"
+	Color   Color      // color for label
+	NoColor bool       // disable colors
+	Time    TimeFormat // time display format
 }
 
 // PrettyHandler implements slog.Handler with pretty colored output.
+// It outputs logs in the format: [label] LEVEL message key=value...
 type PrettyHandler struct {
-	handler slog.Handler
-	opts    Options
-	buf     strings.Builder
+	w    io.Writer
+	opts Options
 }
 
-// NewPrettyHandler creates a PrettyHandler wrapping the default text handler.
+// NewPrettyHandler creates a PrettyHandler that writes to w (defaults to stderr).
 func NewPrettyHandler(w io.Writer, opts Options) *PrettyHandler {
 	if w == nil {
 		w = os.Stderr
 	}
-	replacer := func(_ []string, a slog.Attr) slog.Attr {
-		if opts.Time == TimeFormatNone && a.Key == slog.TimeKey {
-			return slog.Attr{}
-		}
-		if opts.Time == TimeFormatShort && a.Key == slog.TimeKey {
-			return slog.Attr{Key: a.Key, Value: slog.StringValue(a.Value.Time().Format("15:04:05"))}
-		}
-		return a
-	}
-	h := slog.NewTextHandler(w, &slog.HandlerOptions{
-		ReplaceAttr: replacer,
-	})
-	return &PrettyHandler{
-		handler: h,
-		opts:    opts,
-	}
+	return &PrettyHandler{w: w, opts: opts}
 }
 
-// NewPrettyHandlerFrom wraps an existing slog.Handler with pretty prefix.
-func NewPrettyHandlerFrom(h slog.Handler, opts Options) *PrettyHandler {
-	return &PrettyHandler{
-		handler: h,
-		opts:    opts,
-	}
-}
+// Handle formats the log record as a pretty line and writes it.
+func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
+	var sb strings.Builder
 
-func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Build the label prefix with color
-	var labelPrefix string
+	// Time
+	if h.opts.Time != TimeFormatNone {
+		var timeStr string
+		switch h.opts.Time {
+		case TimeFormatShort:
+			timeStr = r.Time.Format("15:04:05")
+		case TimeFormatFull:
+			timeStr = r.Time.Format(time.RFC3339)
+		}
+		if h.opts.NoColor {
+			sb.WriteString(timeStr)
+		} else {
+			sb.WriteString(Colorize(ColorGray, timeStr))
+		}
+		sb.WriteString("  ")
+	}
+
+	// Label
 	if h.opts.Label != "" {
 		if h.opts.NoColor {
-			labelPrefix = h.opts.Label + " "
+			sb.WriteString(h.opts.Label)
 		} else {
-			labelPrefix = Colorize(h.opts.Color, h.opts.Label) + " "
+			sb.WriteString(Colorize(h.opts.Color, h.opts.Label))
 		}
+		sb.WriteString("  ")
 	}
 
-	// Get level color
-	levelColor := LevelColors[r.Level]
+	// Level
+	levelStr := strings.ToUpper(r.Level.String())
 	if h.opts.NoColor {
-		// Just use the level string
-		levelStr := r.Level.String()
-		// Pad to 5 chars for alignment
-		levelStr = fmt.Sprintf("%-5s", levelStr)
-		if labelPrefix != "" {
-			r.Message = labelPrefix + levelStr + " " + r.Message
-		} else {
-			r.Message = levelStr + " " + r.Message
-		}
+		sb.WriteString(fmt.Sprintf("%-5s", levelStr))
 	} else {
-		levelStr := Colorize(levelColor, fmt.Sprintf("%-5s", r.Level.String()))
-		if labelPrefix != "" {
-			r.Message = labelPrefix + levelStr + " " + r.Message
-		} else {
-			r.Message = levelStr + " " + r.Message
-		}
+		color := LevelColors[r.Level]
+		sb.WriteString(Colorize(color, fmt.Sprintf("%-5s", levelStr)))
+	}
+	sb.WriteString("  ")
+
+	// Message
+	sb.WriteString(r.Message)
+
+	// Attributes
+	attrs := make([]slog.Attr, 0, r.NumAttrs())
+	r.Attrs(func(a slog.Attr) bool {
+		attrs = append(attrs, a)
+		return true
+	})
+	sort.Slice(attrs, func(i, j int) bool {
+		return attrs[i].Key < attrs[j].Key
+	})
+
+	for _, a := range attrs {
+		sb.WriteString("  ")
+		sb.WriteString(a.Key)
+		sb.WriteString("=")
+		sb.WriteString(formatAttrValue(a.Value))
 	}
 
-	return h.handler.Handle(ctx, r)
+	sb.WriteString("\n")
+	_, err := h.w.Write([]byte(sb.String()))
+	return err
 }
 
 func (h *PrettyHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return h.handler.Enabled(context.Background(), level)
+	return true
 }
 
 func (h *PrettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &PrettyHandler{
-		handler: h.handler.WithAttrs(attrs),
-		opts:    h.opts,
-	}
+	// For now, just return self - attrs are printed inline
+	_ = attrs
+	return h
 }
 
 func (h *PrettyHandler) WithGroup(name string) slog.Handler {
-	return &PrettyHandler{
-		handler: h.handler.WithGroup(name),
-		opts:    h.opts,
+	// Groups are not supported in pretty mode
+	_ = name
+	return h
+}
+
+func formatAttrValue(v slog.Value) string {
+	switch v.Kind() {
+	case slog.KindString:
+		s := v.String()
+		// Quote strings with spaces
+		if strings.ContainsAny(s, " \t\n\"") {
+			return fmt.Sprintf("%q", s)
+		}
+		return s
+	case slog.KindInt64:
+		return fmt.Sprintf("%d", v.Int64())
+	case slog.KindUint64:
+		return fmt.Sprintf("%d", v.Uint64())
+	case slog.KindFloat64:
+		return fmt.Sprintf("%g", v.Float64())
+	case slog.KindBool:
+		return fmt.Sprintf("%t", v.Bool())
+	case slog.KindDuration:
+		return v.Duration().String()
+	case slog.KindTime:
+		return v.Time().Format(time.RFC3339)
+	case slog.KindAny, slog.KindLogValuer:
+		return fmt.Sprintf("%v", v.Any())
+	default:
+		return v.String()
 	}
 }
 
 // JSONHandler implements slog.Handler with JSON output.
 type JSONHandler struct {
+	w      io.Writer
 	attrs  []slog.Attr
 	groups []string
 }
 
-// NewJSONHandler creates a JSON handler.
+// NewJSONHandler creates a JSON handler that writes to w (defaults to stdout).
 func NewJSONHandler(w io.Writer) *JSONHandler {
-	return &JSONHandler{}
+	if w == nil {
+		w = os.Stdout
+	}
+	return &JSONHandler{w: w}
 }
 
 func (h *JSONHandler) Handle(_ context.Context, r slog.Record) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetEscapeHTML(false)
-
 	m := make(map[string]any, 4+r.NumAttrs())
 	m["time"] = r.Time.Format(time.RFC3339Nano)
 	m["level"] = r.Level.String()
 	m["msg"] = r.Message
-	m["agent"] = os.Getenv("ZLAW_AGENT")
+	if agent := os.Getenv("ZLAW_AGENT"); agent != "" {
+		m["agent"] = agent
+	}
 
-	// Add attributes
 	r.Attrs(func(a slog.Attr) bool {
 		m[a.Key] = a.Value.Any()
 		return true
 	})
 
-	return enc.Encode(m)
+	enc := json.NewEncoder(h.w)
+	enc.SetEscapeHTML(false)
+	enc.Encode(m)
+	return nil
 }
 
 func (h *JSONHandler) Enabled(_ context.Context, level slog.Level) bool {
@@ -258,11 +295,11 @@ func (h *JSONHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *JSONHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &JSONHandler{attrs: attrs}
+	return &JSONHandler{w: h.w, attrs: append(h.attrs, attrs...), groups: h.groups}
 }
 
 func (h *JSONHandler) WithGroup(name string) slog.Handler {
-	return &JSONHandler{groups: append(h.groups, name)}
+	return &JSONHandler{w: h.w, attrs: h.attrs, groups: append(h.groups, name)}
 }
 
 // Logger returns a *slog.Logger configured with the appropriate handler.
@@ -274,10 +311,8 @@ func Logger(label string, color Color) *slog.Logger {
 		Time:    DetectTimeFormat(),
 	}
 
-	format := DetectFormat()
 	var h slog.Handler
-
-	if format == LogFormatJSON {
+	if DetectFormat() == LogFormatJSON {
 		h = NewJSONHandler(os.Stdout)
 	} else {
 		h = NewPrettyHandler(os.Stdout, opts)
@@ -288,10 +323,8 @@ func Logger(label string, color Color) *slog.Logger {
 
 // LoggerWithOptions returns a *slog.Logger with explicit options.
 func LoggerWithOptions(opts Options) *slog.Logger {
-	format := DetectFormat()
 	var h slog.Handler
-
-	if format == LogFormatJSON {
+	if DetectFormat() == LogFormatJSON {
 		h = NewJSONHandler(os.Stdout)
 	} else {
 		h = NewPrettyHandler(os.Stdout, opts)
