@@ -76,6 +76,11 @@ func (r *Registry) isAllowed(name string) bool {
 	return ok
 }
 
+// Get returns a registered tool by name, or nil if not found.
+func (r *Registry) Get(name string) Tool {
+	return r.tools[name]
+}
+
 // Register adds a tool. Panics if name is already registered.
 func (r *Registry) Register(t Tool) {
 	name := t.Definition().Name

@@ -84,11 +84,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
 
-	// Discovery tools — read-only, available to all agents. Messenger injected below.
-	listAgentsTool := &builtin.ListAgents{Registry: builtin.NewAgentRegistry(nil)}
-	getAgentTool := &builtin.GetAgent{Registry: builtin.NewAgentRegistry(nil)}
-	registry.Register(listAgentsTool)
-	registry.Register(getAgentTool)
+	// Agent discovery tools (list_agents, get_agent) are registered by buildToolRegistry.
 
 	applyToolConfig(cfg, registry, logger)
 
@@ -179,9 +175,17 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 		delegateTool.Messenger = nm
 		delegateTool.Registry = regCache
 
-		// Inject messenger into discovery tools so they can query zlaw.registry.list.
-		listAgentsTool.Registry = builtin.NewAgentRegistry(nm)
-		getAgentTool.Registry = builtin.NewAgentRegistry(nm)
+		// Inject messenger into discovery tools that were registered by buildToolRegistry.
+		if listAgents := registry.Get("list_agents"); listAgents != nil {
+			if la, ok := listAgents.(*builtin.ListAgents); ok {
+				la.Registry = builtin.NewAgentRegistry(nm)
+			}
+		}
+		if getAgent := registry.Get("get_agent"); getAgent != nil {
+			if ga, ok := getAgent.(*builtin.GetAgent); ok {
+				ga.Registry = builtin.NewAgentRegistry(nm)
+			}
+		}
 
 		go func() {
 			if err := regCache.Start(ctx, nm); err != nil && ctx.Err() == nil {
