@@ -1,6 +1,7 @@
 [agent]
-name = "example"
-description = "Example agent — copy this directory to agents/<name>/ and customise"
+id = "example"
+# name = "Example"  # optional display name; falls back to id if unset
+description = "Example agent — copy this directory to agents/<id>/ and customise"
 
 [llm]
 backend = "minimax"

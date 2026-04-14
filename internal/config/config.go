@@ -81,11 +81,26 @@ type ContextConfig struct {
 
 // AgentMeta contains agent identity metadata.
 type AgentMeta struct {
+	// ID is the stable, machine-readable identifier for the agent. It is used
+	// for all runtime paths (socket, pid, session dir, memory dir) and as the
+	// NATS username when connecting to the hub. It must not change at runtime.
+	ID string `toml:"id"`
+	// Name is the optional human-readable display name used in system prompts
+	// and agent greetings. Falls back to ID if unset.
 	Name        string `toml:"name"`
 	Description string `toml:"description"`
 	// Manager marks this agent as the designated hub manager agent.
 	// The manager receives user input and can delegate to peer agents.
 	Manager bool `toml:"manager"`
+}
+
+// DisplayName returns the human-readable display name. When Name is empty it
+// falls back to ID, so callers never need to handle the empty-name case.
+func (m AgentMeta) DisplayName() string {
+	if m.Name != "" {
+		return m.Name
+	}
+	return m.ID
 }
 
 // LLMConfig holds LLM backend settings.

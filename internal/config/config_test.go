@@ -19,7 +19,8 @@ func TestLoad_Basic(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "agent.toml", `
 [agent]
-name = "test-agent"
+id = "test-agent"
+name = "Test Agent"
 description = "A test agent"
 
 [llm]
@@ -48,8 +49,14 @@ type = "cli"
 		t.Fatal(err)
 	}
 
-	if cfg.Agent.Name != "test-agent" {
-		t.Errorf("agent.name = %q, want %q", cfg.Agent.Name, "test-agent")
+	if cfg.Agent.ID != "test-agent" {
+		t.Errorf("agent.id = %q, want %q", cfg.Agent.ID, "test-agent")
+	}
+	if cfg.Agent.Name != "Test Agent" {
+		t.Errorf("agent.name = %q, want %q", cfg.Agent.Name, "Test Agent")
+	}
+	if cfg.Agent.DisplayName() != "Test Agent" {
+		t.Errorf("DisplayName() = %q, want %q", cfg.Agent.DisplayName(), "Test Agent")
 	}
 	if cfg.LLM.Backend != "anthropic" {
 		t.Errorf("llm.backend = %q, want %q", cfg.LLM.Backend, "anthropic")
@@ -215,6 +222,23 @@ type = "cli"
 	}
 	if err := loader.WriteRuntimeField("llm.backend", "openai"); err == nil {
 		t.Error("expected error for non-configurable field, got nil")
+	}
+}
+
+func TestAgentMeta_DisplayName(t *testing.T) {
+	tests := []struct {
+		meta config.AgentMeta
+		want string
+	}{
+		{config.AgentMeta{ID: "manager", Name: "Rin"}, "Rin"},
+		{config.AgentMeta{ID: "manager", Name: ""}, "manager"},
+		{config.AgentMeta{ID: "", Name: ""}, ""},
+	}
+	for _, tc := range tests {
+		got := tc.meta.DisplayName()
+		if got != tc.want {
+			t.Errorf("DisplayName() for {ID:%q Name:%q} = %q, want %q", tc.meta.ID, tc.meta.Name, got, tc.want)
+		}
 	}
 }
 
