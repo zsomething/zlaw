@@ -89,6 +89,10 @@ type AgentMeta struct {
 	// and agent greetings. Falls back to ID if unset.
 	Name        string `toml:"name"`
 	Description string `toml:"description"`
+	// Roles are the functional specializations of this agent.
+	// Used by hub registry and manager routing for peer discovery.
+	// Example: roles = ["calendar", "scheduling"]
+	Roles []string `toml:"roles"`
 	// Manager marks this agent as the designated hub manager agent.
 	// The manager receives user input and can delegate to peer agents.
 	Manager bool `toml:"manager"`
