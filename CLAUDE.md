@@ -1,36 +1,38 @@
 # CLAUDE.md — Project Context for Claude Code
 
-File give Claude Code full context for project. Read ARCHITECTURE.md and PLANNING.md for full detail. File summarize essentials, give working conventions.
+Full context for project. Read ARCHITECTURE.md and PLANNING.md for detail. File summarize essentials + conventions.
 
 ---
 
 ## What This Project Is
 
-Multi-agent personal assistant platform in Go. Central **zlaw** process broker communication between autonomous **Agent** processes over embedded NATS message bus.
+Multi-agent personal assistant platform in Go. Central **zlaw** broker autonomous **Agent** processes over embedded NATS.
 
-Primary use case: personal assistant (Telegram as main interface). Coding assistance nice-to-have.
+Primary use: personal assistant (Telegram). Coding assistance nice-to-have.
 
 ---
 
 ## Current Implementation Phase
 
-**Phase 1: Standalone Agent**
+**Phase 1: Complete. Phase 2: In Progress.**
 
-Build single zlaw-agent binary, run independently — no zlaw-hub, no NATS, no inter-agent yet. zlaw-hub and inter-agent layer come Phase 2.
+Phase 1 (standalone agent) done — agent loop, tools, adapters, memory, cron, Telegram all working. Single `cmd/zlaw/` binary with subcommands (`run`, `serve`, `attach`, `auth`, `init`, `hub`).
 
-No zlaw dependencies in Phase 1 agent code. Design for it (e.g. use session IDs from day one), but no coupling.
+Phase 2 focus: zlaw-hub binary, hub CLI bootstrap (`init`, `start`, `status`), hub core (NATS embed, agent supervisor, registry, identity verification). Hub internals partially implemented (`internal/hub/`).
+
+Remaining Phase 1 gaps: plugin binary IPC, working memory, dry-run/sandbox mode.
 
 ---
 
 ## Key Architectural Decisions
 
-- **Language**: Go. No other languages in core. Skill plugins any language via gRPC/IPC.
-- **zlaw role**: Broker only — routes, verifies identity, audits. No planning or orchestration.
-- **Manager agent**: One designated agent receive user input, delegate to peers. Task routing lives in agent, not hub. Regular agent + hub-management tools + self-protection constraint.
-- **A2A routing**: All inter-agent messages via zlaw. Never direct agent-to-agent.
+- **Language**: Go. No other langs in core. Skill plugins any language via gRPC/IPC.
+- **zlaw role**: Broker only — routes, verifies identity, audits. No planning/orchestration.
+- **Manager agent**: One agent receives user input, delegates to peers. Routing in agent, not hub. Regular agent + hub-management tools + self-protection.
+- **A2A routing**: All inter-agent msgs via zlaw. Never direct agent-to-agent.
 - **Config format**: TOML. Per-agent `agent.toml`, global `zlaw.toml`.
-- **Personality**: `SOUL.md` + `IDENTITY.md` per agent. Hot-reloaded on file change.
-- **Session model**: `map[sessionID → history]` from day one. No single global history.
+- **Personality**: `SOUL.md` + `IDENTITY.md` per agent. Hot-reloaded on change.
+- **Session model**: `map[sessionID → history]` from day one. No global history.
 - **Secrets**: Env-var injection only. Never plaintext in config.
 - **Plugin system**: Skill binaries over gRPC or net/rpc. Versioned contract in `plugins/`.
 - **Message bus**: NATS, embedded in zlaw-hub binary by default.
@@ -54,20 +56,29 @@ Input → Build context → LLM call
 ```
 zlaw/
 ├── cmd/
-│   ├── zlaw-hub/     # zlaw-hub binary
-│   └── zlaw-agent/   # zlaw-agent binary
+│   └── zlaw/         # single binary: run/serve/attach/auth/init/hub subcommands
 ├── internal/
-│   ├── agent/        # Agentic loop, history, context builder
-│   ├── llm/          # LLM client abstraction + backends
-│   ├── tools/        # Tool executor, registry, plugin IPC
-│   ├── zlaw/          # zlaw core (Phase 2)
-│   ├── nats/         # Embedded NATS (Phase 2)
-│   ├── identity/     # Keypair management (Phase 2)
-│   ├── adapters/     # Interface adapters (Telegram, CLI, HTTP)
-│   └── config/       # Config loading, hot-reload
+│   ├── agent/        # agentic loop, history, context builder, memory, optimizer
+│   ├── app/          # wiring for agent-run/serve/attach/hub modes
+│   ├── llm/          # LLM client abstraction + Anthropic/OpenAI-compat backends
+│   ├── tools/builtin/# file I/O, bash, glob, grep, web, HTTP, memory, cron, delegate
+│   ├── hub/          # hub core: registry, supervisor, inbox, NATS, ACL, credentials
+│   ├── nats/         # embedded NATS wrapper
+│   ├── identity/     # keypair management
+│   ├── adapters/     # CLI, daemon, Telegram
+│   ├── session/      # session manager, event log, sink
+│   ├── skills/       # skill file discovery + injection
+│   ├── slashcmd/     # slash command parser + builtins
+│   ├── push/         # push notification (Telegram)
+│   ├── config/       # config loading, hot-reload
+│   ├── cron/         # cron scheduler
+│   ├── messaging/    # message types
+│   ├── transport/    # Unix socket transport
+│   ├── zlaw/         # zlaw core (Phase 2)
+│   └── version/      # version info
 ├── agents/
-│   └── <agent-name>/  # agent.toml, SOUL.md, IDENTITY.md
-├── plugins/          # Skill plugin contracts + binaries
+│   └── <agent-name>/ # agent.toml, SOUL.md, IDENTITY.md, cron.toml
+├── plugins/          # skill plugin contracts + binaries
 ├── zlaw.toml
 └── README.md
 ```
@@ -76,27 +87,30 @@ zlaw/
 
 ## Coding Conventions
 
-- Prefer explicit error handling over panic. No `log.Fatal` outside `main()`.
-- Interfaces first — define interface before implementation (especially LLM client, tool executor, input/output adapters).
-- No global state. Pass dependencies explicitly (no `init()` side effects for business logic).
-- Context propagation — pass `context.Context` as first arg to all functions doing I/O or cancellable.
-- Config structs loaded once at startup, passed down; hot-reload fires callback, no unsafe mutation of shared state.
-- Structured logging with `slog` (stdlib). Every log line include `agent`, `session_id`, and where applicable `trace_id`.
-- Tests alongside code (`_test.go`). Unit test loop logic with mock LLM client.
+- Explicit error handling over panic. No `log.Fatal` outside `main()`.
+- Interfaces first — define before implementation (LLM client, tool executor, adapters).
+- No global state. Pass deps explicitly (no `init()` side effects for business logic).
+- Pass `context.Context` as first arg to all I/O or cancellable funcs.
+- Config loaded once at startup, passed down; hot-reload fires callback, no unsafe mutation.
+- Structured logging with `slog` (stdlib). Every log: `agent`, `session_id`, `trace_id` where applicable.
+- Tests alongside code (`_test.go`). Unit test loop with mock LLM client.
 
 ---
 
-## Phase 1 Build Order
+## Phase 2 Focus (current)
 
-1. `internal/config` — load and watch `agent.toml`, `SOUL.md`, `IDENTITY.md`
-2. `internal/llm` — LLM client interface + Anthropic backend
-3. `internal/agent` — context builder, history manager, agentic loop
-4. `internal/tools` — tool registry, executor stub (no real plugins yet)
-5. `cmd/zlaw-agent` — wire everything, accept input from stdin
-6. `internal/adapters/cli` — basic CLI adapter
-7. `internal/tools/plugin` — real plugin IPC contract + example skill
+Active work: hub bootstrap CLI + hub core.
 
-No start Phase 2 (zlaw, NATS, adapters/telegram) until Phase 1 loop working end-to-end with at least one real tool.
+Next tasks (from PLANNING.md):
+- `zlaw hub init` — generate `zlaw.toml`, `credentials.toml`, default manager agent scaffold
+- `zlaw hub auth add` — add credential profiles
+- `zlaw hub start` — start hub, embed NATS, spawn agents
+- `zlaw hub status` — hub health + per-agent status
+- `zlaw hub agent` subcommands — list/logs/restart/stop/remove
+- Hub binary `serve` — NATS embed, agent supervisor, registry, identity verify, audit log
+- Manager agent — gets hub-management tools, delegates to peers via NATS
+
+See PLANNING.md for full checklist.
 
 ---
 
