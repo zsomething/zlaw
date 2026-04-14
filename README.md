@@ -1,36 +1,102 @@
 # zlaw
 
-A personal AI assistant that runs locally, connects to any LLM, and gets smarter the more you use it.
+[![Go](https://github.com/chickenzord/zlaw/actions/workflows/go.yml/badge.svg)](https://github.com/chickenzord/zlaw/actions/workflows/go.yml)
+[![Lint](https://github.com/chickenzord/zlaw/actions/workflows/lint.yml/badge.svg)](https://github.com/chickenzord/zlaw/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/chickenzord/zlaw/branch/main/graph/badge.svg)](https://codecov.io/gh/chickenzord/zlaw)
+[![Go version](https://img.shields.io/github/go-mod/go-version/chickenzord/zlaw)](go.mod)
+
+> **Work in progress.** This project is under active development and not ready for everyday use. Expect breaking changes, missing features, and rough edges.
+
+Your personal AI assistant — runs on your machine, works with any LLM, and gets more useful the longer you use it.
 
 ---
 
-## What it does
+## Why zlaw
 
-**Remembers things.** Memories are saved as plain Markdown files you can read, edit, and version-control. When you enable proactive saving, the agent decides on its own what's worth keeping — user preferences, project context, recurring facts — without being asked. Recall is semantic: queries find relevant memories by meaning, not just matching keywords.
+Most AI assistants start fresh every conversation. zlaw doesn't. It remembers what matters, acts on a schedule, and — when one agent isn't enough — routes work to a fleet of specialists automatically.
 
-**Runs on a schedule.** Define cron jobs in plain text and the agent executes them automatically — send a morning briefing, check for updates, run a recurring task. Jobs are hot-reloadable without a restart. The agent can also create and delete its own scheduled tasks mid-conversation, so it can set reminders or recurring work on its own initiative.
+Everything stays on your machine. No cloud sync, no third-party memory service. Your data is plain files you can read, edit, and put in git.
 
-**Talks to you on Telegram.** Connect a Telegram bot and the assistant lives in your pocket. Conversations are session-aware; you can have separate threads for different contexts.
+---
 
-**Stays sharp in long conversations.** As the context window fills, the agent summarises old turns to preserve meaning, then prunes selectively — stripping extended thinking first, then tool outputs, then full turns. You set the budget; it manages the window.
+## What you can do with it
 
-**Adapts on the fly.** Edit the agent's personality or behaviour and the change takes effect on the next message — no restart needed. The same applies to scheduled jobs, tool config, and runtime model overrides.
+**Have an assistant that actually knows you.**
+
+zlaw builds a memory of facts, preferences, and context as you talk. With proactive saving on, it decides what's worth keeping on its own. You can also be explicit:
+
+```
+you: remember that we deploy every Tuesday and I prefer squash merges
+```
+
+Later, ask anything and it finds the right memory by meaning — not just keyword matching.
+
+**Set reminders and recurring tasks by just asking.**
+
+```
+you: remind me every Monday morning to review the backlog
+you: check my inbox daily at 9am and summarize anything urgent
+```
+
+The agent creates and manages its own scheduled jobs. You can also list or cancel them the same way:
+
+```
+you: what recurring tasks do you have set up?
+you: cancel the inbox check
+```
+
+For bulk setup or version-controlled schedules, `cron.toml` is also supported.
+
+**Talk to it from your phone via Telegram.**
+
+Connect a Telegram bot and your assistant is always a message away. Each conversation thread keeps its own context — separate sessions for work, personal, and side projects.
+
+**Run a fleet of specialist agents.**
+
+Start `zlaw-hub` and it supervises a group of agents, each with its own personality, model, and toolset. Your manager agent takes the request and delegates automatically — the code agent handles the diff, the research agent handles the search, the calendar agent books the meeting. All on your machine, no extra infrastructure.
+
+```
+you: research the top open-source vector databases, then draft a comparison doc
+```
+
+The manager figures out who does what. You just get the result.
+
+**Manage your session without touching the agent.**
+
+Slash commands are handled directly — no LLM call, no cost:
+
+```
+/clear      — start a fresh conversation
+/history    — review what's been said this session
+/help       — list all available commands
+```
+
+Personality and behaviour files hot-reload on save — no restart needed for those either.
 
 ---
 
 ## Features
 
-- **Any LLM backend** — Anthropic native, or any OpenAI-compatible endpoint (Minimax, OpenRouter, Ollama, self-hosted)
-- **Long-term memory** — Markdown files on disk, human-readable and git-trackable; semantic search via vector index
-- **Proactive memory saving** — agent saves what matters without being asked, guided by a sticky instruction block
-- **Cron-scheduled tasks** — define recurring jobs in `cron.toml`, or let the agent schedule them itself via built-in tools; reloaded without restart
-- **Telegram adapter** — full session support over Telegram bot API
-- **Hot-reload** — personality files, cron jobs, and runtime model config update live
-- **Context window management** — token budget, multi-tier summarisation, layered pruning (thinking → tool results → turns)
-- **Prompt caching** — Anthropic backends split the system prompt into stable cached layers for lower latency and cost
+### Personal assistant
+- **Any LLM** — Anthropic, or any OpenAI-compatible endpoint (Minimax, OpenRouter, Ollama, self-hosted)
+- **Long-term memory** — saved as plain Markdown; recalled by semantic search; human-readable and git-trackable
+- **Proactive memory saving** — agent decides what's worth keeping without being asked; or tell it explicitly
+- **Scheduled tasks** — create, list, and cancel cron jobs by talking to the agent; or define them in `cron.toml`
+- **Telegram** — session-aware; independent threads per conversation
+- **Slash commands** — `/clear`, `/history`, `/help` handled client-side with no LLM call
+- **Streaming** — tokens arrive as they're generated
 - **Session persistence** — conversations stored as JSONL; resume any session by ID
-- **Streaming** — tokens stream to the terminal as they arrive
-- **Built-in tools** — file read/write/edit, glob, grep, bash, web fetch/search, HTTP requests, memory ops, cron management
+
+### Multi-agent
+- **Hub supervisor** — `zlaw-hub` spawns, monitors, and auto-restarts a fleet of agent processes
+- **Agent delegation** — manager agent routes tasks to specialist peers and returns a structured result
+- **Per-agent access control** — each agent gets a scoped token at spawn time; permissions enforced at the broker
+
+### Under the hood
+- **Embedded NATS** — agent-to-agent messaging over a local message bus; no external broker needed
+- **Context window management** — token budget with automatic summarisation and layered pruning (thinking → tool results → turns)
+- **Prompt caching** — Anthropic backends cache stable system prompt layers to cut latency and cost
+- **Hot-reload** — personality, scheduled jobs, and runtime config update live on file save
 
 ---
 
@@ -40,30 +106,43 @@ A personal AI assistant that runs locally, connects to any LLM, and gets smarter
 # Bootstrap a new agent
 zlaw-agent init --name myagent
 
-# Run interactively
+# Run interactively in the terminal
 zlaw-agent --agent myagent run
 
-# Run as a daemon (Unix socket + optional Telegram)
+# Run as a background daemon (enables Telegram + scheduled tasks)
 zlaw-agent --agent myagent serve
 ```
 
-Credentials live in `~/.zlaw/credentials.toml`. Add a profile:
+Add your LLM credentials:
 
 ```sh
 zlaw-agent auth login --profile myprofile --type apikey --key <key>
 ```
 
+### Run multiple agents with a hub
+
+```sh
+zlaw-hub start
+```
+
+```toml
+# zlaw.toml
+[[agents]]
+name    = "manager"
+manager = true   # receives user input, delegates to peers
+
+[[agents]]
+name = "coder"
+
+[[agents]]
+name = "researcher"
+```
+
+Each agent gets its own `agent.toml`, `SOUL.md`, and `IDENTITY.md` under `agents/<name>/`.
+
 ---
 
 ## Configuration
-
-Each agent is a directory with three files:
-
-| File | Purpose |
-|------|---------|
-| `agent.toml` | LLM backend, model, memory, tools, adapter, context settings |
-| `SOUL.md` | Personality and behavioural guidelines |
-| `IDENTITY.md` | Agent role and identity |
 
 ### Minimal `agent.toml`
 
@@ -85,46 +164,27 @@ max_tokens   = 4096
 proactive_memory_save = true   # agent saves facts without being asked
 
 [memory.embedder]
-backend      = "openrouter"
-model        = "openai/text-embedding-3-small"
-auth_profile = "openrouter"    # omit to reuse the LLM auth profile
+backend = "openrouter"
+model   = "openai/text-embedding-3-small"
 ```
 
-Memory files are stored under `$ZLAW_HOME/memories/<agent>/` as plain Markdown — readable, editable, and version-controllable. The vector index is a local cache derived from those files; delete it to force a rebuild.
+Memory files live under `$ZLAW_HOME/memories/<agent>/` as plain Markdown — readable and editable. The vector index is a local cache; delete it to rebuild.
 
 ### Context management
 
 ```toml
 [llm]
-context_token_budget         = 80000   # hard limit on history size
-context_summarize_threshold  = 0.8     # summarise at 80% of budget
-context_summarize_turns      = 10      # turns to collapse per pass
-context_summarize_model      = "openai/gpt-4o-mini"   # cheaper model for summarisation
+context_token_budget         = 80000
+context_summarize_threshold  = 0.8
+context_summarize_turns      = 10
+context_summarize_model      = "openai/gpt-4o-mini"
 context_prune_levels         = ["strip_thinking", "strip_tool_results", "drop_pairs"]
-max_memory_tokens            = 2000    # cap the [Memories] block in the system prompt
+max_memory_tokens            = 2000
 ```
-
-### Scheduled tasks
-
-```toml
-# cron.toml (in the agent directory)
-[[jobs]]
-id       = "morning-briefing"
-schedule = "0 8 * * *"
-prompt   = "Give me a brief summary of what I should focus on today."
-```
-
-The agent can also manage its own schedule during a conversation — ask it to remind you about something and it will create the job itself.
 
 ---
 
 ## Docs
 
-- [Configuration reference](docs/configuration.md) — full `agent.toml` reference, backends, credentials, context engineering
-- [Built-in tools](docs/tools.md) — tool reference, allowlist, resilience
-
----
-
-## Coming soon
-
-Multi-agent routing, inter-agent messaging, and a central hub for orchestrating fleets of specialised agents.
+- [Configuration reference](docs/configuration.md) — full `agent.toml` reference, backends, credentials, context tuning
+- [Built-in tools](docs/tools.md) — tool reference, allowlist, result limits
