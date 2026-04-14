@@ -13,9 +13,11 @@ Your personal AI assistant — runs on your machine, works with any LLM, and get
 
 ## Why zlaw
 
-Most AI assistants start fresh every conversation. zlaw doesn't. It remembers what matters, acts on a schedule, and — when one agent isn't enough — routes work to a fleet of specialists automatically.
+zlaw is a multi-agent platform built around a hub model: `zlaw hub start` supervises a fleet of agents over an embedded NATS bus, each with its own personality, model, and toolset. A manager agent routes tasks to specialists automatically.
 
-Everything stays on your machine. No cloud sync, no third-party memory service. Your data is plain files you can read, edit, and put in git.
+Each agent runs as a separate process. Planned: configurable isolation per agent — shared user, dedicated OS user, or Docker container.
+
+Everything runs on your machine. Config, memory, and conversation history are plain files — readable, editable, and git-trackable. Single Go binary, no extra runtime required.
 
 ---
 
