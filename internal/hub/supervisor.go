@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 const (
@@ -39,6 +40,7 @@ type Supervisor struct {
 	credentialsPath string // path to credentials.toml; "" → default
 	agentTokens     AgentTokens
 	logger          *slog.Logger
+	messenger       messaging.Messenger // for publishing agent logs to NATS
 	noColor         bool
 
 	mu     sync.Mutex
@@ -124,6 +126,24 @@ func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credential
 		credentialsPath: credentialsPath,
 		agentTokens:     agentTokens,
 		logger:          logger,
+		noColor:         noColor,
+		agents:          make(map[string]*managedAgent),
+	}
+}
+
+// NewSupervisorWithMessenger creates a Supervisor with a messenger for log publishing.
+func NewSupervisorWithMessenger(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool, messenger messaging.Messenger) *Supervisor {
+	if agentTokens == nil {
+		agentTokens = make(AgentTokens)
+	}
+	return &Supervisor{
+		cfg:             cfg,
+		natsURL:         natsURL,
+		selfBin:         selfBin,
+		credentialsPath: credentialsPath,
+		agentTokens:     agentTokens,
+		logger:          logger,
+		messenger:       messenger,
 		noColor:         noColor,
 		agents:          make(map[string]*managedAgent),
 	}
@@ -361,10 +381,17 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	}
 
 	// Pipe agent stdout/stderr through JSON log reader for unified pretty output.
+	// If messenger is set, logs are also published to NATS for 'zlaw agent logs' clients.
 	label := fmt.Sprintf("[agent:%s]", entry.Name)
 	color := AgentColor(entry.Name)
-	cmd.Stdout = newAgentLogWriter(label, color, s.noColor)
-	cmd.Stderr = newAgentLogWriter(label, color, s.noColor)
+	stdoutWriter := newAgentLogWriter(label, color, s.noColor)
+	stderrWriter := newAgentLogWriter(label, color, s.noColor)
+	if s.messenger != nil {
+		stdoutWriter = stdoutWriter.withMessenger(s.messenger, entry.Name)
+		stderrWriter = stderrWriter.withMessenger(s.messenger, entry.Name)
+	}
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 
 	// Inject credentials from the hub's credentials store.
 	credEnv, err := BuildCredentialEnv(entry, s.credentialsPath)

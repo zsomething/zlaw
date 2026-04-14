@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
+
+	"github.com/nats-io/nats.go"
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
 	"github.com/zsomething/zlaw/internal/logging"
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 // StartHub loads the hub config and starts the hub process.
@@ -46,7 +50,10 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("start registry: %w", err)
 	}
 
-	sup := hub.NewSupervisorWithOptions(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor)
+	// Create a messenger from the NATS connection for log publishing.
+	messenger := &natsMessengerAdapter{conn: result.Conn}
+
+	sup := hub.NewSupervisorWithMessenger(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor, messenger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
 	}
@@ -108,3 +115,44 @@ func setupHubLogger(logger *slog.Logger, noColor bool) *slog.Logger {
 	h := logging.NewPrettyHandler(os.Stderr, opts)
 	return slog.New(h)
 }
+
+// natsMessengerAdapter adapts *nats.Conn to messaging.Messenger interface.
+type natsMessengerAdapter struct {
+	conn *nats.Conn
+}
+
+func (a *natsMessengerAdapter) Publish(_ context.Context, subject string, payload []byte) error {
+	return a.conn.Publish(subject, payload)
+}
+
+func (a *natsMessengerAdapter) Subscribe(_ context.Context, subject string, handler func([]byte)) (messaging.Subscription, error) {
+	sub, err := a.conn.Subscribe(subject, func(msg *nats.Msg) {
+		handler(msg.Data)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &natsSubscription{sub: sub}, nil
+}
+
+func (a *natsMessengerAdapter) Request(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error) {
+	msg, err := a.conn.RequestWithContext(ctx, subject, payload)
+	if err != nil {
+		return nil, err
+	}
+	return msg.Data, nil
+}
+
+func (a *natsMessengerAdapter) JetStream() messaging.JetStreamer {
+	return nil // Hub doesn't need JetStream for log publishing
+}
+
+type natsSubscription struct {
+	sub *nats.Subscription
+}
+
+func (s *natsSubscription) Unsubscribe() error {
+	return s.sub.Unsubscribe()
+}
+
+var _ messaging.Messenger = (*natsMessengerAdapter)(nil)

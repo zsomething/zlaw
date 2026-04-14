@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 // Color represents ANSI terminal colors.
@@ -240,13 +242,15 @@ func ApplyHandlerOptions(h *ColoredHandler, opts ...ColoredHandlerOption) *Color
 }
 
 // agentLogWriter reads JSON log lines from the agent process and writes
-// them in pretty format to stdout.
+// them in pretty format to stdout and optionally publishes to NATS.
 type agentLogWriter struct {
-	label   string
-	color   Color
-	noColor bool
-	buf     strings.Builder
-	mu      sync.Mutex
+	label     string
+	color     Color
+	noColor   bool
+	buf       strings.Builder
+	mu        sync.Mutex
+	messenger messaging.Messenger
+	agentName string
 }
 
 // newAgentLogWriter creates a writer that reformats agent JSON logs.
@@ -256,6 +260,13 @@ func newAgentLogWriter(label string, color Color, noColor bool) *agentLogWriter 
 		color:   color,
 		noColor: noColor,
 	}
+}
+
+// withMessenger sets the messenger for NATS publishing.
+func (w *agentLogWriter) withMessenger(m messaging.Messenger, agentName string) *agentLogWriter {
+	w.messenger = m
+	w.agentName = agentName
+	return w
 }
 
 func (w *agentLogWriter) Write(p []byte) (n int, err error) {
@@ -314,6 +325,13 @@ func (w *agentLogWriter) writeLine(line string) {
 	if v, ok := raw["msg"]; ok {
 		json.Unmarshal(v, &msg)
 	}
+
+	// Build agent field from agentName if not in raw
+	agent := w.agentName
+	if v, ok := raw["agent"]; ok {
+		json.Unmarshal(v, &agent)
+	}
+
 	for k, v := range raw {
 		if k == "time" || k == "level" || k == "msg" || k == "agent" {
 			continue
@@ -321,6 +339,32 @@ func (w *agentLogWriter) writeLine(line string) {
 		var val any
 		json.Unmarshal(v, &val)
 		attrs = append(attrs, k+"="+formatAttr(val))
+	}
+
+	// Publish to NATS if messenger is set
+	if w.messenger != nil && agent != "" {
+		// Reconstruct JSON with agent field for NATS publishing
+		logData := make(map[string]any)
+		logData["agent"] = agent
+		logData["level"] = level
+		logData["msg"] = msg
+		if t, ok := raw["time"]; ok {
+			var timeStr string
+			json.Unmarshal(t, &timeStr)
+			logData["time"] = timeStr
+		}
+		for k, v := range raw {
+			if k == "time" || k == "level" || k == "msg" || k == "agent" {
+				continue
+			}
+			var val any
+			json.Unmarshal(v, &val)
+			logData[k] = val
+		}
+		payload, _ := json.Marshal(logData)
+		// Publish to both global and per-agent subjects
+		w.messenger.Publish(context.Background(), "zlaw.logs", payload)
+		w.messenger.Publish(context.Background(), fmt.Sprintf("agent.%s.logs", agent), payload)
 	}
 
 	// Format: [agent:name] LEVEL msg  key=value...
