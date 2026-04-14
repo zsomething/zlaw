@@ -127,6 +127,10 @@ func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *conf
 	delegateTool := &builtin.AgentDelegate{AgentID: cfg.Agent.ID}
 	registry.Register(delegateTool)
 
+	// Agent discovery tools — read-only, available to all agents.
+	registry.Register(&builtin.ListAgents{Registry: builtin.NewAgentRegistry(nil)})
+	registry.Register(&builtin.GetAgent{Registry: builtin.NewAgentRegistry(nil)})
+
 	memStore := buildMemoryStore(ctx, cfg, "", logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})

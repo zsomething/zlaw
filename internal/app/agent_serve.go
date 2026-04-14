@@ -84,6 +84,12 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
 
+	// Discovery tools — read-only, available to all agents. Messenger injected below.
+	listAgentsTool := &builtin.ListAgents{Registry: builtin.NewAgentRegistry(nil)}
+	getAgentTool := &builtin.GetAgent{Registry: builtin.NewAgentRegistry(nil)}
+	registry.Register(listAgentsTool)
+	registry.Register(getAgentTool)
+
 	applyToolConfig(cfg, registry, logger)
 
 	history, err := buildHistory(cfg.Agent.ID, "daemon", logger)
@@ -172,6 +178,11 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 		regCache := agent.NewRegistryCache(logger)
 		delegateTool.Messenger = nm
 		delegateTool.Registry = regCache
+
+		// Inject messenger into discovery tools so they can query zlaw.registry.list.
+		listAgentsTool.Registry = builtin.NewAgentRegistry(nm)
+		getAgentTool.Registry = builtin.NewAgentRegistry(nm)
+
 		go func() {
 			if err := regCache.Start(ctx, nm); err != nil && ctx.Err() == nil {
 				logger.Warn("registry cache stopped unexpectedly", "err", err)
