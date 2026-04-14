@@ -11,11 +11,14 @@ import (
 )
 
 // StartHub loads the hub config and starts the hub process.
-func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger) error {
+func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
 	cfg, err := config.LoadHubConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
 	}
+
+	// Wrap logger with hub prefix and color.
+	logger = setupHubLogger(logger, noColor)
 
 	result, err := hub.StartNATS(ctx, cfg, externalNATSURL, logger)
 	if err != nil {
@@ -42,7 +45,7 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("start registry: %w", err)
 	}
 
-	sup := hub.NewSupervisor(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger)
+	sup := hub.NewSupervisorWithOptions(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
 	}
@@ -91,4 +94,11 @@ func HubStatus() error {
 	fmt.Println("Hub status: not running")
 	fmt.Println("(Phase 2 will query the supervisor process via Unix socket)")
 	return nil
+}
+
+// setupHubLogger wraps the logger with hub prefix and color.
+func setupHubLogger(logger *slog.Logger, noColor bool) *slog.Logger {
+	h := hub.NewColoredHandler(logger.Handler(), &noColor)
+	h = hub.ApplyHandlerOptions(h, hub.WithLabel("[hub]"), hub.WithColor(hub.LabelColor))
+	return slog.New(h)
 }

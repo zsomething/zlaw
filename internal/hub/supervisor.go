@@ -39,6 +39,7 @@ type Supervisor struct {
 	credentialsPath string // path to credentials.toml; "" → default
 	agentTokens     AgentTokens
 	logger          *slog.Logger
+	noColor         bool
 
 	mu     sync.Mutex
 	agents map[string]*managedAgent
@@ -106,6 +107,24 @@ func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath strin
 		credentialsPath: credentialsPath,
 		agentTokens:     agentTokens,
 		logger:          logger,
+		noColor:         DefaultNoColor(),
+		agents:          make(map[string]*managedAgent),
+	}
+}
+
+// NewSupervisorWithOptions creates a Supervisor with explicit options.
+func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool) *Supervisor {
+	if agentTokens == nil {
+		agentTokens = make(AgentTokens)
+	}
+	return &Supervisor{
+		cfg:             cfg,
+		natsURL:         natsURL,
+		selfBin:         selfBin,
+		credentialsPath: credentialsPath,
+		agentTokens:     agentTokens,
+		logger:          logger,
+		noColor:         noColor,
 		agents:          make(map[string]*managedAgent),
 	}
 }
@@ -328,8 +347,12 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	}
 
 	cmd := exec.Command(bin, args...) //nolint:gosec
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	// Wrap stdout/stderr with agent-specific line prefixer.
+	label := fmt.Sprintf("[%s]", entry.Name)
+	color := AgentColor(entry.Name)
+	cmd.Stdout = NewColoredLinePrefixWriter(os.Stdout, label, color, s.noColor)
+	cmd.Stderr = NewColoredLinePrefixWriter(os.Stderr, label, color, s.noColor)
 
 	// Build environment: inherit everything, override/add hub-specific vars.
 	env := os.Environ()

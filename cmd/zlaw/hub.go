@@ -6,6 +6,7 @@ import (
 
 	"github.com/zsomething/zlaw/internal/app"
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/hub"
 )
 
 type HubCmd struct {
@@ -18,6 +19,7 @@ type HubCmd struct {
 type HubStartCmd struct {
 	Config  string `help:"path to zlaw.toml"`
 	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
+	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
 }
 
 func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
@@ -25,7 +27,10 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	return app.StartHub(ctx, configPath, c.NatsURL, logger)
+	if c.NoColor || hub.DefaultNoColor() {
+		return app.StartHub(ctx, configPath, c.NatsURL, logger, true)
+	}
+	return app.StartHub(ctx, configPath, c.NatsURL, logger, false)
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
