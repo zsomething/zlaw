@@ -41,9 +41,9 @@ func matchesCron(schedule string, t time.Time) (bool, error) {
 
 // matchField checks if val is matched by a single cron field expression,
 // which may be a comma-separated list of parts.
-func matchField(expr string, val, min, max int) (bool, error) {
+func matchField(expr string, val, lo, hi int) (bool, error) {
 	for _, part := range strings.Split(expr, ",") {
-		ok, err := matchPart(part, val, min, max)
+		ok, err := matchPart(part, val, lo, hi)
 		if err != nil {
 			return false, err
 		}
@@ -56,7 +56,7 @@ func matchField(expr string, val, min, max int) (bool, error) {
 
 // matchPart checks a single (non-comma) cron field part.
 // Supports: *, N, N-M, */N, N-M/N.
-func matchPart(part string, val, min, max int) (bool, error) {
+func matchPart(part string, val, lo, hi int) (bool, error) {
 	step := 1
 	if idx := strings.Index(part, "/"); idx != -1 {
 		s, err := strconv.Atoi(part[idx+1:])
@@ -67,10 +67,10 @@ func matchPart(part string, val, min, max int) (bool, error) {
 		part = part[:idx]
 	}
 
-	var lo, hi int
+	var low, high int
 	switch {
 	case part == "*":
-		lo, hi = min, max
+		low, high = lo, hi
 	case strings.Contains(part, "-"):
 		idx := strings.Index(part, "-")
 		a, err1 := strconv.Atoi(part[:idx])
@@ -78,16 +78,16 @@ func matchPart(part string, val, min, max int) (bool, error) {
 		if err1 != nil || err2 != nil {
 			return false, fmt.Errorf("invalid range in %q", part)
 		}
-		lo, hi = a, b
+		low, high = a, b
 	default:
 		n, err := strconv.Atoi(part)
 		if err != nil {
 			return false, fmt.Errorf("invalid value in %q", part)
 		}
-		lo, hi = n, n
+		low, high = n, n
 	}
 
-	for v := lo; v <= hi; v += step {
+	for v := low; v <= high; v += step {
 		if v == val {
 			return true, nil
 		}

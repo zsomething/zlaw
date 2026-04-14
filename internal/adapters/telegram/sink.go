@@ -23,7 +23,7 @@ type chatSink struct {
 	logger *slog.Logger
 
 	mu       sync.Mutex
-	msgID    int            // ID of the in-progress bot message; 0 = none
+	msgID    int // ID of the in-progress bot message; 0 = none
 	buf      strings.Builder
 	lastEdit time.Time
 }

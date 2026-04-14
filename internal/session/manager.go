@@ -111,11 +111,11 @@ func (m *Manager) runSession(ctx context.Context, s *Session) {
 func (m *Manager) processTurn(ctx context.Context, s *Session, t turnInput, log *slog.Logger) {
 	m.activeTurns.Add(1)
 	defer m.activeTurns.Done()
-	stopTyping := s.Broadcaster.StartTyping(t.ctx, 4*time.Second)
+	stopTyping := s.Broadcaster.StartTyping(t.ctx, 4*time.Second) //nolint:contextcheck // t.ctx is the per-turn context, not the session loop ctx
 	defer stopTyping()
 
-	text, err := m.runner.RunStream(t.ctx, s.ID, t.input, m.sysPromptFn(), func(delta string) {
-		s.Broadcaster.Broadcast(t.ctx, Event{
+	text, err := m.runner.RunStream(t.ctx, s.ID, t.input, m.sysPromptFn(), func(delta string) { //nolint:contextcheck
+		s.Broadcaster.Broadcast(t.ctx, Event{ //nolint:contextcheck
 			Type:      EventAssistantDelta,
 			SessionID: s.ID,
 			Data:      delta,

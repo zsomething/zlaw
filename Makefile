@@ -6,7 +6,7 @@ BINARY    := $(CURDIR)/zlaw
 -include .env
 export
 
-.PHONY: build serve attach auth-login auth-list test clean help
+.PHONY: build serve attach auth-login auth-list test clean hooks help
 
 ## build: compile the zlaw binary
 build:
@@ -32,6 +32,15 @@ auth-login: build
 ## auth-list: list stored credential profiles
 auth-list: build
 	ZLAW_HOME=$(ZLAW_HOME) $(BINARY) auth list
+
+## hooks: install git hooks from .githooks/
+hooks:
+	@for hook in .githooks/*; do \
+		name=$$(basename $$hook); \
+		cp $$hook .git/hooks/$$name; \
+		chmod +x .git/hooks/$$name; \
+		echo "installed .git/hooks/$$name"; \
+	done
 
 ## test: run all tests
 test:

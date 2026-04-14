@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/zsomething/zlaw/internal/config"
 )
 

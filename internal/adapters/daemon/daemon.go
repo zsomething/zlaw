@@ -85,10 +85,10 @@ func (d *Daemon) Serve(ctx context.Context, drainTimeout time.Duration) error {
 
 	// Graceful drain: notify attached clients and wait for in-flight turns.
 	d.logger.Info("daemon: draining in-flight turns", "timeout", drainTimeout)
-	drainCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	drainCtx, cancel := context.WithTimeout(context.Background(), drainTimeout) //nolint:contextcheck // intentionally independent from cancelled ctx
 	defer cancel()
-	d.manager.BroadcastAll(drainCtx, session.Event{Type: session.EventShutdown})
-	d.manager.Drain(drainCtx)
+	d.manager.BroadcastAll(drainCtx, session.Event{Type: session.EventShutdown}) //nolint:contextcheck
+	d.manager.Drain(drainCtx)                                                    //nolint:contextcheck
 	if drainCtx.Err() != nil {
 		d.logger.Warn("daemon: drain timeout exceeded, forcing shutdown")
 	} else {

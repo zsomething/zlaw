@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zsomething/zlaw/internal/config"
 	"gopkg.in/yaml.v3"
+
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // Memory is a single long-term memory entry stored per agent.

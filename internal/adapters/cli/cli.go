@@ -34,7 +34,7 @@ type SkillLoader func(name string) (string, error)
 // Adapter connects the agent loop to a terminal or piped stdin.
 type Adapter struct {
 	agent        Runner
-	cmds         *slashcmd.Registry     // slash command dispatcher
+	cmds         *slashcmd.Registry      // slash command dispatcher
 	history      slashcmd.HistoryManager // optional; backs /clear and /history
 	in           io.Reader
 	out          io.Writer
@@ -237,7 +237,6 @@ func (a *Adapter) maybeInjectPrefill(sessionID, input string) (string, error) {
 	}
 	return preamble + "\n" + input, nil
 }
-
 
 // printVerbose writes thinking blocks and tool calls to out before the response.
 func (a *Adapter) printVerbose(r agent.Result) {

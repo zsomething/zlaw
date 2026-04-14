@@ -12,7 +12,7 @@ type AgentServeCmd struct {
 }
 
 func (c *AgentServeCmd) Run(ctx context.Context, logger *slog.Logger) error {
-	agentDir, err := c.AgentFlags.resolveDir()
+	agentDir, err := c.resolveDir()
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,9 @@
 # zlaw
 
-[![Go](https://github.com/chickenzord/zlaw/actions/workflows/go.yml/badge.svg)](https://github.com/chickenzord/zlaw/actions/workflows/go.yml)
-[![Lint](https://github.com/chickenzord/zlaw/actions/workflows/lint.yml/badge.svg)](https://github.com/chickenzord/zlaw/actions/workflows/lint.yml)
-[![codecov](https://codecov.io/gh/chickenzord/zlaw/branch/main/graph/badge.svg)](https://codecov.io/gh/chickenzord/zlaw)
-[![Go version](https://img.shields.io/github/go-mod/go-version/chickenzord/zlaw)](go.mod)
+[![Go](https://github.com/zsomething/zlaw/actions/workflows/go.yml/badge.svg)](https://github.com/zsomething/zlaw/actions/workflows/go.yml)
+[![Lint](https://github.com/zsomething/zlaw/actions/workflows/lint.yml/badge.svg)](https://github.com/zsomething/zlaw/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/zsomething/zlaw/branch/main/graph/badge.svg)](https://codecov.io/gh/zsomething/zlaw)
+[![Go version](https://img.shields.io/github/go-mod/go-version/zsomething/zlaw)](go.mod)
 
 > **Work in progress.** This project is under active development and not ready for everyday use. Expect breaking changes, missing features, and rough edges.
 

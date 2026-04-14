@@ -38,14 +38,6 @@ linters:
         - fmt.Fprintf
         - fmt.Fprintln
 
-formatters:
-  enable:
-    - goimports       # import grouping + gofmt formatting
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/zsomething/zlaw
-
 run:
   tests: false
 

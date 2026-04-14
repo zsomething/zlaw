@@ -93,7 +93,7 @@ func (a *Agent) SetMemoryStore(store MemoryStore, maxTokens int) {
 func (a *Agent) SetContextTokenBudget(budget int) {
 	a.optimizer = NewContextOptimizer(
 		ContextOptimizerConfig{TokenBudget: budget},
-		nil,   // no summarizer
+		nil, // no summarizer
 		a.logger,
 	)
 }

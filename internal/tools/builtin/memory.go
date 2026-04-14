@@ -109,9 +109,7 @@ func (t MemoryRecall) Execute(_ context.Context, raw json.RawMessage) (string, e
 
 	var keywords []string
 	if input.Query != "" {
-		for _, w := range strings.Fields(input.Query) {
-			keywords = append(keywords, w)
-		}
+		keywords = append(keywords, strings.Fields(input.Query)...)
 	}
 
 	memories, err := t.Store.Search(keywords)

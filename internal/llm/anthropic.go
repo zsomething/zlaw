@@ -369,11 +369,11 @@ func fromAnthropicResponse(ar anthropicResponse) (Response, error) {
 
 // streamBlock tracks an in-progress content block during streaming.
 type streamBlock struct {
-	blockType  string
-	text       strings.Builder
-	toolID     string
-	toolName   string
-	toolInput  strings.Builder
+	blockType string
+	text      strings.Builder
+	toolID    string
+	toolName  string
+	toolInput strings.Builder
 }
 
 func parseAnthropicStream(body io.Reader, handler StreamHandler) (Response, error) {

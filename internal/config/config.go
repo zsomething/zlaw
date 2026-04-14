@@ -200,11 +200,11 @@ var runtimeFieldAllowlist = map[string]struct{}{
 
 // Loader loads and watches configuration files for a single agent.
 type Loader struct {
-	dir            string
-	onChange       func(AgentConfig, Personality)
-	onCronChange   func(CronConfig)
-	watcher        *fsnotify.Watcher
-	logger         *slog.Logger
+	dir          string
+	onChange     func(AgentConfig, Personality)
+	onCronChange func(CronConfig)
+	watcher      *fsnotify.Watcher
+	logger       *slog.Logger
 
 	mu          sync.Mutex
 	staticCfg   AgentConfig // from agent.toml; set once in Load, never mutated
@@ -334,7 +334,7 @@ func (l *Loader) Watch(ctx context.Context) error {
 	if err := l.watcher.Add(l.dir); err != nil {
 		return fmt.Errorf("watch dir %s: %w", l.dir, err)
 	}
-	defer l.watcher.Close()
+	defer l.watcher.Close() //nolint:errcheck
 
 	for {
 		select {

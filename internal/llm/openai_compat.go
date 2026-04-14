@@ -12,6 +12,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
+
 	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
@@ -137,7 +138,7 @@ func toOpenAIParams(req Request, model string, defaultMaxTokens int) (openai.Cha
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Model:     openai.ChatModel(model),
+		Model:     model,
 		Messages:  msgs,
 		MaxTokens: openai.Int(int64(maxTokens)),
 	}
@@ -249,7 +250,7 @@ func fromOpenAICompletion(c *openai.ChatCompletion) (Response, error) {
 			Role:    RoleAssistant,
 			Content: blocks,
 		},
-		StopReason: normalizeStopReason(string(choice.FinishReason)),
+		StopReason: normalizeStopReason(choice.FinishReason),
 		Usage: Usage{
 			InputTokens:  int(c.Usage.PromptTokens),
 			OutputTokens: int(c.Usage.CompletionTokens),
@@ -280,7 +281,7 @@ func fromOpenAIAccumulator(acc openai.ChatCompletionAccumulator) (Response, erro
 			Role:    RoleAssistant,
 			Content: blocks,
 		},
-		StopReason: normalizeStopReason(string(choice.FinishReason)),
+		StopReason: normalizeStopReason(choice.FinishReason),
 		Usage: Usage{
 			InputTokens:  int(acc.Usage.PromptTokens),
 			OutputTokens: int(acc.Usage.CompletionTokens),

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats-server/v2/server"
+
 	"github.com/zsomething/zlaw/internal/config"
 )
 

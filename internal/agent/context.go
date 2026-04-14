@@ -70,7 +70,7 @@ When you learn something worth retaining — user preferences, facts, decisions,
 // BuildSkillsSection returns a formatted [Available Skills] block for injection
 // into the system prompt. Each skill is listed as:
 //
-//	- <name>: <description>
+//   - <name>: <description>
 //
 // Returns an empty string when skills is empty.
 func BuildSkillsSection(discovered []skills.Skill) string {
@@ -89,7 +89,7 @@ func BuildSkillsSection(discovered []skills.Skill) string {
 // the system prompt. Memories are listed in reverse-update order (most recent
 // first). Each entry is formatted as:
 //
-//	- <content> #tag1 #tag2
+//   - <content> #tag1 #tag2
 //
 // When maxTokens > 0 entries are truncated so the block fits within the budget
 // (1 token ≈ 4 chars). Returns an empty string when store is nil or has no

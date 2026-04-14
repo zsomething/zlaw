@@ -21,7 +21,7 @@ func Load(path string) error {
 func LoadCwd() error {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil
+		return nil //nolint:nilerr // best-effort: skip .env if cwd is unavailable
 	}
 	return Load(cwd + "/.env")
 }

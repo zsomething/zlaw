@@ -90,14 +90,14 @@ func globMatch(root, pattern string) ([]string, error) {
 	var matches []string
 	err := filepath.WalkDir(searchRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // skip unreadable entries
+			return nil //nolint:nilerr // skip unreadable entries
 		}
 		if d.IsDir() {
 			return nil
 		}
 		rel, err := filepath.Rel(searchRoot, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 		// Match the relative path against the suffix pattern.
 		// This handles cases like "internal/*.go" where the suffix itself has a dir component.

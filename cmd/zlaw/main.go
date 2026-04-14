@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
+
 	"github.com/zsomething/zlaw/internal/dotenv"
 )
 

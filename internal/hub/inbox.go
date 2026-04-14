@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/nats-io/nats.go"
+
 	"github.com/zsomething/zlaw/internal/config"
 )
 

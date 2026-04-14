@@ -199,7 +199,7 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 		if emb.AuthProfile == "" {
 			emb.AuthProfile = cfg.LLM.AuthProfile
 		}
-		embedFunc, err := agent.NewEmbeddingFunc(emb, credPath)
+		embedFunc, err := agent.NewEmbeddingFunc(emb, credPath) //nolint:contextcheck // NewEmbeddingFunc does not take a context
 		if err != nil {
 			logger.Warn("failed to build embedder, falling back to keyword search", "error", err)
 			return agent.NewMarkdownFileStore(dir)

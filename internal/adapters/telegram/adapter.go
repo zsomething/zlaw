@@ -102,13 +102,13 @@ func (a *Adapter) Run(ctx context.Context) error {
 	offset := 0
 	for {
 		if ctx.Err() != nil {
-			return nil
+			return nil //nolint:nilerr // graceful shutdown on context cancellation
 		}
 
 		updates, err := a.bot.GetUpdates(ctx, offset, 30)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return nil //nolint:nilerr // graceful shutdown on context cancellation
 			}
 			a.logger.Error("telegram: getUpdates failed", "error", err)
 			select {
@@ -178,9 +178,8 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 
 	// Ensure a chatSink exists for this chat and is registered with the session.
 	a.mu.Lock()
-	sink, exists := a.sinks[chatID]
-	if !exists {
-		sink = newChatSink(a.bot, chatID, a.logger)
+	if _, exists := a.sinks[chatID]; !exists {
+		sink := newChatSink(a.bot, chatID, a.logger)
 		a.sinks[chatID] = sink
 		s := a.manager.GetOrCreate(ctx, sid)
 		s.Broadcaster.Add(sink)
