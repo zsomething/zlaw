@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/zsomething/zlaw/internal/dotenv"
+	"github.com/zsomething/zlaw/internal/logging"
 )
 
 var cli struct {
@@ -22,9 +23,10 @@ var cli struct {
 func main() {
 	_ = dotenv.LoadCwd()
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: logLevel(),
-	}))
+	logger := logging.Logger("[zlaw]", logging.ColorGray)
+	if os.Getenv("ZLAW_LOG_LEVEL") == "debug" {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

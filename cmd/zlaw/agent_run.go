@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 
 	"github.com/zsomething/zlaw/internal/app"
+	"github.com/zsomething/zlaw/internal/logging"
 )
 
 type AgentRunCmd struct {
@@ -19,6 +21,24 @@ func (c *AgentRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+
+	// Wrap logger with agent label for PrettyHandler mode.
+	name := os.Getenv("ZLAW_AGENT")
+	if name == "" {
+		name = c.Agent
+	}
+	if name != "" && logging.DetectFormat() != logging.LogFormatJSON {
+		label := "[agent:" + name + "]"
+		color := logging.AgentColor(name)
+		opts := logging.Options{
+			Label:   label,
+			Color:   color,
+			NoColor: logging.DetectNoColor(),
+			Time:    logging.DetectTimeFormat(),
+		}
+		logger = logging.LoggerWithOptions(opts)
+	}
+
 	return app.RunAgent(ctx, agentDir, app.AgentRunOptions{
 		Session:   c.Session,
 		Verbose:   c.Verbose,

@@ -1,12 +1,15 @@
 package hub
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Color represents ANSI terminal colors.
@@ -234,4 +237,162 @@ func ApplyHandlerOptions(h *ColoredHandler, opts ...ColoredHandlerOption) *Color
 		opt(h)
 	}
 	return h
+}
+
+// agentLogWriter reads JSON log lines from the agent process and writes
+// them in pretty format to stdout.
+type agentLogWriter struct {
+	label   string
+	color   Color
+	noColor bool
+	buf     strings.Builder
+	mu      sync.Mutex
+}
+
+// newAgentLogWriter creates a writer that reformats agent JSON logs.
+func newAgentLogWriter(label string, color Color, noColor bool) *agentLogWriter {
+	return &agentLogWriter{
+		label:   label,
+		color:   color,
+		noColor: noColor,
+	}
+}
+
+func (w *agentLogWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Accumulate bytes until we have a complete line
+	w.buf.Write(p)
+
+	for {
+		data := w.buf.String()
+		lines := strings.Split(data, "\n")
+
+		// If we don't have a complete line, break
+		if len(lines) <= 1 && !strings.HasSuffix(data, "\n") {
+			break
+		}
+
+		// Process all complete lines
+		for i := 0; i < len(lines)-1; i++ {
+			line := strings.TrimSpace(lines[i])
+			if line != "" {
+				w.writeLine(line)
+			}
+		}
+
+		// Keep incomplete line in buffer
+		if strings.HasSuffix(data, "\n") {
+			w.buf.Reset()
+		} else {
+			w.buf.Reset()
+			w.buf.WriteString(lines[len(lines)-1])
+		}
+		break
+	}
+
+	return len(p), nil
+}
+
+func (w *agentLogWriter) writeLine(line string) {
+	// Try to parse as JSON log entry
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		// Not JSON, just print as-is with prefix
+		fmt.Fprintln(os.Stdout, w.prefix("")+line)
+		return
+	}
+
+	// Extract fields
+	var level, msg string
+	var attrs []string
+
+	if v, ok := raw["level"]; ok {
+		json.Unmarshal(v, &level)
+	}
+	if v, ok := raw["msg"]; ok {
+		json.Unmarshal(v, &msg)
+	}
+	for k, v := range raw {
+		if k == "time" || k == "level" || k == "msg" || k == "agent" {
+			continue
+		}
+		var val any
+		json.Unmarshal(v, &val)
+		attrs = append(attrs, k+"="+formatAttr(val))
+	}
+
+	// Format: [agent:name] LEVEL msg  key=value...
+	var sb strings.Builder
+	sb.WriteString(w.prefix(level))
+	sb.WriteString("  ")
+	sb.WriteString(msg)
+	for _, a := range attrs {
+		sb.WriteString("  ")
+		sb.WriteString(a)
+	}
+	fmt.Fprintln(os.Stdout, sb.String())
+}
+
+func (w *agentLogWriter) prefix(level string) string {
+	if w.noColor {
+		return w.label + " " + strings.ToUpper(fmt.Sprintf("%-5s", level))
+	}
+
+	coloredLabel := Colorize(w.color, w.label)
+
+	levelColor := levelColorFor(level)
+	coloredLevel := Colorize(levelColor, strings.ToUpper(fmt.Sprintf("%-5s", level)))
+
+	return coloredLabel + " " + coloredLevel
+}
+
+func levelColorFor(level string) Color {
+	switch strings.ToLower(level) {
+	case "debug":
+		return ColorGray
+	case "info":
+		return ColorGreen
+	case "warn", "warning":
+		return ColorYellow
+	case "error":
+		return ColorRed
+	default:
+		return ColorDefault
+	}
+}
+
+func formatAttr(v any) string {
+	switch val := v.(type) {
+	case string:
+		if strings.Contains(val, " ") || strings.Contains(val, "=") || strings.Contains(val, "\"") {
+			return fmt.Sprintf("%q", val)
+		}
+		return val
+	case nil:
+		return "<nil>"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// pipeAgentLogs spawns a goroutine that reads from r and writes pretty logs.
+// Returns a writer that the caller should set as the process stdout/stderr.
+func pipeAgentLogs(r io.Reader, label string, color Color, noColor bool) io.Writer {
+	pr, pw := io.Pipe()
+	w := newAgentLogWriter(label, color, noColor)
+
+	go func() {
+		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				w.writeLine(line)
+			}
+		}
+	}()
+
+	return pw
 }

@@ -348,19 +348,23 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 
 	cmd := exec.Command(bin, args...) //nolint:gosec
 
-	// Wrap stdout/stderr with agent-specific line prefixer.
-	label := fmt.Sprintf("[%s]", entry.Name)
-	color := AgentColor(entry.Name)
-	cmd.Stdout = NewColoredLinePrefixWriter(os.Stdout, label, color, s.noColor)
-	cmd.Stderr = NewColoredLinePrefixWriter(os.Stderr, label, color, s.noColor)
-
 	// Build environment: inherit everything, override/add hub-specific vars.
+	// ZLAW_LOG_FORMAT=json makes the agent output structured JSON that we relay
+	// with PrettyHandler. This allows unified log formatting at the hub.
 	env := os.Environ()
 	env = SetEnv(env, "ZLAW_AGENT", entry.Name)
 	env = SetEnv(env, "ZLAW_NATS_URL", s.natsURL)
+	env = SetEnv(env, "ZLAW_LOG_FORMAT", "json")
+	env = SetEnv(env, "ZLAW_NO_COLOR", "1") // colors applied by hub's PrettyHandler
 	if agentDir != "" {
 		env = SetEnv(env, "ZLAW_AGENT_DIR", agentDir)
 	}
+
+	// Pipe agent stdout/stderr through JSON log reader for unified pretty output.
+	label := fmt.Sprintf("[agent:%s]", entry.Name)
+	color := AgentColor(entry.Name)
+	cmd.Stdout = newAgentLogWriter(label, color, s.noColor)
+	cmd.Stderr = newAgentLogWriter(label, color, s.noColor)
 
 	// Inject credentials from the hub's credentials store.
 	credEnv, err := BuildCredentialEnv(entry, s.credentialsPath)

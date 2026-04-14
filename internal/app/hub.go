@@ -8,6 +8,7 @@ import (
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
+	"github.com/zsomething/zlaw/internal/logging"
 )
 
 // StartHub loads the hub config and starts the hub process.
@@ -98,7 +99,12 @@ func HubStatus() error {
 
 // setupHubLogger wraps the logger with hub prefix and color.
 func setupHubLogger(logger *slog.Logger, noColor bool) *slog.Logger {
-	h := hub.NewColoredHandler(logger.Handler(), &noColor)
-	h = hub.ApplyHandlerOptions(h, hub.WithLabel("[hub]"), hub.WithColor(hub.LabelColor))
+	opts := logging.Options{
+		Label:   "[hub]",
+		Color:   logging.ColorGray,
+		NoColor: noColor,
+		Time:    logging.DetectTimeFormat(),
+	}
+	h := logging.NewPrettyHandler(os.Stderr, opts)
 	return slog.New(h)
 }
