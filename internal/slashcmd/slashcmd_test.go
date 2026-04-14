@@ -15,7 +15,7 @@ type stubHistory struct {
 	lines   map[string][]string
 }
 
-func (h *stubHistory) Clear(sessionID string)       { h.cleared = append(h.cleared, sessionID) }
+func (h *stubHistory) Clear(sessionID string)          { h.cleared = append(h.cleared, sessionID) }
 func (h *stubHistory) Lines(sessionID string) []string { return h.lines[sessionID] }
 
 func newRegistry() *slashcmd.Registry {
@@ -46,7 +46,7 @@ func TestDispatch_KnownCommandInvokesHandler(t *testing.T) {
 	r := slashcmd.New()
 	called := false
 	r.Register(slashcmd.Command{
-		Name:    "ping",
+		Name: "ping",
 		Handler: func(_ context.Context, _ string, _ slashcmd.Env) slashcmd.Response {
 			called = true
 			return slashcmd.Response{Text: "pong"}
@@ -217,8 +217,8 @@ func TestClear_FiresAfterClearCallback(t *testing.T) {
 	h := &stubHistory{}
 	var callbackArg string
 	env := slashcmd.Env{
-		SessionID: "s2",
-		History:   h,
+		SessionID:  "s2",
+		History:    h,
 		AfterClear: func(old string) { callbackArg = old },
 	}
 

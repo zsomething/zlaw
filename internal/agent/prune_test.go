@@ -128,10 +128,10 @@ func TestStripThinking_SingleTurn_NoOp(t *testing.T) {
 
 func TestStripThinking_StripsOldTurns(t *testing.T) {
 	msgs := []llm.Message{
-		pureThinkingMsg(llm.RoleAssistant, "plan stuff"),               // old: pure thinking block
-		thinkingMsg(llm.RoleAssistant, "answer", "some thought"),       // old: mixed block
-		textMsg(llm.RoleUser, "next question"),                         // start of recent turn
-		thinkingMsg(llm.RoleAssistant, "final answer", "keep this"),    // recent
+		pureThinkingMsg(llm.RoleAssistant, "plan stuff"),            // old: pure thinking block
+		thinkingMsg(llm.RoleAssistant, "answer", "some thought"),    // old: mixed block
+		textMsg(llm.RoleUser, "next question"),                      // start of recent turn
+		thinkingMsg(llm.RoleAssistant, "final answer", "keep this"), // recent
 	}
 	got := agent.StripThinking(msgs)
 
@@ -174,7 +174,7 @@ func TestStripToolResults_ClearsOldContent(t *testing.T) {
 		textMsg(llm.RoleUser, "run it"),
 		toolResultMsg("tu1", "big output"), // old turn
 		textMsg(llm.RoleUser, "next"),      // start of recent turn
-		toolResultMsg("tu2", "keep this"), // recent
+		toolResultMsg("tu2", "keep this"),  // recent
 	}
 	got := agent.StripToolResults(msgs)
 

@@ -168,9 +168,9 @@ func TestBuildSkillsSection_Empty(t *testing.T) {
 // stubStore is a minimal MemoryStore backed by a slice, for testing.
 type stubStore struct{ memories []agent.Memory }
 
-func (s *stubStore) Save(m agent.Memory) error    { s.memories = append(s.memories, m); return nil }
-func (s *stubStore) Delete(_ string) error        { return nil }
-func (s *stubStore) List() ([]agent.Memory, error) { return s.memories, nil }
+func (s *stubStore) Save(m agent.Memory) error                 { s.memories = append(s.memories, m); return nil }
+func (s *stubStore) Delete(_ string) error                     { return nil }
+func (s *stubStore) List() ([]agent.Memory, error)             { return s.memories, nil }
 func (s *stubStore) Search(_ []string) ([]agent.Memory, error) { return s.memories, nil }
 
 func TestBuildMemoriesSection_Format(t *testing.T) {

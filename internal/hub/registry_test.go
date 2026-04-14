@@ -178,13 +178,13 @@ func TestRegistry_InvalidMessage(t *testing.T) {
 
 	// Publish malformed JSON — should not panic.
 	nc.Publish("zlaw.registry", []byte("not-json")) //nolint:errcheck
-	nc.Flush()                                       //nolint:errcheck
+	nc.Flush()                                      //nolint:errcheck
 	time.Sleep(50 * time.Millisecond)
 
 	// Publish valid JSON but missing name.
 	data, _ := json.Marshal(map[string]any{"version": "1.0.0"})
 	nc.Publish("zlaw.registry", data) //nolint:errcheck
-	nc.Flush()                         //nolint:errcheck
+	nc.Flush()                        //nolint:errcheck
 	time.Sleep(50 * time.Millisecond)
 
 	if len(reg.List()) != 0 {

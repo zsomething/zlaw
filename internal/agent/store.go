@@ -14,15 +14,15 @@ import (
 // SessionMeta holds lightweight metadata about a session stored alongside the
 // JSONL message log as <sessionID>.meta.json.
 type SessionMeta struct {
-	SessionID   string    `json:"session_id"`
-	AgentName   string    `json:"agent_name"`
-	Channel     string    `json:"channel"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	MessageCount int      `json:"message_count"`
-	Title       string    `json:"title"`
-	TotalInputTokens  int `json:"total_input_tokens"`
-	TotalOutputTokens int `json:"total_output_tokens"`
+	SessionID         string    `json:"session_id"`
+	AgentName         string    `json:"agent_name"`
+	Channel           string    `json:"channel"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	MessageCount      int       `json:"message_count"`
+	Title             string    `json:"title"`
+	TotalInputTokens  int       `json:"total_input_tokens"`
+	TotalOutputTokens int       `json:"total_output_tokens"`
 }
 
 // SessionStore persists per-session message history and metadata.

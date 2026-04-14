@@ -51,7 +51,10 @@ func (m *mockSink) TypingCalls() int {
 	return m.typingCalls
 }
 
-func newLogger() interface{ Warn(string, ...any); Error(string, ...any) } {
+func newLogger() interface {
+	Warn(string, ...any)
+	Error(string, ...any)
+} {
 	return nil
 }
 

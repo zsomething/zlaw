@@ -86,8 +86,8 @@ func TestContextOptimizer_SummarizesBeforePruning(t *testing.T) {
 
 	opt := agent.NewContextOptimizer(agent.ContextOptimizerConfig{
 		TokenBudget:        3000, // exceeded by full history
-		SummarizeThreshold: 0.5, // trigger at 1500 tokens
-		SummarizeTurns:     2,   // collapse 2 oldest turns
+		SummarizeThreshold: 0.5,  // trigger at 1500 tokens
+		SummarizeTurns:     2,    // collapse 2 oldest turns
 	}, sum, nil)
 
 	got := opt.Optimize(context.Background(), msgs, 0)
