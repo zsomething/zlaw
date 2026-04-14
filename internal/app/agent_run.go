@@ -60,7 +60,7 @@ func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger
 
 	registry := buildToolRegistry(ctx, cfg, loader, logger)
 
-	discoveredSkills, err := skills.Discover(config.ZlawHome(), cfg.Agent.Name, logger)
+	discoveredSkills, err := skills.Discover(config.ZlawHome(), cfg.Agent.ID, logger)
 	if err != nil {
 		logger.Warn("skill discovery failed, continuing without skills", "error", err)
 		discoveredSkills = nil
@@ -69,7 +69,7 @@ func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger
 
 	applyToolConfig(cfg, registry, logger)
 
-	history, err := buildHistory(cfg.Agent.Name, "cli", logger)
+	history, err := buildHistory(cfg.Agent.ID, "cli", logger)
 	if err != nil {
 		return fmt.Errorf("create session history: %w", err)
 	}
@@ -162,7 +162,7 @@ func buildAgent(
 	discoveredSkills []skills.Skill,
 	logger *slog.Logger,
 ) *agent.Agent {
-	ag := agent.New(cfg.Agent.Name, llmClient, registry, history, logger)
+	ag := agent.New(cfg.Agent.ID, llmClient, registry, history, logger)
 	ag.SetStickyBlocks(stickyBlocks)
 	if len(discoveredSkills) > 0 {
 		ag.SetSkillsSection(agent.BuildSkillsSection(discoveredSkills))
@@ -182,7 +182,7 @@ func buildAgent(
 }
 
 func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath string, logger *slog.Logger) agent.MemoryStore {
-	dir, err := agent.MemoryDir(cfg.Agent.Name)
+	dir, err := agent.MemoryDir(cfg.Agent.ID)
 	if err != nil {
 		logger.Warn("cannot resolve memory dir, memory tools disabled", "error", err)
 		return nil

@@ -86,7 +86,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 
 	applyToolConfig(cfg, registry, logger)
 
-	history, err := buildHistory(cfg.Agent.Name, "daemon", logger)
+	history, err := buildHistory(cfg.Agent.ID, "daemon", logger)
 	if err != nil {
 		return fmt.Errorf("create session history: %w", err)
 	}
@@ -109,7 +109,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 	// Prefer it so NATS auth works regardless of what agent.toml says.
 	name := os.Getenv("ZLAW_AGENT")
 	if name == "" {
-		name = cfg.Agent.Name
+		name = cfg.Agent.ID
 	}
 	if name == "" {
 		name = "default"
