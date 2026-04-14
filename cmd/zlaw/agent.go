@@ -16,8 +16,9 @@ type AgentCmd struct {
 
 // AgentFlags are embedded by commands that need to resolve an agent directory.
 type AgentFlags struct {
-	Agent    string `short:"a" env:"ZLAW_AGENT"     help:"agent name; resolves to $ZLAW_HOME/agents/<name>"`
-	AgentDir string `          env:"ZLAW_AGENT_DIR" help:"explicit path to agent directory (overrides --agent)"`
+	Agent     string `short:"a" env:"ZLAW_AGENT"     help:"agent name; resolves to $ZLAW_HOME/agents/<name>"`
+	AgentDir  string `          env:"ZLAW_AGENT_DIR" help:"explicit path to agent directory (overrides --agent)"`
+	Workspace string `          env:"ZLAW_WORKSPACE" help:"path to agent workspace (SOUL.md, IDENTITY.md); defaults to $ZLAW_HOME/workspaces/<name>"`
 }
 
 func (f AgentFlags) resolveDir() (string, error) {
@@ -28,4 +29,14 @@ func (f AgentFlags) resolveDir() (string, error) {
 		return filepath.Join(config.ZlawHome(), "agents", f.Agent), nil
 	}
 	return "", fmt.Errorf("--agent <name> or --agent-dir <path> is required (or set ZLAW_AGENT / ZLAW_AGENT_DIR)")
+}
+
+func (f AgentFlags) resolveWorkspace() string {
+	if f.Workspace != "" {
+		return f.Workspace
+	}
+	if f.Agent != "" {
+		return filepath.Join(config.ZlawHome(), "workspaces", f.Agent)
+	}
+	return ""
 }

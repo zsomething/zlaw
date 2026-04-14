@@ -39,7 +39,7 @@ type = "cli"
 	writeFile(t, dir, "SOUL.md", "You are a helpful assistant.")
 	writeFile(t, dir, "IDENTITY.md", "My name is Test.")
 
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ type = "cli"
 `)
 	// No SOUL.md or IDENTITY.md
 
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ type = "cli"
 model = "claude-opus-4-6"
 `)
 
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ type = "cli"
 `)
 	// No runtime.toml — should succeed with static model.
 
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ type = "cli"
 	onChange := func(cfg config.AgentConfig, _ config.Personality) {
 		gotModel = cfg.LLM.Model
 	}
-	loader, err := config.NewLoader(dir, onChange, nil)
+	loader, err := config.NewLoader(dir, "", onChange, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ auth_profile = "default"
 [adapter]
 type = "cli"
 `)
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ auth_profile = "default"
 type = "cli"
 `)
 
-	loader, err := config.NewLoader(dir, nil, nil)
+	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

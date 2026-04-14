@@ -11,8 +11,8 @@ import (
 	chromem "github.com/philippgille/chromem-go"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/llm"
-	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 const (
@@ -204,9 +204,9 @@ func NewEmbeddingFunc(cfg config.EmbedderConfig, credPath string) (chromem.Embed
 	baseURL = strings.TrimRight(baseURL, "/")
 
 	if credPath == "" {
-		credPath = auth.DefaultCredentialsPath()
+		credPath = credentials.DefaultCredentialsPath()
 	}
-	src, err := auth.NewTokenSourceFromStore(credPath, cfg.AuthProfile)
+	src, err := credentials.NewTokenSourceFromStore(credPath, cfg.AuthProfile)
 	if err != nil {
 		return nil, fmt.Errorf("embedder: load auth profile %q: %w", cfg.AuthProfile, err)
 	}

@@ -23,17 +23,47 @@ id = %q
 description = ""
 
 [llm]
-backend = ""
-model = ""
-auth_profile = ""
+backend = "anthropic"
+model = "claude-opus-4-5"
+auth_profile = "anthropic"
 max_tokens = 4096
 timeout_sec = 60
 
 [tools]
 allowed = []
 
-[adapter]
-type = "cli"
+[[adapter]]
+type = "telegram"
+auth_profile = "telegram"
+
+[[adapter]]
+type = "fizzy"
+auth_profile = "fizzy"
+`
+
+	// scaffoldCredentialsTOML is the initial credentials file for a new agent.
+	// Values use ${ENV_VAR} expansion so the hub can inject real values.
+	scaffoldCredentialsTOML = `[profiles.anthropic]
+name = "anthropic"
+data = { api_key = "${ANTHROPIC_API_KEY}" }
+
+[profiles.telegram]
+name = "telegram"
+data = { telegram_bot_token = "${TELEGRAM_BOT_TOKEN}" }
+
+[profiles.fizzy]
+name = "fizzy"
+data = { fizzy_api_key = "${FIZZY_API_KEY}" }
+`
+
+	// scaffoldSoulMD is the default SOUL.md for a new workspace.
+	scaffoldSoulMD = `You are a helpful personal assistant.
+`
+
+	// scaffoldIdentityMD is the default IDENTITY.md for a new workspace.
+	scaffoldIdentityMD = `# Identity
+
+Your name is %s.
 `
 )
 
@@ -195,21 +225,52 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 	}
 
 	agentDir := filepath.Join(h.zlawHome, "agents", name)
+	workspaceDir := filepath.Join(h.zlawHome, "workspaces", name)
+
+	// Create agent dir and workspace dir.
 	if err := os.MkdirAll(agentDir, 0o700); err != nil {
 		return fmt.Errorf("agent.create: create agent dir %s: %w", agentDir, err)
 	}
+	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
+		return fmt.Errorf("agent.create: create workspace dir %s: %w", workspaceDir, err)
+	}
 
-	tomlPath := filepath.Join(agentDir, "agent.toml")
-	if _, err := os.Stat(tomlPath); os.IsNotExist(err) {
+	// Scaffold agent.toml if not exists.
+	agentTOMLPath := filepath.Join(agentDir, "agent.toml")
+	if _, err := os.Stat(agentTOMLPath); os.IsNotExist(err) {
 		content := fmt.Sprintf(scaffoldAgentTOML, name)
-		if err := os.WriteFile(tomlPath, []byte(content), 0o600); err != nil {
+		if err := os.WriteFile(agentTOMLPath, []byte(content), 0o600); err != nil {
 			return fmt.Errorf("agent.create: write agent.toml: %w", err)
+		}
+	}
+
+	// Scaffold per-agent credentials.toml if not exists.
+	credsPath := filepath.Join(agentDir, "credentials.toml")
+	if _, err := os.Stat(credsPath); os.IsNotExist(err) {
+		if err := os.WriteFile(credsPath, []byte(scaffoldCredentialsTOML), 0o600); err != nil {
+			return fmt.Errorf("agent.create: write credentials.toml: %w", err)
+		}
+	}
+
+	// Scaffold workspace files if not exist.
+	soulPath := filepath.Join(workspaceDir, "SOUL.md")
+	if _, err := os.Stat(soulPath); os.IsNotExist(err) {
+		if err := os.WriteFile(soulPath, []byte(scaffoldSoulMD), 0o644); err != nil {
+			return fmt.Errorf("agent.create: write SOUL.md: %w", err)
+		}
+	}
+	identityPath := filepath.Join(workspaceDir, "IDENTITY.md")
+	if _, err := os.Stat(identityPath); os.IsNotExist(err) {
+		content := fmt.Sprintf(scaffoldIdentityMD, name)
+		if err := os.WriteFile(identityPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("agent.create: write IDENTITY.md: %w", err)
 		}
 	}
 
 	entry := config.AgentEntry{
 		Name:          name,
 		Dir:           agentDir,
+		Workspace:     workspaceDir,
 		RestartPolicy: config.RestartOnFailure,
 	}
 	if bin, ok := stringParam(params, "binary"); ok {
@@ -226,7 +287,7 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 		return fmt.Errorf("agent.create: spawn: %w", err)
 	}
 
-	h.logger.Info("hub inbox: agent created", "name", name, "dir", entry.Dir)
+	h.logger.Info("hub inbox: agent created", "name", name, "dir", entry.Dir, "workspace", entry.Workspace)
 	return nil
 }
 

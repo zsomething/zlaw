@@ -21,6 +21,7 @@ func (c *AgentRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	workspace := c.resolveWorkspace()
 
 	// Wrap logger with agent label for PrettyHandler mode.
 	name := os.Getenv("ZLAW_AGENT")
@@ -39,7 +40,7 @@ func (c *AgentRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		logger = logging.LoggerWithOptions(opts)
 	}
 
-	return app.RunAgent(ctx, agentDir, app.AgentRunOptions{
+	return app.RunAgent(ctx, agentDir, workspace, app.AgentRunOptions{
 		Session:   c.Session,
 		Verbose:   c.Verbose,
 		ShowUsage: c.ShowUsage,

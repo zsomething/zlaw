@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 // ── Templates ────────────────────────────────────────────────────────────────
@@ -15,26 +14,37 @@ const zlawTOMLTemplate = `[hub]
 name = "main"
 description = "zlaw hub"
 
-# Agents supervised by this hub.
-# List agent names here; each maps to $ZLAW_HOME/agents/<name>/.
-[agents]
-names = ["manager"]
+# Each agent supervised by this hub.
+# The hub scaffolds agent directories automatically.
+[[agents]]
+name = "manager"
+manager = true
 
 [nats]
 # Embedded NATS server listen address. Defaults to 127.0.0.1:4222.
 # listen = "127.0.0.1:4222"
 `
 
-const credentialsTemplate = `# Credential profiles for zlaw and its agents.
-# Add profiles with: zlaw auth add --provider <name>
+// perAgentCredentialsTemplate is the initial credentials file for each agent.
+// The hub scaffolds this at agents/<name>/credentials.toml.
+// Values use ${ENV_VAR} syntax for environment variable expansion.
+const perAgentCredentialsTemplate = `[profiles.anthropic]
+name = "anthropic"
+data = { api_key = "${ANTHROPIC_API_KEY}" }
 
-[profiles]
+[profiles.telegram]
+name = "telegram"
+data = { telegram_bot_token = "${TELEGRAM_BOT_TOKEN}" }
+
+[profiles.fizzy]
+name = "fizzy"
+data = { fizzy_api_key = "${FIZZY_API_KEY}" }
 `
 
-// agentTOMLTemplate is used for both the default manager and any named agent.
-// %s is substituted with the agent name.
+// agentTOMLTemplate is the agent config file.
+// The hub owns this file; agents do not have access to it at rest.
 const agentTOMLTemplate = `[agent]
-name = %q
+id = "manager"
 description = ""
 
 [llm]
@@ -47,8 +57,16 @@ timeout_sec = 120
 [tools]
 # allowed = ["bash", "read_file", ...]  # uncomment to restrict tool access
 
-[adapter]
-type = "cli"
+# Adapters: each adapter receives input from a "channel".
+# The auth_profile references a profile in credentials.toml.
+
+[[adapter]]
+type = "telegram"
+auth_profile = "telegram"
+
+[[adapter]]
+type = "fizzy"
+auth_profile = "fizzy"
 `
 
 const soulMDTemplate = `You are a helpful personal assistant.
@@ -64,10 +82,9 @@ Your name is %s.
 
 // InitCmd bootstraps $ZLAW_HOME.
 //
-// Without --agent: full workspace bootstrap (zlaw.toml, credentials.toml,
-// agents/manager/).
+// Without --agent: full workspace bootstrap (zlaw.toml, workspaces/manager/).
 //
-// With --agent <name>: create a named agent directory only (no hub config).
+// With --agent <name>: create a named agent only (no hub config).
 type InitCmd struct {
 	Agent string `short:"a" help:"create a named agent instead of bootstrapping the full workspace"`
 	Force bool   `help:"overwrite existing files"`
@@ -80,12 +97,12 @@ func (c *InitCmd) Run() error {
 	return c.initWorkspace()
 }
 
-// initWorkspace creates the full $ZLAW_HOME layout: zlaw.toml, credentials,
-// and a default manager agent.
+// initWorkspace creates the full $ZLAW_HOME layout: zlaw.toml and the
+// manager agent workspace. The hub will scaffold agent directories
+// (agent.toml, credentials.toml) at startup.
 func (c *InitCmd) initWorkspace() error {
 	home := config.ZlawHome()
-	credPath := auth.DefaultCredentialsPath()
-	managerDir := filepath.Join(home, "agents", "manager")
+	managerWorkspace := filepath.Join(home, "workspaces", "manager")
 
 	type fileEntry struct {
 		path    string
@@ -95,10 +112,8 @@ func (c *InitCmd) initWorkspace() error {
 
 	files := []fileEntry{
 		{filepath.Join(home, "zlaw.toml"), zlawTOMLTemplate, 0o600},
-		{credPath, credentialsTemplate, 0o600},
-		{filepath.Join(managerDir, "agent.toml"), fmt.Sprintf(agentTOMLTemplate, "manager"), 0o600},
-		{filepath.Join(managerDir, "SOUL.md"), soulMDTemplate, 0o644},
-		{filepath.Join(managerDir, "IDENTITY.md"), fmt.Sprintf(identityMDTemplate, "Manager"), 0o644},
+		{filepath.Join(managerWorkspace, "SOUL.md"), soulMDTemplate, 0o644},
+		{filepath.Join(managerWorkspace, "IDENTITY.md"), fmt.Sprintf(identityMDTemplate, "Manager"), 0o644},
 	}
 
 	if !c.Force {
@@ -112,8 +127,8 @@ func (c *InitCmd) initWorkspace() error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return fmt.Errorf("create ZLAW_HOME: %w", err)
 	}
-	if err := os.MkdirAll(managerDir, 0o700); err != nil {
-		return fmt.Errorf("create manager agent dir: %w", err)
+	if err := os.MkdirAll(managerWorkspace, 0o700); err != nil {
+		return fmt.Errorf("create manager workspace: %w", err)
 	}
 
 	for _, f := range files {
@@ -127,15 +142,18 @@ func (c *InitCmd) initWorkspace() error {
 	fmt.Fprintf(os.Stdout, "Workspace created at %s\n", home)
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Next steps:")
-	fmt.Fprintln(os.Stdout, "  1. Add credentials:  zlaw auth add --provider anthropic")
-	fmt.Fprintln(os.Stdout, "  2. Edit the manager: $EDITOR "+filepath.Join(managerDir, "agent.toml"))
-	fmt.Fprintln(os.Stdout, "  3. Start the hub:    zlaw hub start")
+	fmt.Fprintln(os.Stdout, "  1. Start the hub:    zlaw hub start")
+	fmt.Fprintln(os.Stdout, "     The hub will scaffold agent dirs and prompt for credentials.")
+	fmt.Fprintln(os.Stdout, "  2. Or set credentials manually:")
+	fmt.Fprintln(os.Stdout, "       zlaw hub auth set --agent manager --profile anthropic --key $ANTHROPIC_API_KEY")
 	return nil
 }
 
-// initAgent creates a single named agent directory under $ZLAW_HOME/agents/<name>.
+// initAgent creates a single agent workspace under $ZLAW_HOME/workspaces/<name>.
+// The hub will scaffold the agent directory (agent.toml, credentials.toml)
+// when it starts or when you run 'zlaw hub agent create <name>'.
 func (c *InitCmd) initAgent(name string) error {
-	agentDir := filepath.Join(config.ZlawHome(), "agents", name)
+	workspaceDir := filepath.Join(config.ZlawHome(), "workspaces", name)
 
 	type fileEntry struct {
 		path    string
@@ -144,9 +162,8 @@ func (c *InitCmd) initAgent(name string) error {
 	}
 
 	files := []fileEntry{
-		{filepath.Join(agentDir, "agent.toml"), fmt.Sprintf(agentTOMLTemplate, name), 0o600},
-		{filepath.Join(agentDir, "SOUL.md"), soulMDTemplate, 0o644},
-		{filepath.Join(agentDir, "IDENTITY.md"), fmt.Sprintf(identityMDTemplate, name), 0o644},
+		{filepath.Join(workspaceDir, "SOUL.md"), soulMDTemplate, 0o644},
+		{filepath.Join(workspaceDir, "IDENTITY.md"), fmt.Sprintf(identityMDTemplate, name), 0o644},
 	}
 
 	if !c.Force {
@@ -157,8 +174,8 @@ func (c *InitCmd) initAgent(name string) error {
 		}
 	}
 
-	if err := os.MkdirAll(agentDir, 0o700); err != nil {
-		return fmt.Errorf("create agent dir: %w", err)
+	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
+		return fmt.Errorf("create workspace dir: %w", err)
 	}
 
 	for _, f := range files {
@@ -168,8 +185,9 @@ func (c *InitCmd) initAgent(name string) error {
 		fmt.Fprintf(os.Stdout, "  created  %s\n", f.path)
 	}
 
-	fmt.Fprintf(os.Stdout, "\nAgent %q created at %s\n", name, agentDir)
-	fmt.Fprintf(os.Stdout, "Edit agent.toml to configure the LLM backend, then run:\n")
-	fmt.Fprintf(os.Stdout, "  zlaw agent --agent %s serve\n", name)
+	fmt.Fprintf(os.Stdout, "\nWorkspace %q created at %s\n", name, workspaceDir)
+	fmt.Fprintf(os.Stdout, "Add to zlaw.toml to register with hub:\n")
+	fmt.Fprintf(os.Stdout, "  [[agents]]\n  name = %q\n", name)
+	fmt.Fprintf(os.Stdout, "Then run: zlaw hub start\n")
 	return nil
 }

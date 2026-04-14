@@ -40,9 +40,13 @@ const (
 type AgentEntry struct {
 	// Name is the logical agent name.
 	Name string `toml:"name"`
-	// Dir is the path to the agent's config directory (agent.toml, SOUL.md, etc.).
+	// Dir is the path to the agent's config directory (agent.toml, credentials.toml).
 	// When empty, defaults to $ZLAW_HOME/agents/<name>.
 	Dir string `toml:"dir"`
+	// Workspace is the path to the agent's workspace (SOUL.md, IDENTITY.md, memories/).
+	// When empty, defaults to $ZLAW_HOME/workspaces/<name>.
+	// The agent has read/write access to this directory.
+	Workspace string `toml:"workspace"`
 	// Binary is the path to the agent executable.
 	// When empty, defaults to the hub's own executable (zlaw agent serve).
 	Binary string `toml:"binary"`

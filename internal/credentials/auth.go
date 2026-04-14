@@ -1,9 +1,10 @@
-// Package auth provides pluggable authentication for LLM backends.
+// Package credentials provides pluggable authentication for LLM backends and
+// adapters.
 //
 // Credentials are stored in ~/.config/zlaw/credentials.toml (path overridable
 // via ZLAW_CREDENTIALS_FILE). The agent.toml references a named profile via
-// llm.auth_profile — no secrets ever appear in agent config.
-package auth
+// llm.auth_profile or adapter.auth_profile — no secrets ever appear in agent config.
+package credentials
 
 import (
 	"context"
@@ -11,8 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -25,32 +24,12 @@ type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
 
-// ProfileType identifies the authentication mechanism.
-type ProfileType string
-
-const (
-	ProfileTypeAPIKey ProfileType = "apikey"
-	ProfileTypeOAuth2 ProfileType = "oauth2"
-)
-
 // CredentialProfile is one entry in credentials.toml.
+// Each adapter decides which keys from Data it needs (e.g. "telegram_bot_token",
+// "fizzy_api_key"). This keeps the struct generic and extensible.
 type CredentialProfile struct {
-	Type ProfileType `toml:"type"`
-
-	// apikey fields
-	Key string `toml:"key"`
-
-	// oauth2 fields
-	AccessToken  string    `toml:"access_token"`
-	TokenType    string    `toml:"token_type"`
-	RefreshToken string    `toml:"refresh_token"`
-	Expiry       time.Time `toml:"expiry"`
-
-	// oauth2 client credentials (used for refresh; written by auth login)
-	TokenURL     string `toml:"token_url"`
-	ClientID     string `toml:"client_id"`
-	ClientSecret string `toml:"client_secret"`
-	Scope        string `toml:"scope"`
+	Name string            `toml:"name"`
+	Data map[string]string `toml:"data"`
 }
 
 // CredentialStore is the in-memory representation of credentials.toml.
@@ -59,7 +38,7 @@ type CredentialStore struct {
 }
 
 // ErrProfileNotFound is returned when a named profile does not exist in the store.
-var ErrProfileNotFound = errors.New("auth: credential profile not found")
+var ErrProfileNotFound = errors.New("credentials: profile not found")
 
 // DefaultCredentialsPath returns the path to credentials.toml.
 // Priority: ZLAW_CREDENTIALS_FILE env var → $ZLAW_HOME/credentials.toml.
@@ -94,7 +73,7 @@ func LoadStore(path string) (CredentialStore, error) {
 // SaveStore writes store to path with 0600 permissions, creating parent dirs
 // as needed. It warns (to stderr) if existing file has looser permissions.
 func SaveStore(path string, store CredentialStore) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create credentials dir: %w", err)
 	}
 
@@ -126,30 +105,44 @@ func UpsertProfile(path, name string, profile CredentialProfile) error {
 	return SaveStore(path, store)
 }
 
-// NewTokenSource constructs the appropriate TokenSource for profile.
-func NewTokenSource(profile CredentialProfile) (TokenSource, error) {
-	switch profile.Type {
-	case ProfileTypeAPIKey:
-		if profile.Key == "" {
-			return nil, fmt.Errorf("auth: apikey profile has empty key")
-		}
-		return &staticKeySource{key: profile.Key}, nil
-	case ProfileTypeOAuth2:
-		return &oauth2Source{profile: profile, mu: &sync.Mutex{}}, nil
-	default:
-		return nil, fmt.Errorf("auth: unknown profile type %q", profile.Type)
+// GetProfile loads the named profile from the store.
+func GetProfile(path, name string) (CredentialProfile, error) {
+	store, err := LoadStore(path)
+	if err != nil {
+		return CredentialProfile{}, err
 	}
+	profile, ok := store.Profiles[name]
+	if !ok {
+		return CredentialProfile{}, fmt.Errorf("%w: %q", ErrProfileNotFound, name)
+	}
+	return profile, nil
 }
 
-// NewTokenSourceFromStore loads the named profile and returns a TokenSource.
+// NewTokenSourceFromStore loads the named profile and returns a TokenSource
+// that extracts "api_key" from the profile's Data.
 func NewTokenSourceFromStore(path, profileName string) (TokenSource, error) {
-	store, err := LoadStore(path)
+	profile, err := GetProfile(path, profileName)
 	if err != nil {
 		return nil, err
 	}
-	profile, ok := store.Profiles[profileName]
-	if !ok {
-		return nil, fmt.Errorf("%w: %q", ErrProfileNotFound, profileName)
+	key, ok := profile.Data["api_key"]
+	if !ok || key == "" {
+		return nil, fmt.Errorf("credentials: profile %q has no api_key in data", profileName)
 	}
-	return NewTokenSource(profile)
+	return &staticKeySource{key: key}, nil
+}
+
+// GetData extracts a value from the profile's Data map.
+// Returns empty string if the key is not found.
+func (p CredentialProfile) GetData(key string) string {
+	return p.Data[key]
+}
+
+// staticKeySource returns a fixed API key.
+type staticKeySource struct {
+	key string
+}
+
+func (s *staticKeySource) Token(_ context.Context) (string, error) {
+	return s.key, nil
 }

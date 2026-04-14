@@ -170,9 +170,27 @@ type ToolsConfig struct {
 	MaxResultBytes int      `toml:"max_result_bytes"`
 }
 
-// AdapterConfig selects and configures the I/O adapter.
+// AdapterConfig selects and configures the I/O adapter(s).
+// Multiple adapters allow the agent to receive input from different channels
+// (e.g., Telegram for chat, Fizzy for card events).
 type AdapterConfig struct {
-	Type string `toml:"type"` // "cli", "telegram", etc.
+	// Type is the primary adapter type ("cli", "telegram", etc.). For backward
+	// compatibility, when Adapters is empty, Type determines a single adapter.
+	Type string `toml:"type"`
+
+	// Adapters is a list of adapter configurations. When non-empty, this
+	// supersedes the legacy Type field for multi-adapter support.
+	Adapters []AdapterInstanceConfig `toml:"adapter"`
+}
+
+// AdapterInstanceConfig configures a single adapter instance.
+type AdapterInstanceConfig struct {
+	// Type is the adapter type (e.g., "telegram", "fizzy", "cli").
+	Type string `toml:"type"`
+	// AuthProfile is the credentials.toml profile name for this adapter.
+	// The profile's Data map contains adapter-specific keys (e.g.,
+	// "telegram_bot_token", "fizzy_api_key").
+	AuthProfile string `toml:"auth_profile"`
 }
 
 // Personality holds the raw contents of SOUL.md and IDENTITY.md.
@@ -204,7 +222,8 @@ var runtimeFieldAllowlist = map[string]struct{}{
 
 // Loader loads and watches configuration files for a single agent.
 type Loader struct {
-	dir          string
+	dir          string // agent.toml directory (hub-owned)
+	workspace    string // workspace directory (SOUL.md, IDENTITY.md); agent has access
 	onChange     func(AgentConfig, Personality)
 	onCronChange func(CronConfig)
 	watcher      *fsnotify.Watcher
@@ -215,30 +234,38 @@ type Loader struct {
 	personality Personality // from SOUL.md / IDENTITY.md; updated on each Load
 }
 
-// NewLoader creates a Loader for the given agent directory.
-// onChange is called whenever any watched file changes; it receives the newly
-// loaded config and personality. The callback must not mutate shared state
-// directly — the caller is responsible for safe state updates.
-func NewLoader(dir string, onChange func(AgentConfig, Personality), logger *slog.Logger) (*Loader, error) {
+// NewLoader creates a Loader for the given directories.
+// agentDir contains agent.toml (hub-owned); workspace contains SOUL.md and IDENTITY.md.
+// When workspace is empty, personality files are loaded from agentDir for
+// backward compatibility.
+func NewLoader(agentDir string, workspace string, onChange func(AgentConfig, Personality), logger *slog.Logger) (*Loader, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("create watcher: %w", err)
 	}
-	return &Loader{dir: dir, onChange: onChange, watcher: w, logger: logger}, nil
+	return &Loader{dir: agentDir, workspace: workspace, onChange: onChange, watcher: w, logger: logger}, nil
 }
 
-// Load reads agent.toml, runtime.toml, SOUL.md, and IDENTITY.md from the
-// agent directory, merges the runtime overrides, and returns the result.
+// Load reads agent.toml, runtime.toml from agentDir, and SOUL.md/IDENTITY.md
+// from the workspace directory, merges the runtime overrides, and returns the result.
 // It also caches the static config and personality for use by ReloadRuntime.
 func (l *Loader) Load() (AgentConfig, Personality, error) {
 	static, err := loadTOML(l.dir + "/agent.toml")
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
 	}
-	p, err := loadPersonality(l.dir)
+
+	// Use workspace dir for personality if set, otherwise fall back to agent dir.
+	personalityDir := l.workspace
+	if personalityDir == "" {
+		personalityDir = l.dir
+	}
+
+	p, err := loadPersonality(personalityDir)
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
 	}
+
 	rt, err := loadRuntimeTOML(l.dir + "/runtime.toml")
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
@@ -332,11 +359,16 @@ func (l *Loader) SetCronChangeHandler(fn func(CronConfig)) {
 	l.onCronChange = fn
 }
 
-// Watch starts watching the agent directory for changes. It blocks until ctx
-// is cancelled. Call in a goroutine.
+// Watch starts watching the agent directory and workspace (if set) for changes.
+// It blocks until ctx is cancelled. Call in a goroutine.
 func (l *Loader) Watch(ctx context.Context) error {
 	if err := l.watcher.Add(l.dir); err != nil {
 		return fmt.Errorf("watch dir %s: %w", l.dir, err)
+	}
+	if l.workspace != "" && l.workspace != l.dir {
+		if err := l.watcher.Add(l.workspace); err != nil {
+			return fmt.Errorf("watch workspace %s: %w", l.workspace, err)
+		}
 	}
 	defer l.watcher.Close() //nolint:errcheck
 

@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/llm"
-	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 // staticSource is an inline TokenSource for tests.
@@ -216,5 +216,6 @@ func TestMock_Exhausted(t *testing.T) {
 	}
 }
 
-// Add missing import
-var _ = auth.ProfileTypeAPIKey // ensure auth package compiled
+// Ensure credentials package compiles
+var _ = credentials.CredentialProfile{}
+var _ staticSource

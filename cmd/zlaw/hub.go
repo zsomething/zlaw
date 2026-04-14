@@ -12,6 +12,7 @@ import (
 type HubCmd struct {
 	Start  HubStartCmd  `cmd:"" help:"start the hub"`
 	Status HubStatusCmd `cmd:"" help:"show hub status"`
+	Auth   HubAuthCmd   `cmd:"" help:"manage per-agent credentials"`
 }
 
 // ── hub start ─────────────────────────────────────────────────────────────────

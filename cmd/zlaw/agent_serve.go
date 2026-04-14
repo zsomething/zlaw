@@ -18,6 +18,7 @@ func (c *AgentServeCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	workspace := c.resolveWorkspace()
 
 	// Wrap logger with agent label for PrettyHandler mode.
 	// When ZLAW_LOG_FORMAT=json (hub-spawned), the agent outputs JSON and
@@ -38,5 +39,5 @@ func (c *AgentServeCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		logger = logging.LoggerWithOptions(opts)
 	}
 
-	return app.ServeAgent(ctx, agentDir, logger)
+	return app.ServeAgent(ctx, agentDir, workspace, logger)
 }
