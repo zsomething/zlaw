@@ -71,7 +71,7 @@ func TestHubClient_PublishesRegistration(t *testing.T) {
 	}
 
 	go func() {
-		hc := agent.NewHubClient("myagent", "1.0", []string{"bash", "glob"}, m, runner, nil, nil)
+		hc := agent.NewHubClient("myagent", "1.0", []string{"bash", "glob"}, nil, m, runner, nil, nil)
 		_ = hc.Start(ctx)
 	}()
 
@@ -112,7 +112,7 @@ func TestHubClient_HandlesInboxTask(t *testing.T) {
 	}
 
 	go func() {
-		hc := agent.NewHubClient("worker", "1.0", nil, m, runner, nil, nil)
+		hc := agent.NewHubClient("worker", "1.0", nil, nil, m, runner, nil, nil)
 		_ = hc.Start(ctx)
 	}()
 
@@ -165,7 +165,7 @@ func TestHubClient_MalformedInbox_NoReply(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		hc := agent.NewHubClient("bot", "1.0", nil, m, runner, nil, nil)
+		hc := agent.NewHubClient("bot", "1.0", nil, nil, m, runner, nil, nil)
 		_ = hc.Start(ctx)
 	}()
 
@@ -189,7 +189,7 @@ func TestHubClient_StopsOnContextCancel(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		hc := agent.NewHubClient("stopper", "1.0", nil, m, runner, nil, nil)
+		hc := agent.NewHubClient("stopper", "1.0", nil, nil, m, runner, nil, nil)
 		done <- hc.Start(ctx)
 	}()
 

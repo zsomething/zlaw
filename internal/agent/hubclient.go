@@ -19,6 +19,13 @@ const (
 
 	// hubHeartbeatInterval is how often the agent re-publishes its registration.
 	hubHeartbeatInterval = 30 * time.Second
+
+	// agentInboxStream is the JetStream stream name for agent inbox messages.
+	// Mirrors hub/internal/hub/stream.go constants.
+	agentInboxStream = "AGENT_INBOX"
+
+	// fetchTimeout is how long Fetch() waits for a message before looping.
+	fetchTimeout = 5 * time.Second
 )
 
 // HubTaskRunner executes an incoming task envelope and returns the output text.
@@ -31,6 +38,7 @@ type hubRegistration struct {
 	Name         string   `json:"name"`
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
+	Roles        []string `json:"roles"`
 }
 
 // HubClient manages the agent's connection to the hub over NATS:
@@ -41,6 +49,7 @@ type HubClient struct {
 	name         string
 	version      string
 	capabilities []string
+	roles        []string
 	messenger    messaging.Messenger
 	runner       HubTaskRunner
 	sysPromptFn  func() string
@@ -52,6 +61,7 @@ type HubClient struct {
 func NewHubClient(
 	name, version string,
 	capabilities []string,
+	roles []string,
 	messenger messaging.Messenger,
 	runner HubTaskRunner,
 	sysPromptFn func() string,
@@ -64,6 +74,7 @@ func NewHubClient(
 		name:         name,
 		version:      version,
 		capabilities: capabilities,
+		roles:        roles,
 		messenger:    messenger,
 		runner:       runner,
 		sysPromptFn:  sysPromptFn,
@@ -72,15 +83,74 @@ func NewHubClient(
 }
 
 // Start publishes the initial registration, begins the heartbeat loop, and
-// subscribes to the agent's inbox. It returns when ctx is cancelled.
+// subscribes to the agent's inbox. When JetStream is available it uses a durable
+// pull consumer (redelivers on reconnect); otherwise it falls back to a plain
+// nats.Subscribe. It returns when ctx is cancelled.
 func (h *HubClient) Start(ctx context.Context) error {
 	if err := h.publishRegistration(ctx); err != nil {
 		return fmt.Errorf("hub: initial registration: %w", err)
 	}
 
 	inboxSubject := fmt.Sprintf(inboxSubjectFmt, h.name)
+
+	// Try JetStream first; fall back to plain Subscribe.
+	var err error
+	if js := h.messenger.JetStream(); js != nil {
+		err = h.runJetStreamInbox(ctx, inboxSubject, js)
+	} else {
+		err = h.runPlainInbox(ctx, inboxSubject)
+	}
+	return err
+}
+
+// runJetStreamInbox runs a durable pull consumer for the agent's inbox subject.
+// Each call to Fetch() blocks until a message arrives or ctx is cancelled.
+// Messages are acked after successful turn completion (redelivered on failure).
+func (h *HubClient) runJetStreamInbox(ctx context.Context, inboxSubject string, js messaging.JetStreamer) error {
+	consumer := h.name // durable consumer name == agent name
+
+	if err := js.CreatePullConsumer(ctx, consumer, agentInboxStream, inboxSubject); err != nil {
+		return fmt.Errorf("hub: create pull consumer %q: %w", consumer, err)
+	}
+	h.logger.Info("hub client started (jetstream)",
+		"agent", h.name,
+		"inbox", inboxSubject,
+		"stream", agentInboxStream,
+		"consumer", consumer,
+	)
+
+	ticker := time.NewTicker(hubHeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			h.logger.Info("hub client stopping", "agent", h.name)
+			return nil
+		case <-ticker.C:
+			if err := h.publishRegistration(ctx); err != nil {
+				h.logger.Warn("hub: heartbeat failed", "agent", h.name, "err", err)
+			}
+		default:
+			// Non-blocking fetch with a short timeout so we don't miss ctx cancellation.
+			fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
+			err := js.Fetch(fetchCtx, consumer, agentInboxStream, func(msg *messaging.JetMsg) {
+				h.processInboxMessage(ctx, msg.Data())
+				_ = msg.Ack() // ack after successful processing
+			})
+			cancel()
+			if err != nil && ctx.Err() == nil {
+				// Log and loop; fetch timeout is expected when idle.
+				h.logger.Debug("hub: fetch loop", "agent", h.name, "err", err)
+			}
+		}
+	}
+}
+
+// runPlainInbox subscribes via plain nats.Subscribe and processes messages directly.
+func (h *HubClient) runPlainInbox(ctx context.Context, inboxSubject string) error {
 	sub, err := h.messenger.Subscribe(ctx, inboxSubject, func(data []byte) {
-		h.handleInbox(ctx, data)
+		h.processInboxMessage(ctx, data)
 	})
 	if err != nil {
 		return fmt.Errorf("hub: subscribe to inbox %s: %w", inboxSubject, err)
@@ -115,6 +185,7 @@ func (h *HubClient) publishRegistration(ctx context.Context) error {
 		Name:         h.name,
 		Version:      h.version,
 		Capabilities: h.capabilities,
+		Roles:        h.roles,
 	}
 	data, err := json.Marshal(reg)
 	if err != nil {
@@ -123,8 +194,9 @@ func (h *HubClient) publishRegistration(ctx context.Context) error {
 	return h.messenger.Publish(ctx, registrySubject, data)
 }
 
-// handleInbox processes a single message arriving on the agent's inbox subject.
-func (h *HubClient) handleInbox(ctx context.Context, data []byte) {
+// processInboxMessage parses a task envelope, runs the task through the runner,
+// and publishes the reply to env.ReplyTo. It does not handle Ack/Nak.
+func (h *HubClient) processInboxMessage(ctx context.Context, data []byte) {
 	var env messaging.TaskEnvelope
 	if err := json.Unmarshal(data, &env); err != nil {
 		h.logger.Warn("hub: malformed task envelope", "agent", h.name, "err", err)

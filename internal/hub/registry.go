@@ -37,6 +37,7 @@ type RegistryEntry struct {
 	Name          string          `json:"name"`
 	Version       string          `json:"version"`
 	Capabilities  []string        `json:"capabilities"`
+	Roles         []string        `json:"roles"`
 	Status        AgentConnStatus `json:"status"`
 	LastHeartbeat time.Time       `json:"last_heartbeat"`
 }
@@ -46,6 +47,7 @@ type registrationMsg struct {
 	Name         string   `json:"name"`
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
+	Roles        []string `json:"roles"`
 }
 
 // Registry subscribes to zlaw.registry and maintains the live state of all
@@ -153,8 +155,14 @@ func (r *Registry) handleRegistration(data []byte) {
 	entry.LastHeartbeat = time.Now()
 }
 
-// checkHeartbeats marks agents as disconnected when they have not sent a
-// heartbeat within maxMissedHeartbeats intervals.
+// HandleQuery responds to a registry list request with the full agent list.
+// It is idempotent — the caller receives a point-in-time snapshot.
+func (r *Registry) HandleQuery(_ context.Context, _ []byte) ([]byte, error) {
+	r.mu.RLock()
+	entries := r.List()
+	r.mu.RUnlock()
+	return json.Marshal(entries)
+}
 func (r *Registry) checkHeartbeats() {
 	deadline := time.Now().Add(-time.Duration(maxMissedHeartbeats) * heartbeatInterval)
 

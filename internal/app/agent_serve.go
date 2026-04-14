@@ -183,6 +183,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 			name,
 			version.Version,
 			caps,
+			cfg.Agent.Roles,
 			nm,
 			cronRunner{ag: ag, sysPromptFn: sysPromptFn},
 			sysPromptFn,
