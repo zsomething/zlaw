@@ -78,13 +78,26 @@ func (r *Registry) Start(ctx context.Context, nc *nats.Conn) error {
 		return err
 	}
 
+	// Also handle request/reply queries from agents.
+	querySub, err := nc.Subscribe(registrySubject+".list", func(msg *nats.Msg) {
+		data, err := r.HandleQuery(context.Background(), msg.Data)
+		if err == nil {
+			_ = nc.Publish(msg.Reply, data)
+		}
+	})
+	if err != nil {
+		sub.Unsubscribe() //nolint:errcheck
+		return err
+	}
+
 	go func() {
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
-				sub.Unsubscribe() //nolint:errcheck
+				sub.Unsubscribe()      //nolint:errcheck
+				querySub.Unsubscribe() //nolint:errcheck
 				return
 			case <-ticker.C:
 				r.checkHeartbeats()
@@ -151,6 +164,7 @@ func (r *Registry) handleRegistration(data []byte) {
 
 	entry.Version = msg.Version
 	entry.Capabilities = msg.Capabilities
+	entry.Roles = msg.Roles
 	entry.Status = AgentConnected
 	entry.LastHeartbeat = time.Now()
 }
