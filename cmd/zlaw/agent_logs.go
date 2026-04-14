@@ -117,6 +117,7 @@ func (c *AgentLogsCmd) Run(ctx context.Context) error {
 		case data := <-logCh:
 			if err := c.printLogEntry(data, minLevel, since, noColor); err != nil {
 				// Skip malformed entries silently
+				continue
 			}
 		}
 	}
@@ -182,7 +183,9 @@ func (c *AgentLogsCmd) printLogEntry(data []byte, minLevel int, since time.Durat
 			sb.WriteString(k)
 			sb.WriteString("=")
 			var val any
-			json.Unmarshal(v, &val)
+			if err := json.Unmarshal(v, &val); err != nil {
+				continue
+			}
 			sb.WriteString(formatAttr(val))
 		}
 	}

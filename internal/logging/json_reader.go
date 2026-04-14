@@ -33,16 +33,24 @@ func ParseJSONLogEntry(line string) (*JSONLogEntry, error) {
 	entry := &JSONLogEntry{Attrs: make(map[string]any)}
 
 	if v, ok := raw["time"]; ok {
-		json.Unmarshal(v, &entry.Time)
+		if err := json.Unmarshal(v, &entry.Time); err != nil {
+			return nil, err
+		}
 	}
 	if v, ok := raw["level"]; ok {
-		json.Unmarshal(v, &entry.Level)
+		if err := json.Unmarshal(v, &entry.Level); err != nil {
+			return nil, err
+		}
 	}
 	if v, ok := raw["msg"]; ok {
-		json.Unmarshal(v, &entry.Msg)
+		if err := json.Unmarshal(v, &entry.Msg); err != nil {
+			return nil, err
+		}
 	}
 	if v, ok := raw["agent"]; ok {
-		json.Unmarshal(v, &entry.Agent)
+		if err := json.Unmarshal(v, &entry.Agent); err != nil {
+			return nil, err
+		}
 	}
 
 	// Collect remaining fields as attributes
@@ -51,7 +59,9 @@ func ParseJSONLogEntry(line string) (*JSONLogEntry, error) {
 			continue
 		}
 		var val any
-		json.Unmarshal(v, &val)
+		if err := json.Unmarshal(v, &val); err != nil {
+			continue
+		}
 		entry.Attrs[k] = val
 	}
 

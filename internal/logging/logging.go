@@ -286,7 +286,9 @@ func (h *JSONHandler) Handle(_ context.Context, r slog.Record) error {
 
 	enc := json.NewEncoder(h.w)
 	enc.SetEscapeHTML(false)
-	enc.Encode(m)
+	if err := enc.Encode(m); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -80,7 +80,7 @@ func (r *Registry) Start(ctx context.Context, nc *nats.Conn) error {
 
 	// Also handle request/reply queries from agents.
 	querySub, err := nc.Subscribe(registrySubject+".list", func(msg *nats.Msg) {
-		data, err := r.HandleQuery(context.Background(), msg.Data)
+		data, err := r.HandleQuery(ctx, msg.Data)
 		if err == nil {
 			_ = nc.Publish(msg.Reply, data)
 		}

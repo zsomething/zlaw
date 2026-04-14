@@ -246,7 +246,7 @@ func (w *agentLogWriter) Write(p []byte) (n int, err error) {
 			w.buf.Reset()
 			w.buf.WriteString(lines[len(lines)-1])
 		}
-		break
+		break //nolint:staticcheck // Only one iteration; process complete lines then return.
 	}
 
 	return len(p), nil
@@ -263,18 +263,26 @@ func (w *agentLogWriter) writeLine(line string) {
 	var attrs []string
 
 	if v, ok := raw["level"]; ok {
-		json.Unmarshal(v, &level)
+		if err := json.Unmarshal(v, &level); err != nil {
+			return
+		}
 	}
 	if v, ok := raw["msg"]; ok {
-		json.Unmarshal(v, &msg)
+		if err := json.Unmarshal(v, &msg); err != nil {
+			return
+		}
 	}
 	if v, ok := raw["time"]; ok {
-		json.Unmarshal(v, &timeStr)
+		if err := json.Unmarshal(v, &timeStr); err != nil {
+			return
+		}
 	}
 
 	agent := w.agentName
 	if v, ok := raw["agent"]; ok {
-		json.Unmarshal(v, &agent)
+		if err := json.Unmarshal(v, &agent); err != nil {
+			return
+		}
 	}
 
 	for k, v := range raw {
@@ -282,7 +290,9 @@ func (w *agentLogWriter) writeLine(line string) {
 			continue
 		}
 		var val any
-		json.Unmarshal(v, &val)
+		if err := json.Unmarshal(v, &val); err != nil {
+			continue
+		}
 		attrs = append(attrs, k+"="+formatAttr(val))
 	}
 
@@ -300,12 +310,14 @@ func (w *agentLogWriter) writeLine(line string) {
 				continue
 			}
 			var val any
-			json.Unmarshal(v, &val)
+			if err := json.Unmarshal(v, &val); err != nil {
+				continue
+			}
 			logData[k] = val
 		}
 		payload, _ := json.Marshal(logData)
-		w.messenger.Publish(context.Background(), "zlaw.logs", payload)
-		w.messenger.Publish(context.Background(), fmt.Sprintf("agent.%s.logs", agent), payload)
+		_ = w.messenger.Publish(context.Background(), "zlaw.logs", payload)
+		_ = w.messenger.Publish(context.Background(), fmt.Sprintf("agent.%s.logs", agent), payload)
 	}
 
 	var sb strings.Builder
@@ -391,6 +403,8 @@ func formatAttr(v any) string {
 }
 
 // pipeAgentLogs spawns a goroutine that reads from r and writes pretty logs.
+//
+//nolint:unused
 func pipeAgentLogs(r io.Reader, label string, color Color, noColor bool) io.Writer {
 	pr, pw := io.Pipe()
 	w := newAgentLogWriter(label, color, noColor)
