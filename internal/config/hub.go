@@ -61,6 +61,11 @@ type NATSConfig struct {
 	// Listen is the address for the embedded NATS server.
 	// Defaults to "127.0.0.1:4222" when empty.
 	Listen string `toml:"listen"`
+	// JetStream enables the JetStream persistence subsystem.
+	JetStream bool `toml:"jetstream"`
+	// StoreDir sets the JetStream message storage directory.
+	// Defaults to $ZLAW_HOME/nats when empty and JetStream is enabled.
+	StoreDir string `toml:"store_dir"`
 }
 
 // DefaultHubConfigPath returns the path to zlaw.toml.

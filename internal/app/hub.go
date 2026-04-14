@@ -23,6 +23,15 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 	}
 	defer result.Conn.Close()
 
+	// Create the durable agent inbox stream if JetStream is enabled.
+	if result.JetStream != nil {
+		sm := hub.NewStreamManager(result.Conn)
+		if err := sm.EnsureAgentInboxStream(ctx, 0); err != nil {
+			return fmt.Errorf("create agent inbox stream: %w", err)
+		}
+		logger.Info("agent inbox stream ready", "name", hub.AgentInboxStream)
+	}
+
 	selfBin, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)

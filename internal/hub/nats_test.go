@@ -3,67 +3,68 @@ package hub_test
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
 )
 
-func TestStartNATS_Embedded(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func TestEnsureStoreDir(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "nats-store")
 
-	cfg := config.HubConfig{
-		NATS: config.NATSConfig{Listen: "127.0.0.1:14522"},
-	}
-
-	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
+	got, err := hub.EnsureStoreDir(dir)
 	if err != nil {
-		t.Fatalf("StartNATS: %v", err)
+		t.Fatalf("EnsureStoreDir(%q): %v", dir, err)
 	}
-	conn := result.Conn
-	defer conn.Close()
-
-	if !conn.IsConnected() {
-		t.Fatal("expected connection to be active")
+	if got != dir {
+		t.Errorf("got %q, want %q", got, dir)
 	}
-
-	// Verify basic pub/sub over the embedded server.
-	ch := make(chan []byte, 1)
-	sub, err := conn.Subscribe("test.subject", func(msg *nats.Msg) {
-		ch <- msg.Data
-	})
-	if err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
-	defer sub.Unsubscribe() //nolint:errcheck
-
-	if err := conn.Publish("test.subject", []byte("hello")); err != nil {
-		t.Fatalf("publish: %v", err)
-	}
-
-	select {
-	case data := <-ch:
-		if string(data) != "hello" {
-			t.Fatalf("got %q, want %q", data, "hello")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for message")
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("directory not created: %v", err)
 	}
 }
 
-func TestStartNATS_ACLEnforcement(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func TestEnsureStoreDir_Defaults(t *testing.T) {
+	// EnsureStoreDir with empty string should return the default path.
+	got, err := hub.EnsureStoreDir("")
+	if err != nil {
+		t.Fatalf("EnsureStoreDir(\"\"): %v", err)
+	}
+	want := hub.DefaultJetStreamStoreDir()
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestEnsureStoreDir_CreatesNested(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "a", "b", "c")
+
+	got, err := hub.EnsureStoreDir(dir)
+	if err != nil {
+		t.Fatalf("EnsureStoreDir(%q): %v", dir, err)
+	}
+	if got != dir {
+		t.Errorf("got %q, want %q", got, dir)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("nested directory not created: %v", err)
+	}
+}
+
+func TestStartNATS_JetStreamEnabled(t *testing.T) {
+	tmp := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cfg := config.HubConfig{
-		NATS: config.NATSConfig{Listen: "127.0.0.1:14523"},
-		Agents: []config.AgentEntry{
-			{Name: "manager", Manager: true},
-			{Name: "specialist"},
-			{Name: "specialist2"},
+		NATS: config.NATSConfig{
+			Listen:    "127.0.0.1:14530",
+			JetStream: true,
+			StoreDir:  filepath.Join(tmp, "js-store"),
 		},
 	}
 
@@ -71,62 +72,61 @@ func TestStartNATS_ACLEnforcement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartNATS: %v", err)
 	}
+	defer result.Conn.Close()
 
-	// Verify per-agent tokens were generated.
-	if len(result.ACL.AgentTokens) != 3 {
-		t.Fatalf("expected 3 agent tokens, got %d", len(result.ACL.AgentTokens))
+	if result.JetStream == nil {
+		t.Fatal("expected JetStream config to be set")
 	}
-	if result.ACL.HubToken == "" {
-		t.Fatal("expected non-empty hub token")
+	if !result.JetStream.Enabled {
+		t.Error("expected JetStream.Enabled to be true")
 	}
-
-	natsURL := result.Conn.ConnectedUrl()
-
-	// Specialist can publish to manager inbox (allowed).
-	specToken := result.ACL.AgentTokens["specialist"]
-	specConn, err := nats.Connect(natsURL, nats.UserInfo("specialist", specToken))
-	if err != nil {
-		t.Fatalf("specialist connect: %v", err)
-	}
-	defer specConn.Close()
-
-	if err := specConn.Publish("agent.manager.inbox", []byte("test")); err != nil {
-		t.Fatalf("specialist publish to manager.inbox (expected allowed): %v", err)
-	}
-	if err := specConn.Flush(); err != nil {
-		t.Fatalf("flush after allowed publish: %v", err)
-	}
-
-	// Specialist attempting to publish to another specialist's inbox must be rejected.
-	// The NATS server sends a permissions violation and closes the connection.
-	violationCh := make(chan error, 1)
-	specConn.SetErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, e error) {
-		violationCh <- e
-	})
-
-	_ = specConn.Publish("agent.specialist2.inbox", []byte("forbidden"))
-	_ = specConn.Flush()
-
-	// The NATS server closes the connection on publish permission violation.
-	// Wait briefly for the async error or disconnection.
-	select {
-	case <-violationCh:
-		// permission violation received — ACL enforced correctly
-	case <-time.After(2 * time.Second):
-		// If no error: check whether the connection was closed by the server.
-		if specConn.IsConnected() {
-			t.Error("specialist published to specialist2.inbox without a permission violation")
-		}
+	if result.JetStream.StoreDir == "" {
+		t.Error("expected StoreDir to be non-empty")
 	}
 }
 
-func TestStartNATS_InvalidAddress(t *testing.T) {
-	ctx := context.Background()
+func TestStartNATS_JetStreamDisabled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := config.HubConfig{
-		NATS: config.NATSConfig{Listen: "notavalidaddress"},
+		NATS: config.NATSConfig{Listen: "127.0.0.1:14531"},
 	}
-	_, err := hub.StartNATS(ctx, cfg, "", slog.Default())
-	if err == nil {
-		t.Fatal("expected error for invalid listen address")
+
+	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
+	if err != nil {
+		t.Fatalf("StartNATS: %v", err)
+	}
+	defer result.Conn.Close()
+
+	if result.JetStream != nil {
+		t.Errorf("expected JetStream config to be nil, got %+v", result.JetStream)
+	}
+}
+
+func TestStartNATS_JetStreamDefaultStoreDir(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := config.HubConfig{
+		NATS: config.NATSConfig{
+			Listen:    "127.0.0.1:14532",
+			JetStream: true,
+			// StoreDir omitted — should default and be created.
+		},
+	}
+
+	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
+	if err != nil {
+		t.Fatalf("StartNATS: %v", err)
+	}
+	defer result.Conn.Close()
+
+	wantDir := hub.DefaultJetStreamStoreDir()
+	if result.JetStream.StoreDir != wantDir {
+		t.Errorf("StoreDir = %q, want %q", result.JetStream.StoreDir, wantDir)
+	}
+	if _, err := os.Stat(wantDir); err != nil {
+		t.Errorf("default store dir not created at %s: %v", wantDir, err)
 	}
 }

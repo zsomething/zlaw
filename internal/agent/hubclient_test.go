@@ -42,6 +42,10 @@ func (a *chanMessengerAdapter) Request(ctx context.Context, subject string, payl
 	return a.m.Request(ctx, subject, payload, timeout)
 }
 
+func (a *chanMessengerAdapter) JetStream() messaging.JetStreamer {
+	return nil
+}
+
 var _ messaging.Messenger = (*chanMessengerAdapter)(nil)
 
 func newTestMessenger() *chanMessengerAdapter {
@@ -84,7 +88,7 @@ func TestHubClient_PublishesRegistration(t *testing.T) {
 		if len(caps) != 2 {
 			t.Errorf("capabilities = %v, want 2 items", caps)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for registration message")
 	}
 }

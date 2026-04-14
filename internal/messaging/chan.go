@@ -114,5 +114,12 @@ func (s *chanSubscription) Unsubscribe() error {
 	return nil
 }
 
+// JetStream is not implemented for ChanMessenger (returns nil).
+// In real usage, JetStream will always be nil for ChanMessenger since it is a
+// test double — never used in production binaries.
+func (m *ChanMessenger) JetStream() JetStreamer {
+	return nil
+}
+
 // compile-time interface check
 var _ Messenger = (*ChanMessenger)(nil)
