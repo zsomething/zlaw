@@ -79,7 +79,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 	// allowlist is applied. The scheduler field is wired after construction.
 	cronWriter := &cronWriterImpl{agentDir: agentDir}
 
-	registry := buildToolRegistry(ctx, cfg, loader, logger)
+	registry, delegateTool := buildToolRegistry(ctx, cfg, loader, logger)
 	registry.Register(builtin.ListCronjobs{Reader: cronWriter})
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
@@ -167,6 +167,16 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 			return fmt.Errorf("connect to hub NATS: %w", err)
 		}
 		defer nm.Close()
+
+		// Wire messenger into delegate tool so it can send tasks to other agents.
+		regCache := agent.NewRegistryCache(logger)
+		delegateTool.Messenger = nm
+		delegateTool.Registry = regCache
+		go func() {
+			if err := regCache.Start(ctx, nm); err != nil && ctx.Err() == nil {
+				logger.Warn("registry cache stopped unexpectedly", "err", err)
+			}
+		}()
 
 		caps := toolCapabilities(registry)
 		hubClient := agent.NewHubClient(

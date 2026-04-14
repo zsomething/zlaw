@@ -58,7 +58,7 @@ func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger
 		return fmt.Errorf("create llm client: %w", err)
 	}
 
-	registry := buildToolRegistry(ctx, cfg, loader, logger)
+	registry, _ := buildToolRegistry(ctx, cfg, loader, logger)
 
 	discoveredSkills, err := skills.Discover(config.ZlawHome(), cfg.Agent.ID, logger)
 	if err != nil {
@@ -108,7 +108,7 @@ func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *config.Loader, logger *slog.Logger) *tools.Registry {
+func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *config.Loader, logger *slog.Logger) (*tools.Registry, *builtin.AgentDelegate) {
 	registry := tools.NewRegistry()
 	registry.Register(builtin.CurrentTime{})
 	registry.Register(builtin.ReadFile{})
@@ -122,13 +122,18 @@ func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *conf
 	registry.Register(builtin.HTTPRequest{})
 	registry.Register(builtin.Configure{Loader: loader})
 
+	// agent_delegate is always registered; Messenger/Registry are set later
+	// when the hub connection is established (nil = standalone-mode error).
+	delegateTool := &builtin.AgentDelegate{AgentID: cfg.Agent.ID}
+	registry.Register(delegateTool)
+
 	memStore := buildMemoryStore(ctx, cfg, "", logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
 		registry.Register(builtin.MemoryRecall{Store: memStore})
 		registry.Register(builtin.MemoryDelete{Store: memStore})
 	}
-	return registry
+	return registry, delegateTool
 }
 
 func indexSkills(discovered []skills.Skill, registry *tools.Registry, logger *slog.Logger) map[string]skills.Skill {

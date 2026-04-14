@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/zsomething/zlaw/internal/ctxkey"
 	"github.com/zsomething/zlaw/internal/llm"
 )
 
@@ -114,6 +115,7 @@ func (a *Agent) RunStream(ctx context.Context, sessionID, input, systemPrompt st
 }
 
 func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (Result, error) {
+	ctx = context.WithValue(ctx, ctxkey.SessionID, sessionID)
 	log := a.logger.With("agent", a.name, "session_id", sessionID)
 
 	log.Debug("turn started", "input_len", len(input), "system_prompt_len", len(systemPrompt))
