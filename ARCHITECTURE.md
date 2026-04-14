@@ -231,16 +231,13 @@ zlaw.registry            ← agent registration/heartbeat
 ### Day 0 — First install
 
 ```
-zlaw hub init
+zlaw init
 # Generates: $ZLAW_HOME/zlaw.toml (skeleton with one manager agent entry)
 #            $ZLAW_HOME/credentials.toml (empty template, 0600)
 #            $ZLAW_HOME/agents/manager/ (full agent scaffold)
 
-zlaw hub auth add --provider anthropic --name default
+zlaw auth login --profile anthropic --type apikey
 # Prompts for API key → saves to credentials.toml
-
-zlaw hub auth add --provider telegram --name default
-# Prompts for bot token → saves to credentials.toml, updates zlaw.toml
 
 zlaw hub start
 # Starts hub, spawns manager agent
@@ -260,11 +257,11 @@ Manager calls `agent_create(name="coding", role="Go developer")`:
 ### Day N — Operations
 
 ```bash
-zlaw hub status                   # hub health + per-agent status
-zlaw hub agent list               # all agents, status, last heartbeat
-zlaw hub agent logs coding        # stream agent logs
-zlaw hub agent restart coding     # restart agent process
-zlaw hub agent remove coding      # stop process + deregister
+zlaw hub status                   # hub health + per-agent status (implemented)
+zlaw hub agent list               # all agents, status, last heartbeat (planned)
+zlaw hub agent logs coding        # stream agent logs (planned)
+zlaw hub agent restart coding     # restart agent process (planned)
+zlaw hub agent remove coding      # stop process + deregister (planned)
 ```
 
 ---

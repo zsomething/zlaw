@@ -53,7 +53,7 @@ Connect a Telegram bot and your assistant is always a message away. Each convers
 
 **Run a fleet of specialist agents.**
 
-Start `zlaw-hub` and it supervises a group of agents, each with its own personality, model, and toolset. Your manager agent takes the request and delegates automatically — the code agent handles the diff, the research agent handles the search, the calendar agent books the meeting. All on your machine, no extra infrastructure.
+Start `zlaw hub start` and it supervises a group of agents, each with its own personality, model, and toolset. Your manager agent takes the request and delegates automatically — the code agent handles the diff, the research agent handles the search, the calendar agent books the meeting. All on your machine, no extra infrastructure.
 
 ```
 you: research the top open-source vector databases, then draft a comparison doc
@@ -88,7 +88,7 @@ Personality and behaviour files hot-reload on save — no restart needed for tho
 - **Session persistence** — conversations stored as JSONL; resume any session by ID
 
 ### Multi-agent
-- **Hub supervisor** — `zlaw-hub` spawns, monitors, and auto-restarts a fleet of agent processes
+- **Hub supervisor** — `zlaw hub start` spawns, monitors, and auto-restarts a fleet of agent processes
 - **Agent delegation** — manager agent routes tasks to specialist peers and returns a structured result
 - **Per-agent access control** — each agent gets a scoped token at spawn time; permissions enforced at the broker
 
@@ -103,26 +103,29 @@ Personality and behaviour files hot-reload on save — no restart needed for tho
 ## Quick start
 
 ```sh
-# Bootstrap a new agent
-zlaw-agent init --name myagent
+# Bootstrap workspace (creates zlaw.toml, credentials.toml, manager agent)
+zlaw init
 
-# Run interactively in the terminal
-zlaw-agent --agent myagent run
+# Add LLM credentials
+zlaw auth login --profile anthropic --type apikey
+
+# Run a single agent interactively
+zlaw agent run -a myagent
 
 # Run as a background daemon (enables Telegram + scheduled tasks)
-zlaw-agent --agent myagent serve
+zlaw agent serve -a myagent
 ```
 
-Add your LLM credentials:
+To create an additional named agent:
 
 ```sh
-zlaw-agent auth login --profile myprofile --type apikey --key <key>
+zlaw init -a myagent
 ```
 
 ### Run multiple agents with a hub
 
 ```sh
-zlaw-hub start
+zlaw hub start
 ```
 
 ```toml
