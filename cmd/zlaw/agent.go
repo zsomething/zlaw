@@ -72,9 +72,13 @@ func (c *AgentListCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "Name\tStatus\tRoles")
+	fmt.Fprintln(tw, "Name\tConn\tLastHeartbeat\tRoles")
 	for _, e := range entries {
-		fmt.Fprintf(tw, "%s\t%s\t%v\n", e.Name, e.Status, e.Roles)
+		heartbeat := e.LastHeartbeat
+		if heartbeat == "" {
+			heartbeat = "-"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%v\n", e.Name, e.Status, heartbeat, e.Roles)
 	}
 	return tw.Flush()
 }
@@ -102,13 +106,23 @@ func (c *AgentStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	if !status.Running {
 		running = "no"
 	}
-	fmt.Printf("Name:    %s\n", status.Name)
-	fmt.Printf("Running: %s\n", running)
+	fmt.Printf("Name:     %s\n", status.Name)
+	fmt.Printf("Running:  %s\n", running)
 	if status.PID > 0 {
-		fmt.Printf("PID:     %d\n", status.PID)
+		fmt.Printf("PID:      %d\n", status.PID)
+	}
+	fmt.Printf("Conn:     %s\n", status.ConnStatus)
+	if status.LastHeartbeat != "" {
+		fmt.Printf("Heartbeat: %s\n", status.LastHeartbeat)
+	}
+	if len(status.Capabilities) > 0 {
+		fmt.Printf("Capabilities: %v\n", status.Capabilities)
+	}
+	if len(status.Roles) > 0 {
+		fmt.Printf("Roles: %v\n", status.Roles)
 	}
 	if status.LastErr != "" {
-		fmt.Printf("Error:   %s\n", status.LastErr)
+		fmt.Printf("Error:  %s\n", status.LastErr)
 	}
 	return nil
 }
@@ -249,16 +263,21 @@ func agentAction(ctx context.Context, method string, params map[string]any) erro
 }
 
 type agentListEntry struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version"`
-	Capabilities []string `json:"capabilities"`
-	Roles        []string `json:"roles"`
-	Status       string   `json:"status"`
+	Name          string   `json:"name"`
+	Version       string   `json:"version"`
+	Capabilities  []string `json:"capabilities"`
+	Roles         []string `json:"roles"`
+	Status        string   `json:"status"`
+	LastHeartbeat string   `json:"last_heartbeat"`
 }
 
 type agentStatusEntry struct {
-	Name    string `json:"name"`
-	Running bool   `json:"running"`
-	PID     int    `json:"pid"`
-	LastErr string `json:"last_err"`
+	Name          string   `json:"name"`
+	Running       bool     `json:"running"`
+	PID           int      `json:"pid"`
+	LastErr       string   `json:"last_err,omitempty"`
+	ConnStatus    string   `json:"conn_status"`
+	LastHeartbeat string   `json:"last_heartbeat,omitempty"`
+	Capabilities  []string `json:"capabilities,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
 }

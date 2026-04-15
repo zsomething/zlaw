@@ -37,18 +37,22 @@ func (s *stubSpawner) Restart(name string) error {
 }
 
 type stubRegistry struct {
-	entries []hub.RegistryEntry
+	entries map[string]hub.RegistryEntry
 }
 
-func (r *stubRegistry) List() []hub.RegistryEntry { return r.entries }
-func (r *stubRegistry) Deregister(name string) {
-	filtered := r.entries[:0]
+func (r *stubRegistry) List() []hub.RegistryEntry {
+	result := make([]hub.RegistryEntry, 0, len(r.entries))
 	for _, e := range r.entries {
-		if e.Name != name {
-			filtered = append(filtered, e)
-		}
+		result = append(result, e)
 	}
-	r.entries = filtered
+	return result
+}
+func (r *stubRegistry) Get(name string) (hub.RegistryEntry, bool) {
+	e, ok := r.entries[name]
+	return e, ok
+}
+func (r *stubRegistry) Deregister(name string) {
+	delete(r.entries, name)
 }
 
 // --- helpers ---
@@ -82,9 +86,9 @@ func runInbox(t *testing.T, sup hub.AgentSpawner, reg hub.AgentRegistryReader, m
 // --- tests ---
 
 func TestManagementHandler_AgentList(t *testing.T) {
-	reg := &stubRegistry{entries: []hub.RegistryEntry{
-		{Name: "worker", Status: "connected"},
-		{Name: "analyst", Status: "connected"},
+	reg := &stubRegistry{entries: map[string]hub.RegistryEntry{
+		"worker":  {Name: "worker", Status: hub.AgentConnected},
+		"analyst": {Name: "analyst", Status: hub.AgentConnected},
 	}}
 	req := runInbox(t, &stubSpawner{}, reg, "manager", t.TempDir())
 
@@ -101,7 +105,7 @@ func TestManagementHandler_AgentList(t *testing.T) {
 func TestManagementHandler_AgentCreate(t *testing.T) {
 	zlawHome := t.TempDir()
 	sup := &stubSpawner{}
-	req := runInbox(t, sup, &stubRegistry{}, "manager", zlawHome)
+	req := runInbox(t, sup, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", zlawHome)
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.create",
@@ -121,7 +125,7 @@ func TestManagementHandler_AgentCreate(t *testing.T) {
 }
 
 func TestManagementHandler_AgentCreate_MissingName(t *testing.T) {
-	req := runInbox(t, &stubSpawner{}, &stubRegistry{}, "manager", t.TempDir())
+	req := runInbox(t, &stubSpawner{}, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.create",
@@ -139,7 +143,7 @@ func TestManagementHandler_AgentConfigure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := runInbox(t, &stubSpawner{}, &stubRegistry{}, "manager", zlawHome)
+	req := runInbox(t, &stubSpawner{}, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", zlawHome)
 
 	reply := req(hub.ManagementRequest{
 		Op: "agent.configure",
@@ -164,7 +168,7 @@ func TestManagementHandler_AgentConfigure_InvalidKey(t *testing.T) {
 	agentDir := filepath.Join(zlawHome, "agents", "worker")
 	os.MkdirAll(agentDir, 0o700) //nolint:errcheck
 
-	req := runInbox(t, &stubSpawner{}, &stubRegistry{}, "manager", zlawHome)
+	req := runInbox(t, &stubSpawner{}, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", zlawHome)
 
 	reply := req(hub.ManagementRequest{
 		Op: "agent.configure",
@@ -181,7 +185,7 @@ func TestManagementHandler_AgentConfigure_InvalidKey(t *testing.T) {
 
 func TestManagementHandler_AgentStop(t *testing.T) {
 	sup := &stubSpawner{}
-	req := runInbox(t, sup, &stubRegistry{}, "manager", t.TempDir())
+	req := runInbox(t, sup, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.stop",
@@ -197,7 +201,7 @@ func TestManagementHandler_AgentStop(t *testing.T) {
 
 func TestManagementHandler_AgentRestart(t *testing.T) {
 	sup := &stubSpawner{}
-	req := runInbox(t, sup, &stubRegistry{}, "manager", t.TempDir())
+	req := runInbox(t, sup, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.restart",
@@ -213,7 +217,7 @@ func TestManagementHandler_AgentRestart(t *testing.T) {
 
 func TestManagementHandler_AgentRemove(t *testing.T) {
 	sup := &stubSpawner{}
-	reg := &stubRegistry{entries: []hub.RegistryEntry{{Name: "worker"}}}
+	reg := &stubRegistry{entries: map[string]hub.RegistryEntry{"worker": {Name: "worker"}}}
 	req := runInbox(t, sup, reg, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{
@@ -231,7 +235,7 @@ func TestManagementHandler_AgentRemove(t *testing.T) {
 }
 
 func TestManagementHandler_AgentRemove_SelfProtection(t *testing.T) {
-	req := runInbox(t, &stubSpawner{}, &stubRegistry{}, "manager", t.TempDir())
+	req := runInbox(t, &stubSpawner{}, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.remove",
@@ -246,7 +250,7 @@ func TestManagementHandler_AgentRemove_SelfProtection(t *testing.T) {
 }
 
 func TestManagementHandler_UnknownOp(t *testing.T) {
-	req := runInbox(t, &stubSpawner{}, &stubRegistry{}, "manager", t.TempDir())
+	req := runInbox(t, &stubSpawner{}, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, "manager", t.TempDir())
 
 	reply := req(hub.ManagementRequest{Op: "no.such.op"})
 	if reply.OK {

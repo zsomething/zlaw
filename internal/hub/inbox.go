@@ -91,6 +91,7 @@ type AgentSpawner interface {
 // AgentRegistryReader is the Registry subset used by ManagementHandler.
 type AgentRegistryReader interface {
 	List() []RegistryEntry
+	Get(name string) (RegistryEntry, bool)
 	Deregister(name string)
 }
 

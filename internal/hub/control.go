@@ -210,14 +210,26 @@ type ControlResponseError struct {
 	ID    json.RawMessage `json:"id,omitempty"`
 }
 
+// AgentInfo combines supervisor process state with registry heartbeat state.
+type AgentInfo struct {
+	Name          string   `json:"name"`
+	Running       bool     `json:"running"`
+	PID           int      `json:"pid"`
+	LastErr       string   `json:"last_err,omitempty"`
+	ConnStatus    string   `json:"conn_status"`
+	LastHeartbeat string   `json:"last_heartbeat,omitempty"`
+	Capabilities  []string `json:"capabilities,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
+}
+
 // hubStatusResult is the payload for hub.status.
 type hubStatusResult struct {
-	Name       string        `json:"name"`
-	Version    string        `json:"version"`
-	AgentCount int           `json:"agent_count"`
-	Agents     []AgentStatus `json:"agents"`
-	ConnStatus string        `json:"connected_status"`
-	NATS       *NATSStatus   `json:"nats,omitempty"`
+	Name       string      `json:"name"`
+	Version    string      `json:"version"`
+	AgentCount int         `json:"agent_count"`
+	Agents     []AgentInfo `json:"agents"`
+	ConnStatus string      `json:"connected_status"`
+	NATS       *NATSStatus `json:"nats,omitempty"`
 }
 
 // NATSStatus holds NATS connection info for hub.status.
@@ -229,7 +241,27 @@ type NATSStatus struct {
 // hubStatus returns a snapshot of hub state.
 func (cs *ControlSocket) hubStatus() (json.RawMessage, error) {
 	statuses := cs.supervisor.Statuses()
-	agents := append([]AgentStatus(nil), statuses...)
+
+	// Merge supervisor process status with registry heartbeat status.
+	agents := make([]AgentInfo, 0, len(statuses))
+	for _, s := range statuses {
+		info := AgentInfo{
+			Name:    s.Name,
+			Running: s.Running,
+			PID:     s.PID,
+		}
+		if s.LastErr != nil {
+			info.LastErr = s.LastErr.Error()
+		}
+		// Enrich with registry heartbeat info.
+		if entry, ok := cs.registry.Get(s.Name); ok {
+			info.ConnStatus = string(entry.Status)
+			info.LastHeartbeat = entry.LastHeartbeat.Format(time.RFC3339)
+			info.Capabilities = entry.Capabilities
+			info.Roles = entry.Roles
+		}
+		agents = append(agents, info)
+	}
 
 	connStatus := "standalone"
 	var natsStatus *NATSStatus
@@ -279,7 +311,24 @@ func (cs *ControlSocket) agentStatus(params json.RawMessage) (json.RawMessage, e
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(status)
+
+	// Build enhanced AgentInfo with registry heartbeat info.
+	info := AgentInfo{
+		Name:    status.Name,
+		Running: status.Running,
+		PID:     status.PID,
+	}
+	if status.LastErr != nil {
+		info.LastErr = status.LastErr.Error()
+	}
+	if entry, ok := cs.registry.Get(p.Name); ok {
+		info.ConnStatus = string(entry.Status)
+		info.LastHeartbeat = entry.LastHeartbeat.Format(time.RFC3339)
+		info.Capabilities = entry.Capabilities
+		info.Roles = entry.Roles
+	}
+
+	return json.Marshal(info)
 }
 
 // agentConfigure updates a runtime field for a named agent.

@@ -151,19 +151,23 @@ func HubStatus(ctx context.Context, jsonOutput bool) error {
 
 // hubStatusSocketResponse is the JSON payload from hub.status.
 type hubStatusSocketResponse struct {
-	Name       string      `json:"name"`
-	Version    string      `json:"version"`
-	AgentCount int         `json:"agent_count"`
-	Agents     []agentInfo `json:"agents"`
-	ConnStatus string      `json:"connected_status"`
-	NATS       *natsInfo   `json:"nats,omitempty"`
+	Name       string        `json:"name"`
+	Version    string        `json:"version"`
+	AgentCount int           `json:"agent_count"`
+	Agents     []agentInfoV2 `json:"agents"`
+	ConnStatus string        `json:"connected_status"`
+	NATS       *natsInfo     `json:"nats,omitempty"`
 }
 
-type agentInfo struct {
-	Name    string `json:"name"`
-	Running bool   `json:"running"`
-	PID     int    `json:"pid"`
-	LastErr string `json:"last_err,omitempty"`
+type agentInfoV2 struct {
+	Name          string   `json:"name"`
+	Running       bool     `json:"running"`
+	PID           int      `json:"pid"`
+	LastErr       string   `json:"last_err,omitempty"`
+	ConnStatus    string   `json:"conn_status"`
+	LastHeartbeat string   `json:"last_heartbeat,omitempty"`
+	Capabilities  []string `json:"capabilities,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
 }
 
 type natsInfo struct {
@@ -229,13 +233,18 @@ func printHubStatus(s *hubStatusSocketResponse) error {
 	if len(s.Agents) > 0 {
 		fmt.Fprintln(os.Stdout, "\nAgent status:")
 		tw2 := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw2, "Name\tRunning\tPID\tError")
+		fmt.Fprintln(tw2, "Name\tRunning\tPID\tConn\tHeartbeat\tError")
 		for _, a := range s.Agents {
 			running := "yes"
 			if !a.Running {
 				running = "no"
 			}
-			fmt.Fprintf(tw2, "%s\t%s\t%d\t%s\n", a.Name, running, a.PID, a.LastErr)
+			heartbeat := a.LastHeartbeat
+			if heartbeat == "" {
+				heartbeat = "-"
+			}
+			fmt.Fprintf(tw2, "%s\t%s\t%d\t%s\t%s\t%s\n",
+				a.Name, running, a.PID, a.ConnStatus, heartbeat, a.LastErr)
 		}
 		tw2.Flush() //nolint:errcheck
 	}

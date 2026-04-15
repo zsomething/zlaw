@@ -29,10 +29,20 @@ func (m *mockControlSupervisor) Restart(name string) error                      
 func (m *mockControlSupervisor) Spawn(_ context.Context, _ config.AgentEntry) error { return nil }
 
 type mockControlRegistry struct {
-	entries []RegistryEntry
+	entries map[string]RegistryEntry
 }
 
-func (m *mockControlRegistry) List() []RegistryEntry  { return m.entries }
+func (m *mockControlRegistry) List() []RegistryEntry {
+	result := make([]RegistryEntry, 0, len(m.entries))
+	for _, e := range m.entries {
+		result = append(result, e)
+	}
+	return result
+}
+func (m *mockControlRegistry) Get(name string) (RegistryEntry, bool) {
+	e, ok := m.entries[name]
+	return e, ok
+}
 func (m *mockControlRegistry) Deregister(name string) {}
 
 func TestControlSocket(t *testing.T) {
@@ -50,9 +60,9 @@ func TestControlSocket(t *testing.T) {
 		},
 	}
 	reg := &mockControlRegistry{
-		entries: []RegistryEntry{
-			{Name: "alice", Status: AgentConnected},
-			{Name: "bob", Status: AgentDisconnected},
+		entries: map[string]RegistryEntry{
+			"alice": {Name: "alice", Status: AgentConnected, LastHeartbeat: time.Now()},
+			"bob":   {Name: "bob", Status: AgentDisconnected, LastHeartbeat: time.Now().Add(-time.Minute)},
 		},
 	}
 
