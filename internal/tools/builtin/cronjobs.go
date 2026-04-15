@@ -33,7 +33,7 @@ type ListCronjobs struct {
 
 func (ListCronjobs) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "list_cronjobs",
+		Name:        "cronjob_list",
 		Description: "List all scheduled cron jobs configured for this agent.",
 		InputSchema: []byte(`{"type":"object","properties":{}}`),
 	}
@@ -87,7 +87,7 @@ var createCronjobSchema = []byte(`{
 
 func (CreateCronjob) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name: "create_cronjob",
+		Name: "cronjob_create",
 		Description: "Create a new scheduled cron job. The job will run the given task prompt " +
 			"on the configured schedule and deliver the result to the target channel. " +
 			"Omit target to default to the current session's channel.",
@@ -165,7 +165,7 @@ var deleteCronjobSchema = []byte(`{
 
 func (DeleteCronjob) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "delete_cronjob",
+		Name:        "cronjob_delete",
 		Description: "Delete a scheduled cron job by its ID.",
 		InputSchema: deleteCronjobSchema,
 	}

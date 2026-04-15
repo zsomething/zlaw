@@ -30,7 +30,7 @@ func TestRegistry_Execute_knownTool(t *testing.T) {
 	r := tools.NewRegistry()
 	r.Register(builtin.CurrentTime{})
 
-	call := llm.ToolUse{ID: "call-1", Name: "current_time", Input: []byte("{}")}
+	call := llm.ToolUse{ID: "call-1", Name: "time", Input: []byte("{}")}
 	res := r.Execute(context.Background(), call)
 
 	if res.IsError {
@@ -63,7 +63,7 @@ func TestRegistry_Definitions(t *testing.T) {
 	if len(defs) != 1 {
 		t.Fatalf("expected 1 definition, got %d", len(defs))
 	}
-	if defs[0].Name != "current_time" {
+	if defs[0].Name != "time" {
 		t.Fatalf("unexpected tool name: %q", defs[0].Name)
 	}
 }
@@ -73,7 +73,7 @@ func TestRegistry_ExecuteAll(t *testing.T) {
 	r.Register(builtin.CurrentTime{})
 
 	calls := []llm.ToolUse{
-		{ID: "a", Name: "current_time", Input: []byte("{}")},
+		{ID: "a", Name: "time", Input: []byte("{}")},
 		{ID: "b", Name: "missing", Input: []byte("{}")},
 	}
 	results := r.ExecuteAll(context.Background(), calls)
@@ -150,13 +150,13 @@ func TestRegistry_Allowlist_filtersDefinitions(t *testing.T) {
 	r.Register(builtin.CurrentTime{})
 	r.Register(builtin.ReadFile{})
 
-	r.SetAllowlist([]string{"current_time"})
+	r.SetAllowlist([]string{"time"})
 	defs := r.Definitions()
 
 	if len(defs) != 1 {
 		t.Fatalf("expected 1 definition after allowlist, got %d", len(defs))
 	}
-	if defs[0].Name != "current_time" {
+	if defs[0].Name != "time" {
 		t.Fatalf("unexpected tool in definitions: %q", defs[0].Name)
 	}
 }
@@ -166,8 +166,8 @@ func TestRegistry_Allowlist_blocksExecution(t *testing.T) {
 	r.Register(builtin.CurrentTime{})
 	r.Register(builtin.ReadFile{})
 
-	r.SetAllowlist([]string{"current_time"})
-	call := llm.ToolUse{ID: "x", Name: "read_file", Input: []byte(`{"path":"/etc/hosts"}`)}
+	r.SetAllowlist([]string{"time"})
+	call := llm.ToolUse{ID: "x", Name: "read", Input: []byte(`{"path":"/etc/hosts"}`)}
 	res := r.Execute(context.Background(), call)
 
 	if !res.IsError {
@@ -179,8 +179,8 @@ func TestRegistry_Allowlist_allowsExecution(t *testing.T) {
 	r := tools.NewRegistry()
 	r.Register(builtin.CurrentTime{})
 
-	r.SetAllowlist([]string{"current_time"})
-	call := llm.ToolUse{ID: "y", Name: "current_time", Input: []byte("{}")}
+	r.SetAllowlist([]string{"time"})
+	call := llm.ToolUse{ID: "y", Name: "time", Input: []byte("{}")}
 	res := r.Execute(context.Background(), call)
 
 	if res.IsError {
@@ -194,7 +194,7 @@ func TestRegistry_Allowlist_empty_allowsAll(t *testing.T) {
 	r.Register(builtin.ReadFile{})
 
 	// Set then clear the allowlist
-	r.SetAllowlist([]string{"current_time"})
+	r.SetAllowlist([]string{"time"})
 	r.SetAllowlist(nil)
 
 	defs := r.Definitions()
