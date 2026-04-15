@@ -47,6 +47,11 @@ func (f AgentFlags) resolveWorkspace() string {
 	if f.Workspace != "" {
 		return f.Workspace
 	}
+	// ZLAW_WORKSPACE is set by the hub supervisor as an absolute path.
+	// Use it if present — avoids re-resolving relative paths from zlaw.toml.
+	if ws := os.Getenv("ZLAW_WORKSPACE"); ws != "" {
+		return ws
+	}
 	if f.Agent != "" {
 		return filepath.Join(config.ZlawHome(), "workspaces", f.Agent)
 	}
