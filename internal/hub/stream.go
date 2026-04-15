@@ -19,6 +19,9 @@ const (
 
 	// DefaultStreamMaxAge is the default message retention window (1 hour).
 	DefaultStreamMaxAge = time.Hour
+
+	// inboxSubjectFmt is the agent-specific inbox subject pattern.
+	inboxSubjectFmt = "agent.%s.inbox"
 )
 
 // StreamManager handles JetStream stream lifecycle operations.
@@ -69,10 +72,42 @@ func (sm *StreamManager) EnsureAgentInboxStream(ctx context.Context, maxAge time
 	return nil
 }
 
+// EnsureAgentConsumers creates durable pull consumers for each agent name in
+// agentNames. The consumer name equals the agent name, filtering on its inbox
+// subject (agent.<name>.inbox). It is idempotent — existing consumers are left
+// untouched.
+func (sm *StreamManager) EnsureAgentConsumers(ctx context.Context, agentNames []string) error {
+	js, err := sm.conn.JetStream()
+	if err != nil {
+		return fmt.Errorf("jetstream: get context: %w", err)
+	}
+
+	for _, name := range agentNames {
+		consumer := name
+		filter := fmt.Sprintf(inboxSubjectFmt, name)
+
+		cfg := &nats.ConsumerConfig{
+			Name:          consumer,
+			Durable:       consumer,
+			FilterSubject: filter,
+			AckPolicy:     nats.AckExplicitPolicy,
+			AckWait:       30 * time.Second,
+			MaxDeliver:    10,
+		}
+
+		_, err := js.AddConsumer(AgentInboxStream, cfg)
+		if err != nil && !errors.Is(err, nats.ErrConsumerNameAlreadyInUse) {
+			return fmt.Errorf("jetstream: create consumer %q: %w", consumer, err)
+		}
+	}
+	return nil
+}
+
 // compile-time interface check
 var _ StreamManagerer = (*StreamManager)(nil)
 
 // StreamManagerer is the interface for stream management operations.
 type StreamManagerer interface {
 	EnsureAgentInboxStream(ctx context.Context, maxAge time.Duration) error
+	EnsureAgentConsumers(ctx context.Context, agentNames []string) error
 }
