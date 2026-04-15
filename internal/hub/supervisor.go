@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -354,6 +355,15 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 
 	agentDir := resolveAgentDir(entry)
 	workspaceDir := resolveWorkspaceDir(entry)
+
+	// Always resolve to absolute paths so ZLAW_AGENT_DIR and ZLAW_WORKSPACE
+	// are unambiguous regardless of the cwd at agent runtime.
+	if !filepath.IsAbs(agentDir) {
+		agentDir = filepath.Join(config.ZlawHome(), agentDir)
+	}
+	if !filepath.IsAbs(workspaceDir) {
+		workspaceDir = filepath.Join(config.ZlawHome(), workspaceDir)
+	}
 
 	var args []string
 	if entry.Binary == "" {
