@@ -178,16 +178,16 @@ func (a *Adapter) handleMessage(ctx context.Context, msg *TGMsg) {
 
 	// Ensure a chatSink exists for this chat and is registered with the session.
 	a.mu.Lock()
+	s := a.manager.GetOrCreate(ctx, sid, "")
 	if _, exists := a.sinks[chatID]; !exists {
 		sink := newChatSink(a.bot, chatID, a.logger)
 		a.sinks[chatID] = sink
-		s := a.manager.GetOrCreate(ctx, sid)
 		s.Broadcaster.Add(sink)
 	}
 	a.mu.Unlock()
 
-	// Inject the source channel address so tools (e.g. create_cronjob) can
-	// use it as a default delivery target without knowing the chat ID.
-	channelCtx := context.WithValue(ctx, ctxkey.SourceChannel, "telegram:"+strconv.FormatInt(chatID, 10))
+	// Inject source channel and trace ID so tools can use them.
+	channelCtx := ctxkey.WithSourceChannel(ctx, "telegram:"+strconv.FormatInt(chatID, 10))
+	channelCtx = ctxkey.WithTraceID(channelCtx, s.TraceID)
 	a.manager.Submit(channelCtx, sid, text, "telegram")
 }

@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"sync"
 	"time"
@@ -27,6 +29,7 @@ type turnInput struct {
 // Session is a live conversation with its own broadcaster and input queue.
 type Session struct {
 	ID          string
+	TraceID     string // distributed trace ID for this conversation; propagated to delegations
 	Broadcaster *Broadcaster
 	inputCh     chan turnInput // buffered, size 8
 	cancel      context.CancelFunc
@@ -58,15 +61,20 @@ func NewManager(runner AgentRunner, sysPromptFn func() string, logger *slog.Logg
 
 // GetOrCreate returns the existing session for sessionID, or creates a new one.
 // New sessions start their event loop in a background goroutine.
-func (m *Manager) GetOrCreate(ctx context.Context, sessionID string) *Session {
+// traceID is the distributed trace ID; if empty a new one is generated.
+func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, traceID string) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if s, ok := m.sessions[sessionID]; ok {
 		return s
 	}
+	if traceID == "" {
+		traceID = newTraceID()
+	}
 	sessCtx, cancel := context.WithCancel(ctx)
 	s := &Session{
 		ID:          sessionID,
+		TraceID:     traceID,
 		Broadcaster: NewBroadcaster(m.logger),
 		inputCh:     make(chan turnInput, 8),
 		cancel:      cancel,
@@ -81,14 +89,22 @@ func (m *Manager) GetOrCreate(ctx context.Context, sessionID string) *Session {
 // and is carried through to EventAssistantDone so sinks can adapt their presentation.
 // Non-blocking: drops the turn with a warning if the channel buffer is full.
 // Returns the session so the caller can add sinks before the turn is processed.
+// The session TraceID is generated on first Submit and propagated to delegations.
 func (m *Manager) Submit(ctx context.Context, sessionID, input, origin string) *Session {
-	s := m.GetOrCreate(ctx, sessionID)
+	s := m.GetOrCreate(ctx, sessionID, "")
 	select {
 	case s.inputCh <- turnInput{ctx: ctx, input: input, origin: origin}:
 	default:
 		m.logger.Warn("session: input queue full, dropping turn", "session_id", sessionID)
 	}
 	return s
+}
+
+// newTraceID generates a random 16-byte hex trace ID.
+func newTraceID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // runSession is the event loop for a single session. It processes turns
