@@ -31,13 +31,9 @@ type HubACL struct {
 // BuildHubACL generates a per-agent NATS token and permission set for each
 // AgentEntry, plus a privileged token for the hub's own internal connection.
 //
-// Manager agent (entry.Manager == true):
-//   - publish:   agent.*.inbox, zlaw.hub.inbox
-//   - subscribe: agent.<name>.inbox, zlaw.registry
-//
-// Specialist agent:
-//   - publish:   agent.manager.inbox
-//   - subscribe: agent.<name>.inbox
+// In the P2P delegation model (#273), all agents have equal permissions:
+//   - publish:   agent.*.inbox, zlaw.registry
+//   - subscribe: agent.<name>.inbox, _INBOX.>
 //
 // Hub internal (_hub): no permission restrictions (full access).
 func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
@@ -66,48 +62,31 @@ func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
 		acl.Users = append(acl.Users, &server.User{
 			Username:    entry.Name,
 			Password:    token,
-			Permissions: agentPermissions(entry.Name, entry.Manager),
+			Permissions: agentPermissions(entry.Name),
 		})
 	}
 
 	return acl, nil
 }
 
-// agentPermissions returns the NATS subject permissions for the given agent.
-//
-// All agents publish heartbeats to zlaw.registry, so both manager and
-// specialist agents are granted publish access to it.
-func agentPermissions(name string, isManager bool) *server.Permissions {
+// agentPermissions returns the NATS subject permissions for all agents.
+// In the P2P delegation model all agents have equal permissions:
+//   - publish:   agent.*.inbox (send to any agent), zlaw.registry (heartbeats)
+//   - subscribe: agent.<name>.inbox (own inbox), _INBOX.> (reply subjects)
+func agentPermissions(name string) *server.Permissions {
 	inboxSubject := "agent." + name + ".inbox"
-
-	if isManager {
-		return &server.Permissions{
-			Publish: &server.SubjectPermission{
-				Allow: []string{
-					"agent.*.inbox",
-					"zlaw.hub.inbox",
-					"zlaw.registry",
-					"$JS.API.>", // JetStream management API
-					"_INBOX.>",  // NATS inbox for request/reply
-				},
-			},
-			Subscribe: &server.SubjectPermission{
-				Allow: []string{
-					inboxSubject,
-					"zlaw.registry",
-					"$JS.API.>", // JetStream API responses
-					"_INBOX.>",  // NATS inbox responses
-				},
-			},
-		}
-	}
-
 	return &server.Permissions{
 		Publish: &server.SubjectPermission{
-			Allow: []string{"agent.manager.inbox", "zlaw.registry"},
+			Allow: []string{
+				"agent.*.inbox", // P2P: send delegation to any agent
+				"zlaw.registry", // heartbeat / registry
+			},
 		},
 		Subscribe: &server.SubjectPermission{
-			Allow: []string{inboxSubject},
+			Allow: []string{
+				inboxSubject,
+				"_INBOX.>", // NATS reply subjects for request/reply
+			},
 		},
 	}
 }
