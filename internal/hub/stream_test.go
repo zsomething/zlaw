@@ -119,3 +119,67 @@ func TestStreamManager_EnsureAgentInboxStream_ExternalNATS(t *testing.T) {
 		t.Error("expected error when JetStream is not available")
 	}
 }
+
+func TestStreamManager_EnsureAgentConsumers(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cfg := config.HubConfig{
+		NATS: config.NATSConfig{
+			Listen:    "127.0.0.1:14543",
+			JetStream: true,
+		},
+	}
+
+	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
+	if err != nil {
+		t.Fatalf("StartNATS: %v", err)
+	}
+	defer result.Conn.Close()
+
+	sm := hub.NewStreamManager(result.Conn)
+
+	// Create stream first.
+	if err := sm.EnsureAgentInboxStream(ctx, 0); err != nil {
+		t.Fatalf("EnsureAgentInboxStream: %v", err)
+	}
+
+	agents := []string{"alice", "bob", "charlie"}
+
+	// First call creates consumers.
+	if err := sm.EnsureAgentConsumers(ctx, agents); err != nil {
+		t.Fatalf("EnsureAgentConsumers (first): %v", err)
+	}
+
+	// Second call is idempotent — should not error.
+	if err := sm.EnsureAgentConsumers(ctx, agents); err != nil {
+		t.Fatalf("EnsureAgentConsumers (idempotent): %v", err)
+	}
+
+	// Verify consumers exist via JetStream API.
+	js, err := result.Conn.JetStream()
+	if err != nil {
+		t.Fatalf("JetStream context: %v", err)
+	}
+
+	for _, name := range agents {
+		info, err := js.ConsumerInfo(hub.AgentInboxStream, name)
+		if err != nil {
+			t.Errorf("ConsumerInfo(%s): %v", name, err)
+			continue
+		}
+		if info.Name != name {
+			t.Errorf("consumer name = %q, want %q", info.Name, name)
+		}
+		if info.Config.Durable != name {
+			t.Errorf("consumer durable = %q, want %q", info.Config.Durable, name)
+		}
+		filterSubject := "agent." + name + ".inbox"
+		if info.Config.FilterSubject != filterSubject {
+			t.Errorf("consumer filter = %q, want %q", info.Config.FilterSubject, filterSubject)
+		}
+		if info.Config.AckPolicy != nats.AckExplicitPolicy {
+			t.Errorf("consumer ack policy = %v, want AckExplicitPolicy", info.Config.AckPolicy)
+		}
+	}
+}
