@@ -35,24 +35,22 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 	defer result.Conn.Close()
 
 	// Create the durable agent inbox stream and pre-create consumers for
-	// configured agents if JetStream is enabled.
-	if result.JetStream != nil {
-		sm := hub.NewStreamManager(result.Conn)
-		if err := sm.EnsureAgentInboxStream(ctx, 0); err != nil {
-			return fmt.Errorf("create agent inbox stream: %w", err)
-		}
-		logger.Info("agent inbox stream ready", "name", hub.AgentInboxStream)
-
-		// Pre-create durable pull consumers for all configured agents.
-		agentNames := make([]string, len(cfg.Agents))
-		for i, a := range cfg.Agents {
-			agentNames[i] = a.Name
-		}
-		if err := sm.EnsureAgentConsumers(ctx, agentNames); err != nil {
-			return fmt.Errorf("create agent consumers: %w", err)
-		}
-		logger.Info("agent consumers ready", "count", len(agentNames))
+	// all configured agents.
+	sm := hub.NewStreamManager(result.Conn)
+	if err := sm.EnsureAgentInboxStream(ctx, 0); err != nil {
+		return fmt.Errorf("create agent inbox stream: %w", err)
 	}
+	logger.Info("agent inbox stream ready", "name", hub.AgentInboxStream)
+
+	// Pre-create durable pull consumers for all configured agents.
+	agentNames := make([]string, len(cfg.Agents))
+	for i, a := range cfg.Agents {
+		agentNames[i] = a.Name
+	}
+	if err := sm.EnsureAgentConsumers(ctx, agentNames); err != nil {
+		return fmt.Errorf("create agent consumers: %w", err)
+	}
+	logger.Info("agent consumers ready", "count", len(agentNames))
 
 	selfBin, err := os.Executable()
 	if err != nil {

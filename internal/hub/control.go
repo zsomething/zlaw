@@ -269,7 +269,7 @@ func (cs *ControlSocket) hubStatus() (json.RawMessage, error) {
 		connStatus = "nats"
 		natsStatus = &NATSStatus{
 			Listen:    cs.cfg.NATS.Listen,
-			JetStream: cs.cfg.NATS.JetStream,
+			JetStream: true, // JetStream is always enabled
 		}
 	}
 

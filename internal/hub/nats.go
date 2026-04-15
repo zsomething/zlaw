@@ -23,7 +23,7 @@ import (
 type NATSResult struct {
 	Conn      *nats.Conn
 	ACL       *HubACL
-	JetStream *JetStreamConfig // nil when JetStream is disabled
+	JetStream JetStreamConfig
 }
 
 const (
@@ -34,8 +34,6 @@ const (
 
 // JetStreamConfig holds JetStream settings.
 type JetStreamConfig struct {
-	// Enabled activates the JetStream subsystem.
-	Enabled bool
 	// StoreDir is the directory for JetStream message storage.
 	// Defaults to $ZLAW_HOME/nats when empty.
 	StoreDir string
@@ -100,23 +98,12 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		return nil, fmt.Errorf("build NATS ACL: %w", err)
 	}
 
-	var jsEnabled bool
-	var jsStoreDir string
-
-	// Configure JetStream if enabled in the hub config.
-	if cfg.NATS.JetStream {
-		jsStoreDir, err = EnsureStoreDir(cfg.NATS.StoreDir)
-		if err != nil {
-			return nil, fmt.Errorf("jetstream store dir: %w", err)
-		}
-		jsEnabled = true
-		logger.Info("jetstream enabled", "store_dir", jsStoreDir)
+	// JetStream is always enabled for durable messaging.
+	jsStoreDir, err := EnsureStoreDir(cfg.NATS.StoreDir)
+	if err != nil {
+		return nil, fmt.Errorf("jetstream store dir: %w", err)
 	}
-
-	var jsCfg *JetStreamConfig
-	if jsEnabled {
-		jsCfg = &JetStreamConfig{Enabled: true, StoreDir: jsStoreDir}
-	}
+	logger.Info("jetstream enabled", "store_dir", jsStoreDir)
 
 	opts := &server.Options{
 		Host:           host,
@@ -125,7 +112,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		NoSigs:         true,
 		MaxControlLine: 4096,
 		Users:          acl.Users,
-		JetStream:      jsEnabled,
+		JetStream:      true,
 		StoreDir:       jsStoreDir,
 	}
 
@@ -141,7 +128,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		return nil, fmt.Errorf("embedded nats server did not become ready within %s", natsReadyTimeout)
 	}
 
-	logger.Info("embedded NATS server started", "listen", listen, "jetstream", jsEnabled)
+	logger.Info("embedded NATS server started", "listen", listen, "jetstream", true)
 
 	conn, err := nats.Connect(srv.ClientURL(), nats.UserInfo(hubUsername, acl.HubToken))
 	if err != nil {
@@ -157,7 +144,7 @@ func startEmbedded(ctx context.Context, cfg config.HubConfig, logger *slog.Logge
 		logger.Info("embedded NATS server stopped")
 	}()
 
-	return &NATSResult{Conn: conn, ACL: acl, JetStream: jsCfg}, nil
+	return &NATSResult{Conn: conn, ACL: acl, JetStream: JetStreamConfig{StoreDir: jsStoreDir}}, nil
 }
 
 // connectExternal connects to an existing NATS server at url.

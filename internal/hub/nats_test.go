@@ -62,9 +62,8 @@ func TestStartNATS_JetStreamEnabled(t *testing.T) {
 
 	cfg := config.HubConfig{
 		NATS: config.NATSConfig{
-			Listen:    "127.0.0.1:14530",
-			JetStream: true,
-			StoreDir:  filepath.Join(tmp, "js-store"),
+			Listen:   "127.0.0.1:14530",
+			StoreDir: filepath.Join(tmp, "js-store"),
 		},
 	}
 
@@ -74,33 +73,8 @@ func TestStartNATS_JetStreamEnabled(t *testing.T) {
 	}
 	defer result.Conn.Close()
 
-	if result.JetStream == nil {
-		t.Fatal("expected JetStream config to be set")
-	}
-	if !result.JetStream.Enabled {
-		t.Error("expected JetStream.Enabled to be true")
-	}
 	if result.JetStream.StoreDir == "" {
 		t.Error("expected StoreDir to be non-empty")
-	}
-}
-
-func TestStartNATS_JetStreamDisabled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cfg := config.HubConfig{
-		NATS: config.NATSConfig{Listen: "127.0.0.1:14531"},
-	}
-
-	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
-	if err != nil {
-		t.Fatalf("StartNATS: %v", err)
-	}
-	defer result.Conn.Close()
-
-	if result.JetStream != nil {
-		t.Errorf("expected JetStream config to be nil, got %+v", result.JetStream)
 	}
 }
 
@@ -110,8 +84,7 @@ func TestStartNATS_JetStreamDefaultStoreDir(t *testing.T) {
 
 	cfg := config.HubConfig{
 		NATS: config.NATSConfig{
-			Listen:    "127.0.0.1:14532",
-			JetStream: true,
+			Listen: "127.0.0.1:14532",
 			// StoreDir omitted — should default and be created.
 		},
 	}

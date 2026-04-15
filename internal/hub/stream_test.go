@@ -17,8 +17,7 @@ func TestStreamManager_EnsureAgentInboxStream_Idempotent(t *testing.T) {
 
 	cfg := config.HubConfig{
 		NATS: config.NATSConfig{
-			Listen:    "127.0.0.1:14540",
-			JetStream: true,
+			Listen: "127.0.0.1:14540",
 		},
 	}
 
@@ -69,8 +68,7 @@ func TestStreamManager_EnsureAgentInboxStream_NonDefaultMaxAge(t *testing.T) {
 
 	cfg := config.HubConfig{
 		NATS: config.NATSConfig{
-			Listen:    "127.0.0.1:14541",
-			JetStream: true,
+			Listen: "127.0.0.1:14541",
 		},
 	}
 
@@ -100,34 +98,13 @@ func TestStreamManager_EnsureAgentInboxStream_NonDefaultMaxAge(t *testing.T) {
 	}
 }
 
-func TestStreamManager_EnsureAgentInboxStream_ExternalNATS(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.HubConfig{
-		NATS: config.NATSConfig{Listen: "127.0.0.1:14542"},
-	}
-
-	result, err := hub.StartNATS(ctx, cfg, "", slog.Default())
-	if err != nil {
-		t.Fatalf("StartNATS: %v", err)
-	}
-	defer result.Conn.Close()
-
-	// External connection has no JetStream; js.StreamInfo should error.
-	sm := hub.NewStreamManager(result.Conn)
-	err = sm.EnsureAgentInboxStream(ctx, 0)
-	if err == nil {
-		t.Error("expected error when JetStream is not available")
-	}
-}
-
 func TestStreamManager_EnsureAgentConsumers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cfg := config.HubConfig{
 		NATS: config.NATSConfig{
-			Listen:    "127.0.0.1:14543",
-			JetStream: true,
+			Listen: "127.0.0.1:14543",
 		},
 	}
 
