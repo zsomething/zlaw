@@ -127,22 +127,10 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 
 	pushRegistry := push.NewRegistry()
 
-	// Register adapters from config (multi-adapter support).
+	// Register adapters from config.
 	credPath := credentials.DefaultCredentialsPath()
 	for _, adapterCfg := range adaptersFromConfig(cfg) {
 		registerAdapterFromConfig(ctx, adapterCfg, sessionManager, history, pushRegistry, credPath, logger)
-	}
-
-	// Legacy: also check TELEGRAM_BOT_TOKEN for backward compat.
-	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
-		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
-		tgAdapter.SetHistoryManager(history)
-		pushRegistry.Register("telegram", tgAdapter)
-		go func() {
-			if err := tgAdapter.Run(ctx); err != nil {
-				logger.Error("telegram adapter stopped", "error", err)
-			}
-		}()
 	}
 
 	scheduler := cron.NewScheduler(
