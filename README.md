@@ -18,14 +18,14 @@ Your personal AI assistant powered by a fleet of specialized agents — runs on 
 **A platform for autonomous agents that work for you.**
 zlaw is built around the idea that a fleet of specialized agents — each with its own personality, model, and toolset — can handle complex, multi-step tasks better than a single monolithic assistant.
 
-**Agents that remember and grow.**
-Long-term memory stored as plain files, searchable by meaning. The agent builds context over time without manual curation.
+**Agents that don't forget.**
+Memory stored as plain files, searchable by meaning. Tell the agent something once, it recalls it in future sessions.
 
 **You own your data.**
 Everything — config, memory, history — is a plain file you can read, edit, and version-control. No proprietary storage.
 
 **Any model, any endpoint.**
-Works with Anthropic or any OpenAI-compatible API. Swap models without changing behaviour.
+Native Anthropic API with prompt caching, or any OpenAI-compatible endpoint. Swap models without changing behaviour.
 
 ---
 
@@ -35,13 +35,13 @@ Works with Anthropic or any OpenAI-compatible API. Swap models without changing 
 Go is chosen for performance and developer experience, not to run on a Raspberry Pi. If you need a lightweight agent, look elsewhere.
 
 **General-purpose AI infrastructure.**
-zlaw is a personal assistant platform, not a replacement for enterprise AI platforms like LangSmith or Weights & Biases.
+zlaw is a personal assistant platform, not a replacement for enterprise AI infrastructure or observability tools.
 
 **Agent-to-agent direct communication.**
 All inter-agent communication routes through the hub (NATS broker). No peer-to-peer networking.
 
-**Plugin ecosystem for external services.**
-Skills are Markdown files executed locally. gRPC/plugin binaries are for local skill tooling only — not for integrating with external SaaS.
+**Local skills only.**
+Skills are Markdown files executed locally — no IPC, no gRPC, no external integrations. Agents use built-in tools for external services.
 
 ---
 
@@ -194,34 +194,70 @@ zlaw hub start
 
 ```toml
 # zlaw.toml
-[[agents]]
-name    = "manager"
-manager = true   # receives user input, delegates to peers
+[hub]
+name = "main"
+
+[nats]
+listen = "127.0.0.1:4222"
 
 [[agents]]
-name = "coder"
+name     = "manager"
+manager  = true   # receives user input, delegates to peers
+workspace = "workspaces/manager"
 
 [[agents]]
-name = "researcher"
+name     = "coder"
+workspace = "workspaces/coder"
 ```
 
-Each agent gets its own `agent.toml`, `SOUL.md`, and `IDENTITY.md` under `agents/<name>/`.
+Each agent gets its own `agent.toml`, `SOUL.md`, `IDENTITY.md`, and `credentials.toml` under `agents/<name>/`.
 
 ---
 
 ## Configuration
 
+### zlaw.toml (hub config)
+
+```toml
+[hub]
+name = "main"              # hub display name
+description = "..."        # optional
+
+[nats]
+listen = "127.0.0.1:4222"  # NATS server listen address
+
+[[agents]]
+name      = "manager"
+manager   = true            # receives user input, delegates to peers
+workspace = "workspaces/manager"  # agent's working directory
+# dir = "agents/manager"     # optional, defaults to agents/<name>
+```
+
 ### Minimal `agent.toml`
 
 ```toml
 [agent]
-name = "myagent"
+id = "myagent"
 
 [llm]
 backend      = "openrouter"
 model        = "openai/gpt-4o"
 auth_profile = "openrouter"
 max_tokens   = 4096
+
+[[adapter]]
+type = "cli"    # cli, telegram, or omit for headless
+```
+
+### Multi-channel adapters
+
+```toml
+[[adapter]]
+type         = "telegram"
+auth_profile = "telegram"
+
+[[adapter]]
+type         = "cli"
 ```
 
 ### Memory
@@ -235,18 +271,18 @@ backend = "openrouter"
 model   = "openai/text-embedding-3-small"
 ```
 
-Memory files live under `$ZLAW_HOME/memories/<agent>/` as plain Markdown — readable and editable. The vector index is a local cache; delete it to rebuild.
+Memory files live under `$ZLAW_HOME/memories/<agentName>/` as plain Markdown — readable and editable. The vector index is a local cache; delete it to rebuild.
 
 ### Context management
 
 ```toml
 [llm]
-context_token_budget         = 80000
-context_summarize_threshold  = 0.8
-context_summarize_turns      = 10
-context_summarize_model      = "openai/gpt-4o-mini"
-context_prune_levels         = ["strip_thinking", "strip_tool_results", "drop_pairs"]
-max_memory_tokens            = 2000
+context_token_budget        = 80000
+context_summarize_threshold = 0.8
+context_summarize_turns     = 10
+context_summarize_model     = "openai/gpt-4o-mini"
+context_prune_levels        = ["strip_thinking", "strip_tool_results", "drop_pairs"]
+max_memory_tokens           = 2000
 ```
 
 ---
