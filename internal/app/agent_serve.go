@@ -111,17 +111,18 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("create run dir: %w", err)
 	}
-	// ZLAW_AGENT is injected by the hub and matches the ACL username exactly.
-	// Prefer it so NATS auth works regardless of what agent.toml says.
-	name := os.Getenv("ZLAW_AGENT")
-	if name == "" {
-		name = cfg.Agent.ID
+	// ZLAW_AGENT is injected by the hub and matches the hub's agent entry name.
+	// Use cfg.Agent.ID for all runtime paths — it's the stable agent identifier.
+	// Fall back to ZLAW_AGENT if ID is not set (standalone mode with init-based config).
+	id := cfg.Agent.ID
+	if id == "" {
+		id = os.Getenv("ZLAW_AGENT")
 	}
-	if name == "" {
-		name = "default"
+	if id == "" {
+		id = "default"
 	}
-	sockPath := filepath.Join(runDir, name+".sock")
-	pidPath := filepath.Join(runDir, name+".pid")
+	sockPath := filepath.Join(runDir, "agent-"+id+".sock")
+	pidPath := filepath.Join(runDir, "agent-"+id+".pid")
 	t := transport.NewUnixTransport(sockPath)
 	d := clidaemon.New(t, sessionManager, pidPath, logger)
 
@@ -163,7 +164,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	// Hub-connected mode: connect to NATS, publish registration, handle inbox.
 	if natsURL := os.Getenv("ZLAW_NATS_URL"); natsURL != "" {
 		natsToken := os.Getenv("ZLAW_NATS_CREDS")
-		nm, err := messaging.NewNATSMessenger(natsURL, name, natsToken)
+		nm, err := messaging.NewNATSMessenger(natsURL, id, natsToken)
 		if err != nil {
 			return fmt.Errorf("connect to hub NATS: %w", err)
 		}
@@ -194,7 +195,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 
 		caps := toolCapabilities(registry)
 		hubClient := agent.NewHubClient(
-			name,
+			id,
 			version.Version,
 			caps,
 			cfg.Agent.Roles,
@@ -211,7 +212,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 		logger.Info("hub client started", "nats_url", natsURL)
 	}
 
-	logger.Info("daemon starting", "agent", name, "socket", sockPath)
+	logger.Info("daemon starting", "agent", id, "socket", sockPath)
 
 	drainTimeout := time.Duration(cfg.Serve.ShutdownTimeoutSec) * time.Second
 	return d.Serve(ctx, drainTimeout)
