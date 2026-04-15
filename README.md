@@ -9,7 +9,7 @@
 
 > **Work in progress.** This project is under active development and not ready for everyday use. Expect breaking changes, missing features, and rough edges.
 
-Your personal AI assistant — runs on your machine, works with any LLM, and gets more useful the longer you use it.
+Your personal AI assistant powered by a fleet of specialized agents — runs on your machine, works with any LLM, and gets more useful the longer you use it.
 
 ---
 
