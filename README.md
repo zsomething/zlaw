@@ -5,6 +5,8 @@
 [![codecov](https://codecov.io/gh/zsomething/zlaw/branch/main/graph/badge.svg)](https://codecov.io/gh/zsomething/zlaw)
 [![Go version](https://img.shields.io/github/go-mod/go-version/zsomething/zlaw)](go.mod)
 
+![zlaw logo](.github/media/zlaw.png)
+
 > **Work in progress.** This project is under active development and not ready for everyday use. Expect breaking changes, missing features, and rough edges.
 
 Your personal AI assistant — runs on your machine, works with any LLM, and gets more useful the longer you use it.
