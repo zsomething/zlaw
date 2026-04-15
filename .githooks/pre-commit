@@ -5,3 +5,6 @@ if [ -n "$staged" ]; then
     echo "$staged" | xargs gofmt -w
     echo "$staged" | xargs git add
 fi
+
+# Run golangci-lint on all Go files.
+golangci-lint run ./...

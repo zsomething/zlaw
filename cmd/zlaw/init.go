@@ -25,50 +25,6 @@ manager = true
 # listen = "127.0.0.1:4222"
 `
 
-// perAgentCredentialsTemplate is the initial credentials file for each agent.
-// The hub scaffolds this at agents/<name>/credentials.toml.
-// Values use ${ENV_VAR} syntax for environment variable expansion.
-const perAgentCredentialsTemplate = `[profiles.anthropic]
-name = "anthropic"
-data = { api_key = "${ANTHROPIC_API_KEY}" }
-
-[profiles.telegram]
-name = "telegram"
-data = { telegram_bot_token = "${TELEGRAM_BOT_TOKEN}" }
-
-[profiles.fizzy]
-name = "fizzy"
-data = { fizzy_api_key = "${FIZZY_API_KEY}" }
-`
-
-// agentTOMLTemplate is the agent config file.
-// The hub owns this file; agents do not have access to it at rest.
-const agentTOMLTemplate = `[agent]
-id = "manager"
-description = ""
-
-[llm]
-backend = "anthropic"
-model = "claude-opus-4-5"
-auth_profile = "anthropic"
-max_tokens = 8192
-timeout_sec = 120
-
-[tools]
-# allowed = ["bash", "read_file", ...]  # uncomment to restrict tool access
-
-# Adapters: each adapter receives input from a "channel".
-# The auth_profile references a profile in credentials.toml.
-
-[[adapter]]
-type = "telegram"
-auth_profile = "telegram"
-
-[[adapter]]
-type = "fizzy"
-auth_profile = "fizzy"
-`
-
 const soulMDTemplate = `You are a helpful personal assistant.
 `
 
