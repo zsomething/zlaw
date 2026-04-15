@@ -51,7 +51,7 @@ func TestBuildHubACL_AgentCannotPublishHubInbox(t *testing.T) {
 	// In the P2P model, no agent should be able to publish to zlaw.hub.inbox
 	// (hub management API is CLI-only via control socket).
 	acl, err := hub.BuildHubACL([]config.AgentEntry{
-		{Name: "manager", Manager: true}, // deprecated flag, should have no effect
+		{Name: "specialist"},
 	})
 	if err != nil {
 		t.Fatalf("BuildHubACL: %v", err)
