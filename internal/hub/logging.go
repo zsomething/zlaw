@@ -1,90 +1,47 @@
 package hub
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/zsomething/zlaw/internal/logging"
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
-// Color represents ANSI terminal colors.
-type Color int
+// Re-export types from logging package for backward compatibility
+type Color = logging.Color
 
 const (
-	ColorDefault Color = 0
-	ColorRed     Color = 31
-	ColorGreen   Color = 32
-	ColorYellow  Color = 33
-	ColorBlue    Color = 34
-	ColorMagenta Color = 35
-	ColorCyan    Color = 36
-	ColorGray    Color = 90
-	ColorWhite   Color = 97
+	ColorDefault = logging.ColorDefault
+	ColorRed     = logging.ColorRed
+	ColorGreen   = logging.ColorGreen
+	ColorYellow  = logging.ColorYellow
+	ColorBlue    = logging.ColorBlue
+	ColorMagenta = logging.ColorMagenta
+	ColorCyan    = logging.ColorCyan
+	ColorGray    = logging.ColorGray
+	ColorWhite   = logging.ColorWhite
+
+	LabelColor = logging.ColorGray
 )
 
-// AgentColorPalette is a stable color palette for agent log prefixes.
-var AgentColorPalette = []Color{
-	ColorCyan,
-	ColorGreen,
-	ColorMagenta,
-	ColorYellow,
-	ColorBlue,
-	ColorRed,
-}
-
-// AgentColor returns a stable color for the given agent name.
-// Uses a simple hash to select from the palette deterministically.
-func AgentColor(name string) Color {
-	hash := 0
-	for _, c := range name {
-		hash = hash*31 + int(c)
-	}
-	return AgentColorPalette[hash%len(AgentColorPalette)]
-}
-
-// Colorize applies ANSI color codes to text if color is enabled.
-func Colorize(color Color, text string) string {
-	if color == ColorDefault {
-		return text
-	}
-	return fmt.Sprintf("\x1b[%dm%s\x1b[0m", color, text)
-}
-
-// LabelColor is the color used for hub log lines.
-const LabelColor = ColorGray
+var (
+	AgentColorPalette = logging.AgentColorPalette
+	AgentColor        = logging.AgentColor
+	Colorize          = logging.Colorize
+)
 
 // DefaultNoColor returns true if output should not use colors.
-// Respects ZLAW_NO_COLOR env var and checks if stdout is a TTY.
 func DefaultNoColor() bool {
-	if os.Getenv("ZLAW_NO_COLOR") != "" {
-		return true
-	}
-	return !isTTY(os.Stdout)
-}
-
-func isTTY(f *os.File) bool {
-	// Try to detect if file descriptor is a terminal.
-	// This is a simple check; works on Linux/macOS.
-	if f == nil {
-		return false
-	}
-	stat, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return (stat.Mode() & os.ModeCharDevice) == os.ModeCharDevice
-}
-
-// ColoredHandler wraps a slog.Handler and adds color and label prefix.
-type ColoredHandler struct {
-	handler slog.Handler
-	label   string
-	color   Color
-	noColor bool
-	attrs   []slog.Attr
-	groups  bool
+	return logging.DetectNoColor()
 }
 
 // ColoredHandlerOption configures a ColoredHandler.
@@ -105,10 +62,18 @@ func WithNoColor(noColor bool) ColoredHandlerOption {
 	return func(h *ColoredHandler) { h.noColor = noColor }
 }
 
+// ColoredHandler wraps a slog.Handler and adds color and label prefix.
+// Deprecated: Use logging.PrettyHandler instead.
+type ColoredHandler struct {
+	handler slog.Handler
+	label   string
+	color   Color
+	noColor bool
+}
+
 // NewColoredHandler creates a new ColoredHandler wrapping the given handler.
-// If noColor is nil, defaults to DefaultNoColor().
 func NewColoredHandler(h slog.Handler, noColor *bool) *ColoredHandler {
-	nc := DefaultNoColor()
+	nc := logging.DetectNoColor()
 	if noColor != nil {
 		nc = *noColor
 	}
@@ -121,7 +86,6 @@ func NewColoredHandler(h slog.Handler, noColor *bool) *ColoredHandler {
 
 // Handle implements slog.Handler.
 func (h *ColoredHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Build the prefix
 	var prefix string
 	if h.label != "" {
 		if h.noColor {
@@ -130,15 +94,6 @@ func (h *ColoredHandler) Handle(ctx context.Context, r slog.Record) error {
 			prefix = Colorize(h.color, h.label) + " "
 		}
 	}
-
-	// Get the formatted message from the underlying handler
-	// We need to intercept the write to add our prefix.
-	// Since slog.TextHandler writes directly, we'll capture it.
-	return h.handleWithPrefix(ctx, r, prefix)
-}
-
-func (h *ColoredHandler) handleWithPrefix(ctx context.Context, r slog.Record, prefix string) error {
-	// Modify the message to include the prefix before passing to handler.
 	if prefix != "" {
 		r.Message = prefix + r.Message
 	}
@@ -170,11 +125,18 @@ func (h *ColoredHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
+// ApplyHandlerOptions applies options to a handler.
+func ApplyHandlerOptions(h *ColoredHandler, opts ...ColoredHandlerOption) *ColoredHandler {
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
 // LinePrefixWriter wraps an io.Writer and prepends a prefix to each line.
 type LinePrefixWriter struct {
-	w       io.Writer
-	prefix  string
-	noColor bool
+	w      io.Writer
+	prefix string
 }
 
 // NewLinePrefixWriter creates a writer that prefixes each line.
@@ -187,7 +149,6 @@ func (p *LinePrefixWriter) Write(b []byte) (n int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
-
 	lines := strings.Split(string(b), "\n")
 	for i, line := range lines {
 		if line != "" || i < len(lines)-1 {
@@ -210,7 +171,7 @@ func (p *LinePrefixWriter) Write(b []byte) (n int, err error) {
 	return len(b), nil
 }
 
-// ColoredLinePrefixWriter adds color to the prefix when not in no-color mode.
+// ColoredLinePrefixWriter adds color to the prefix.
 type ColoredLinePrefixWriter struct {
 	*LinePrefixWriter
 	color Color
@@ -228,10 +189,222 @@ func NewColoredLinePrefixWriter(w io.Writer, prefix string, color Color, noColor
 	}
 }
 
-// ApplyHandlerOptions applies options to a handler and returns it.
-func ApplyHandlerOptions(h *ColoredHandler, opts ...ColoredHandlerOption) *ColoredHandler {
-	for _, opt := range opts {
-		opt(h)
+// agentLogWriter reads JSON log lines from the agent process and writes
+// them in pretty format to stdout and optionally publishes to NATS.
+type agentLogWriter struct {
+	label     string
+	color     Color
+	noColor   bool
+	buf       strings.Builder
+	mu        sync.Mutex
+	messenger messaging.Messenger
+	agentName string
+	timeColor Color // color for timestamp (gray)
+}
+
+// newAgentLogWriter creates a writer that reformats agent JSON logs.
+func newAgentLogWriter(label string, color Color, noColor bool) *agentLogWriter {
+	return &agentLogWriter{
+		label:     label,
+		color:     color,
+		noColor:   noColor,
+		timeColor: ColorGray,
 	}
-	return h
+}
+
+// withMessenger sets the messenger for NATS publishing.
+func (w *agentLogWriter) withMessenger(m messaging.Messenger, agentName string) *agentLogWriter {
+	w.messenger = m
+	w.agentName = agentName
+	return w
+}
+
+func (w *agentLogWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.buf.Write(p)
+
+	for {
+		data := w.buf.String()
+		lines := strings.Split(data, "\n")
+
+		if len(lines) <= 1 && !strings.HasSuffix(data, "\n") {
+			break
+		}
+
+		for i := 0; i < len(lines)-1; i++ {
+			line := strings.TrimSpace(lines[i])
+			if line != "" {
+				w.writeLine(line)
+			}
+		}
+
+		if strings.HasSuffix(data, "\n") {
+			w.buf.Reset()
+		} else {
+			w.buf.Reset()
+			w.buf.WriteString(lines[len(lines)-1])
+		}
+		break
+	}
+
+	return len(p), nil
+}
+
+func (w *agentLogWriter) writeLine(line string) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		fmt.Fprintln(os.Stdout, w.prefix("")+line)
+		return
+	}
+
+	var level, msg, timeStr string
+	var attrs []string
+
+	if v, ok := raw["level"]; ok {
+		json.Unmarshal(v, &level)
+	}
+	if v, ok := raw["msg"]; ok {
+		json.Unmarshal(v, &msg)
+	}
+	if v, ok := raw["time"]; ok {
+		json.Unmarshal(v, &timeStr)
+	}
+
+	agent := w.agentName
+	if v, ok := raw["agent"]; ok {
+		json.Unmarshal(v, &agent)
+	}
+
+	for k, v := range raw {
+		if k == "time" || k == "level" || k == "msg" || k == "agent" {
+			continue
+		}
+		var val any
+		json.Unmarshal(v, &val)
+		attrs = append(attrs, k+"="+formatAttr(val))
+	}
+
+	// Publish to NATS if messenger is set
+	if w.messenger != nil && agent != "" {
+		logData := make(map[string]any)
+		logData["agent"] = agent
+		logData["level"] = level
+		logData["msg"] = msg
+		if timeStr != "" {
+			logData["time"] = timeStr
+		}
+		for k, v := range raw {
+			if k == "time" || k == "level" || k == "msg" || k == "agent" {
+				continue
+			}
+			var val any
+			json.Unmarshal(v, &val)
+			logData[k] = val
+		}
+		payload, _ := json.Marshal(logData)
+		w.messenger.Publish(context.Background(), "zlaw.logs", payload)
+		w.messenger.Publish(context.Background(), fmt.Sprintf("agent.%s.logs", agent), payload)
+	}
+
+	var sb strings.Builder
+
+	// Timestamp (from agent JSON or current time)
+	if timeStr != "" {
+		if t, err := time.Parse(time.RFC3339Nano, timeStr); err == nil {
+			timeStr = t.Format("15:04:05")
+		}
+	} else {
+		timeStr = time.Now().Format("15:04:05")
+	}
+
+	if w.noColor {
+		sb.WriteString(timeStr)
+	} else {
+		sb.WriteString(Colorize(w.timeColor, timeStr))
+	}
+	sb.WriteString(" ")
+
+	// Label and level
+	sb.WriteString(w.prefix(level))
+	sb.WriteString(" ")
+
+	// Message and attrs
+	sb.WriteString(msg)
+	for _, a := range attrs {
+		sb.WriteString(" ")
+		sb.WriteString(a)
+	}
+	fmt.Fprintln(os.Stdout, sb.String())
+}
+
+func (w *agentLogWriter) prefix(level string) string {
+	var sb strings.Builder
+
+	// Label
+	if w.noColor {
+		sb.WriteString(w.label)
+	} else {
+		sb.WriteString(Colorize(w.color, w.label))
+	}
+	sb.WriteString(" ")
+
+	// Level
+	if w.noColor {
+		sb.WriteString(strings.ToUpper(level))
+	} else {
+		levelColor := levelColorFor(level)
+		sb.WriteString(Colorize(levelColor, strings.ToUpper(level)))
+	}
+
+	return sb.String()
+}
+
+func levelColorFor(level string) Color {
+	switch strings.ToLower(level) {
+	case "debug":
+		return ColorGray
+	case "info":
+		return ColorGreen
+	case "warn", "warning":
+		return ColorYellow
+	case "error":
+		return ColorRed
+	default:
+		return ColorDefault
+	}
+}
+
+func formatAttr(v any) string {
+	switch val := v.(type) {
+	case string:
+		if strings.Contains(val, " ") || strings.Contains(val, "=") || strings.Contains(val, "\"") {
+			return fmt.Sprintf("%q", val)
+		}
+		return val
+	case nil:
+		return "<nil>"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// pipeAgentLogs spawns a goroutine that reads from r and writes pretty logs.
+func pipeAgentLogs(r io.Reader, label string, color Color, noColor bool) io.Writer {
+	pr, pw := io.Pipe()
+	w := newAgentLogWriter(label, color, noColor)
+
+	go func() {
+		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				w.writeLine(line)
+			}
+		}
+	}()
+
+	return pw
 }

@@ -3,20 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/zsomething/zlaw/internal/llm/auth"
 )
-
-func logLevel() slog.Level {
-	if os.Getenv("ZLAW_LOG_LEVEL") == "debug" {
-		return slog.LevelDebug
-	}
-	return slog.LevelInfo
-}
 
 // prompt writes label to stdout and reads a line from stdin.
 // If sensitive is true, it attempts to disable terminal echo (best-effort).

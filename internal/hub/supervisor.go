@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 const (
@@ -39,6 +40,7 @@ type Supervisor struct {
 	credentialsPath string // path to credentials.toml; "" → default
 	agentTokens     AgentTokens
 	logger          *slog.Logger
+	messenger       messaging.Messenger // for publishing agent logs to NATS
 	noColor         bool
 
 	mu     sync.Mutex
@@ -124,6 +126,24 @@ func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credential
 		credentialsPath: credentialsPath,
 		agentTokens:     agentTokens,
 		logger:          logger,
+		noColor:         noColor,
+		agents:          make(map[string]*managedAgent),
+	}
+}
+
+// NewSupervisorWithMessenger creates a Supervisor with a messenger for log publishing.
+func NewSupervisorWithMessenger(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool, messenger messaging.Messenger) *Supervisor {
+	if agentTokens == nil {
+		agentTokens = make(AgentTokens)
+	}
+	return &Supervisor{
+		cfg:             cfg,
+		natsURL:         natsURL,
+		selfBin:         selfBin,
+		credentialsPath: credentialsPath,
+		agentTokens:     agentTokens,
+		logger:          logger,
+		messenger:       messenger,
 		noColor:         noColor,
 		agents:          make(map[string]*managedAgent),
 	}
@@ -348,19 +368,30 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 
 	cmd := exec.Command(bin, args...) //nolint:gosec
 
-	// Wrap stdout/stderr with agent-specific line prefixer.
-	label := fmt.Sprintf("[%s]", entry.Name)
-	color := AgentColor(entry.Name)
-	cmd.Stdout = NewColoredLinePrefixWriter(os.Stdout, label, color, s.noColor)
-	cmd.Stderr = NewColoredLinePrefixWriter(os.Stderr, label, color, s.noColor)
-
 	// Build environment: inherit everything, override/add hub-specific vars.
+	// ZLAW_LOG_FORMAT=json makes the agent output structured JSON that we relay
+	// with PrettyHandler. This allows unified log formatting at the hub.
 	env := os.Environ()
 	env = SetEnv(env, "ZLAW_AGENT", entry.Name)
 	env = SetEnv(env, "ZLAW_NATS_URL", s.natsURL)
+	env = SetEnv(env, "ZLAW_LOG_FORMAT", "json")
+	env = SetEnv(env, "ZLAW_NO_COLOR", "1") // colors applied by hub's PrettyHandler
 	if agentDir != "" {
 		env = SetEnv(env, "ZLAW_AGENT_DIR", agentDir)
 	}
+
+	// Pipe agent stdout/stderr through JSON log reader for unified pretty output.
+	// If messenger is set, logs are also published to NATS for 'zlaw agent logs' clients.
+	label := fmt.Sprintf("[agent:%s]", entry.Name)
+	color := AgentColor(entry.Name)
+	stdoutWriter := newAgentLogWriter(label, color, s.noColor)
+	stderrWriter := newAgentLogWriter(label, color, s.noColor)
+	if s.messenger != nil {
+		stdoutWriter = stdoutWriter.withMessenger(s.messenger, entry.Name)
+		stderrWriter = stderrWriter.withMessenger(s.messenger, entry.Name)
+	}
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 
 	// Inject credentials from the hub's credentials store.
 	credEnv, err := BuildCredentialEnv(entry, s.credentialsPath)
