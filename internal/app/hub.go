@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"text/tabwriter"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -67,23 +70,54 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		config.ZlawHome(),
 		logger,
 	)
+
+	// Start the hub management NATS inbox handler.
 	go func() {
 		if err := mgmtHandler.Start(ctx); err != nil && ctx.Err() == nil {
 			logger.Error("hub management handler stopped unexpectedly", "err", err)
 		}
 	}()
 
+	// Start the agent-tool NATS inbox handler (HubInbox).
+	hubInbox := hub.NewHubInbox(sup, reg, hubConfigAdapter{cfg}, logger)
+	go func() {
+		if err := mgmtHandler.StartToolInbox(ctx, hubInbox); err != nil && ctx.Err() == nil {
+			logger.Error("hub tool inbox handler stopped unexpectedly", "err", err)
+		}
+	}()
+
+	// Start the control socket for CLI access.
+	controlPath := hub.ControlSocketPath(config.ZlawHome())
+	ctrlSock := hub.NewControlSocket(
+		controlPath,
+		sup,
+		reg,
+		mgmtHandler,
+		cfg,
+		logger,
+	)
+	if err := ctrlSock.Start(ctx); err != nil {
+		return fmt.Errorf("start control socket: %w", err)
+	}
+
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
 		"agents", len(cfg.Agents),
 		"manager", managerName,
+		"control", controlPath,
 	)
 
 	// Block until context is cancelled (signal or parent shutdown).
 	<-ctx.Done()
 	logger.Info("hub shutting down")
+	ctrlSock.Stop() //nolint:errcheck
 	return nil
 }
+
+// hubConfigAdapter adapts config.HubConfig to hub.ToolHubConfig.
+type hubConfigAdapter struct{ cfg config.HubConfig }
+
+func (a hubConfigAdapter) HubName() string { return a.cfg.Hub.Name }
 
 // managerAgentName returns the name of the first agent entry marked Manager,
 // or empty string if none.
@@ -96,11 +130,115 @@ func managerAgentName(cfg config.HubConfig) string {
 	return ""
 }
 
-// HubStatus prints the current hub status.
-// Phase 2 stub — will query the supervisor via Unix socket.
-func HubStatus() error {
-	fmt.Println("Hub status: not running")
-	fmt.Println("(Phase 2 will query the supervisor process via Unix socket)")
+// HubStatus prints the current hub status via the control socket.
+// If the hub is not running (socket unreachable), it prints a note.
+func HubStatus(ctx context.Context, jsonOutput bool) error {
+	status, err := hubStatusFromSocket(ctx)
+	if err != nil {
+		// Hub not running.
+		fmt.Println("Hub status: not running")
+		fmt.Println("(Start the hub with 'zlaw hub start' to see status)")
+		return nil //nolint:nilerr
+	}
+
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(status)
+	}
+	return printHubStatus(status)
+}
+
+// hubStatusSocketResponse is the JSON payload from hub.status.
+type hubStatusSocketResponse struct {
+	Name       string      `json:"name"`
+	Version    string      `json:"version"`
+	AgentCount int         `json:"agent_count"`
+	Agents     []agentInfo `json:"agents"`
+	ConnStatus string      `json:"connected_status"`
+	NATS       *natsInfo   `json:"nats,omitempty"`
+}
+
+type agentInfo struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	PID     int    `json:"pid"`
+	LastErr string `json:"last_err,omitempty"`
+}
+
+type natsInfo struct {
+	Listen    string `json:"listen"`
+	JetStream bool   `json:"jetstream"`
+}
+
+const socketDialTimeout = 2 * time.Second
+
+// hubStatusFromSocket connects to the hub's control socket and requests hub.status.
+func hubStatusFromSocket(ctx context.Context) (*hubStatusSocketResponse, error) {
+	socketPath := hub.ControlSocketPath(config.ZlawHome())
+
+	conn, err := net.DialTimeout("unix", socketPath, socketDialTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("connect to hub control socket: %w", err)
+	}
+	defer func() { conn.Close() }() //nolint:errcheck
+
+	req := `{"method":"hub.status"}` + "\n"
+	if _, err := conn.Write([]byte(req)); err != nil {
+		return nil, fmt.Errorf("send hub.status request: %w", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	var raw json.RawMessage
+	dec := json.NewDecoder(conn)
+	if err := dec.Decode(&raw); err != nil {
+		return nil, fmt.Errorf("read hub.status response: %w", err)
+	}
+
+	var resp struct {
+		OK     bool            `json:"ok"`
+		Result json.RawMessage `json:"result,omitempty"`
+		Error  string          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse hub.status response: %w", err)
+	}
+	if !resp.OK {
+		return nil, fmt.Errorf("hub.status error: %s", resp.Error)
+	}
+
+	var status hubStatusSocketResponse
+	if err := json.Unmarshal(resp.Result, &status); err != nil {
+		return nil, fmt.Errorf("decode hub.status result: %w", err)
+	}
+	return &status, nil
+}
+
+// printHubStatus prints the hub status in human-readable format.
+func printHubStatus(s *hubStatusSocketResponse) error {
+	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintf(tw, "Hub name:\t%s\n", s.Name)
+	fmt.Fprintf(tw, "Status:\t\t%s\n", s.ConnStatus)
+	if s.NATS != nil {
+		fmt.Fprintf(tw, "NATS listen:\t%s\n", s.NATS.Listen)
+		fmt.Fprintf(tw, "JetStream:\t%v\n", s.NATS.JetStream)
+	}
+	fmt.Fprintf(tw, "Agents:\t\t%d\n", s.AgentCount)
+	tw.Flush() //nolint:errcheck
+
+	if len(s.Agents) > 0 {
+		fmt.Fprintln(os.Stdout, "\nAgent status:")
+		tw2 := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw2, "Name\tRunning\tPID\tError")
+		for _, a := range s.Agents {
+			running := "yes"
+			if !a.Running {
+				running = "no"
+			}
+			fmt.Fprintf(tw2, "%s\t%s\t%d\t%s\n", a.Name, running, a.PID, a.LastErr)
+		}
+		tw2.Flush() //nolint:errcheck
+	}
 	return nil
 }
 
