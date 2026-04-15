@@ -35,7 +35,7 @@ type writeFileInput struct {
 
 func (WriteFile) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "write_file",
+		Name:        "write",
 		Description: "Write content to a file. Creates the file and any missing parent directories. Overwrites the file if it already exists.",
 		InputSchema: writeFileSchema,
 	}

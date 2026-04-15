@@ -190,13 +190,13 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 
 		// Inject messenger into discovery tools that were registered by buildToolRegistry.
 		if listAgents := registry.Get("list_agents"); listAgents != nil {
-			if la, ok := listAgents.(*builtin.ListAgents); ok {
+			if la, ok := listAgents.(*builtin.AgentList); ok {
 				la.Registry = builtin.NewAgentRegistry(nm)
 				la.AgentID = id // mark "is_self" for current agent
 			}
 		}
 		if getAgent := registry.Get("get_agent"); getAgent != nil {
-			if ga, ok := getAgent.(*builtin.GetAgent); ok {
+			if ga, ok := getAgent.(*builtin.AgentGet); ok {
 				ga.Registry = builtin.NewAgentRegistry(nm)
 			}
 		}

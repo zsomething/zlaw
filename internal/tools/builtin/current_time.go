@@ -20,7 +20,7 @@ var currentTimeSchema = []byte(`{
 
 func (CurrentTime) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "current_time",
+		Name:        "time",
 		Description: "Returns the current date and time in UTC (RFC 3339 format).",
 		InputSchema: currentTimeSchema,
 	}
