@@ -70,9 +70,13 @@ func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
 }
 
 // agentPermissions returns the NATS subject permissions for all agents.
-// In the P2P delegation model all agents have equal permissions:
-//   - publish:   agent.*.inbox (send to any agent), zlaw.registry (heartbeats)
-//   - subscribe: agent.<name>.inbox (own inbox), _INBOX.> (reply subjects)
+// In the P2P delegation model all agents need:
+//   - subscribe:  zlaw.registry        (receive heartbeats / registration messages)
+//   - publish:    agent.*.inbox        (P2P delegation)
+//   - publish:    zlaw.registry        (send heartbeats)
+//   - subscribe:  agent.<name>.inbox   (own inbox for JetStream durable consumer)
+//   - publish/sub: $JS.API.>          (JetStream: create consumers, fetch, info, etc.)
+//   - subscribe:  _INBOX.>             (NATS reply subjects for request/reply)
 func agentPermissions(name string) *server.Permissions {
 	inboxSubject := "agent." + name + ".inbox"
 	return &server.Permissions{
@@ -80,12 +84,15 @@ func agentPermissions(name string) *server.Permissions {
 			Allow: []string{
 				"agent.*.inbox", // P2P: send delegation to any agent
 				"zlaw.registry", // heartbeat / registry
+				"$JS.API.>",     // JetStream management API
 			},
 		},
 		Subscribe: &server.SubjectPermission{
 			Allow: []string{
-				inboxSubject,
-				"_INBOX.>", // NATS reply subjects for request/reply
+				"zlaw.registry", // heartbeat subscription / registry messages
+				inboxSubject,    // own inbox (JetStream durable consumer)
+				"$JS.API.>",     // JetStream API responses
+				"_INBOX.>",      // NATS reply subjects
 			},
 		},
 	}
