@@ -98,22 +98,24 @@ type AgentRegistryReader interface {
 // ManagementHandler subscribes to zlaw.hub.inbox and dispatches management
 // operations (agent.list, agent.create, agent.configure, agent.stop,
 // agent.restart, agent.remove) to the Supervisor and Registry.
+//
+// Note: hub management API is CLI-only (#273). The NATS zlaw.hub.inbox
+// handler is retained for possible future use but the hub's control socket
+// is the primary interface for lifecycle operations.
 type ManagementHandler struct {
-	conn        *nats.Conn
-	supervisor  AgentSpawner
-	registry    AgentRegistryReader
-	managerName string // name of the manager agent (self-protection)
-	zlawHome    string
-	logger      *slog.Logger
+	conn       *nats.Conn
+	supervisor AgentSpawner
+	registry   AgentRegistryReader
+	zlawHome   string
+	logger     *slog.Logger
 }
 
-// NewManagementHandler creates a ManagementHandler. managerName is the name of
-// the manager agent; agent.remove will reject requests targeting it.
+// NewManagementHandler creates a ManagementHandler. It receives a supervisor
+// and registry to dispatch agent lifecycle operations.
 func NewManagementHandler(
 	conn *nats.Conn,
 	supervisor AgentSpawner,
 	registry AgentRegistryReader,
-	managerName string,
 	zlawHome string,
 	logger *slog.Logger,
 ) *ManagementHandler {
@@ -121,12 +123,11 @@ func NewManagementHandler(
 		logger = slog.Default()
 	}
 	return &ManagementHandler{
-		conn:        conn,
-		supervisor:  supervisor,
-		registry:    registry,
-		managerName: managerName,
-		zlawHome:    zlawHome,
-		logger:      logger,
+		conn:       conn,
+		supervisor: supervisor,
+		registry:   registry,
+		zlawHome:   zlawHome,
+		logger:     logger,
 	}
 }
 
@@ -274,15 +275,6 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 		Workspace:     workspaceDir,
 		RestartPolicy: config.RestartOnFailure,
 	}
-	if bin, ok := stringParam(params, "binary"); ok {
-		entry.Binary = bin
-	}
-	if dir, ok := stringParam(params, "dir"); ok && dir != "" {
-		entry.Dir = dir
-	}
-	if mgr, ok := params["manager"].(bool); ok {
-		entry.Manager = mgr
-	}
 
 	if err := h.supervisor.Spawn(ctx, entry); err != nil {
 		return fmt.Errorf("agent.create: spawn: %w", err)
@@ -335,14 +327,11 @@ func (h *ManagementHandler) opAgentRestart(params map[string]any) error {
 }
 
 // opAgentRemove stops the agent and removes it from the registry.
-// Rejects if the target is the manager agent (self-protection).
+// No special protection for any agent — hub management is CLI-only (#273).
 func (h *ManagementHandler) opAgentRemove(params map[string]any) error {
 	name, ok := stringParam(params, "name")
 	if !ok || name == "" {
 		return fmt.Errorf("agent.remove: param 'name' is required")
-	}
-	if name == h.managerName {
-		return fmt.Errorf("agent.remove: cannot remove manager agent %q", name)
 	}
 
 	if err := h.supervisor.Stop(name); err != nil {
