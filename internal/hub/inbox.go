@@ -362,3 +362,58 @@ func stringParam(params map[string]any, key string) (string, bool) {
 	s, ok := v.(string)
 	return s, ok
 }
+
+// toolSubject is the NATS subject for hub tool calls.
+const toolSubject = "zlaw.hub.tool"
+
+// StartToolInbox subscribes to zlaw.hub.tool and dispatches incoming
+// tool-call requests to handler. It blocks until ctx is cancelled.
+func (h *ManagementHandler) StartToolInbox(ctx context.Context, handler *HubInbox) error {
+	sub, err := h.conn.Subscribe(toolSubject, func(msg *nats.Msg) {
+		var req ToolRequest
+		if err := json.Unmarshal(msg.Data, &req); err != nil {
+			h.logger.Warn("hub tool inbox: malformed tool request", "err", err)
+			return
+		}
+		if req.Tool == "" {
+			h.logger.Warn("hub tool inbox: request missing tool name")
+			return
+		}
+
+		reply := handler.HandleToolRequest(ctx, req)
+		replyData, err := json.Marshal(reply)
+		if err != nil {
+			h.logger.Error("hub tool inbox: marshal reply failed", "err", err)
+			return
+		}
+
+		// Publish reply to the caller-provided inbox subject.
+		if req.ReplyTo != "" {
+			if pubErr := h.conn.Publish(req.ReplyTo, replyData); pubErr != nil {
+				h.logger.Error("hub tool inbox: publish reply failed",
+					"reply_to", req.ReplyTo, "err", pubErr)
+			}
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("hub tool inbox: subscribe to %s: %w", toolSubject, err)
+	}
+
+	h.logger.Info("hub tool inbox active", "subject", toolSubject)
+
+	<-ctx.Done()
+	sub.Unsubscribe() //nolint:errcheck
+	return nil
+}
+
+// HandleTool implements ToolHandler. It dispatches tool calls via the
+// existing dispatch logic, using the tool name as the op.
+func (h *ManagementHandler) HandleTool(ctx context.Context, req ToolRequest) ToolReply {
+	params := req.Args // may be nil
+	result, err := h.dispatch(ctx, req.Tool, params)
+	if err != nil {
+		return ToolReply{Tool: req.Tool, OK: false, Error: err.Error()}
+	}
+	data, _ := json.Marshal(result)
+	return ToolReply{Tool: req.Tool, OK: true, Output: string(data)}
+}

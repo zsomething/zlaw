@@ -36,8 +36,10 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 
 // ── hub status ────────────────────────────────────────────────────────────────
 
-type HubStatusCmd struct{}
+type HubStatusCmd struct {
+	JSON bool `long:"json" help:"output status as JSON"`
+}
 
-func (c *HubStatusCmd) Run() error {
-	return app.HubStatus()
+func (c *HubStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	return app.HubStatus(ctx, c.JSON)
 }
