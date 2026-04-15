@@ -233,14 +233,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 // When Adapters is non-empty, it returns those (multi-adapter mode).
 // Otherwise, it returns a single entry based on the legacy Type field.
 func adaptersFromConfig(cfg config.AgentConfig) []config.AdapterInstanceConfig {
-	if len(cfg.Adapter.Adapters) > 0 {
-		return cfg.Adapter.Adapters
-	}
-	// Legacy single-adapter mode.
-	if cfg.Adapter.Type != "" {
-		return []config.AdapterInstanceConfig{{Type: cfg.Adapter.Type}}
-	}
-	return nil
+	return cfg.Adapter
 }
 
 // registerAdapterFromConfig loads adapter credentials and registers the adapter.

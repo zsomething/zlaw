@@ -33,7 +33,7 @@ timeout_sec = 30
 [tools]
 allowed = ["echo", "current-time"]
 
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 	writeFile(t, dir, "SOUL.md", "You are a helpful assistant.")
@@ -67,8 +67,8 @@ type = "cli"
 	if len(cfg.Tools.Allowed) != 2 {
 		t.Errorf("tools.allowed len = %d, want 2", len(cfg.Tools.Allowed))
 	}
-	if cfg.Adapter.Type != "cli" {
-		t.Errorf("adapter.type = %q, want %q", cfg.Adapter.Type, "cli")
+	if len(cfg.Adapter) != 1 || cfg.Adapter[0].Type != "cli" {
+		t.Errorf("adapter = %v, want [cli]", cfg.Adapter)
 	}
 	if p.Soul != "You are a helpful assistant." {
 		t.Errorf("soul = %q", p.Soul)
@@ -86,7 +86,7 @@ name = "minimal"
 [llm]
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 	// No SOUL.md or IDENTITY.md
@@ -118,7 +118,7 @@ backend = "anthropic"
 model = "claude-haiku-4-5-20251001"
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 	writeFile(t, dir, "runtime.toml", `
@@ -148,7 +148,7 @@ name = "no-runtime"
 model = "claude-haiku-4-5-20251001"
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 	// No runtime.toml — should succeed with static model.
@@ -175,7 +175,7 @@ name = "write-test"
 model = "claude-haiku-4-5-20251001"
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 
@@ -210,7 +210,7 @@ name = "invalid-key-test"
 [llm]
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 	loader, err := config.NewLoader(dir, "", nil, nil)
@@ -253,7 +253,7 @@ backend = "anthropic"
 model = "${MY_MODEL}"
 auth_profile = "default"
 [tools]
-[adapter]
+[[adapter]]
 type = "cli"
 `)
 

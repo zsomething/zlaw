@@ -100,7 +100,7 @@ func collectAuthProfiles(cfg config.AgentConfig) []string {
 	add(cfg.Memory.Embedder.AuthProfile)
 
 	// Collect adapter auth profiles (multi-adapter support).
-	for _, adapter := range cfg.Adapter.Adapters {
+	for _, adapter := range cfg.Adapter {
 		add(adapter.AuthProfile)
 	}
 

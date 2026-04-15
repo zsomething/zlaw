@@ -16,14 +16,14 @@ import (
 
 // AgentConfig holds all configuration for a single agent instance.
 type AgentConfig struct {
-	Agent   AgentMeta     `toml:"agent"`
-	LLM     LLMConfig     `toml:"llm"`
-	Context ContextConfig `toml:"context"`
-	Tools   ToolsConfig   `toml:"tools"`
-	Adapter AdapterConfig `toml:"adapter"`
-	Sticky  StickyConfig  `toml:"sticky"`
-	Serve   ServeConfig   `toml:"serve"`
-	Memory  MemoryConfig  `toml:"memory"`
+	Agent   AgentMeta               `toml:"agent"`
+	LLM     LLMConfig               `toml:"llm"`
+	Context ContextConfig           `toml:"context"`
+	Tools   ToolsConfig             `toml:"tools"`
+	Adapter []AdapterInstanceConfig `toml:"adapter"`
+	Sticky  StickyConfig            `toml:"sticky"`
+	Serve   ServeConfig             `toml:"serve"`
+	Memory  MemoryConfig            `toml:"memory"`
 }
 
 // MemoryConfig controls long-term memory behaviour.
@@ -168,19 +168,6 @@ type LLMConfig struct {
 type ToolsConfig struct {
 	Allowed        []string `toml:"allowed"`
 	MaxResultBytes int      `toml:"max_result_bytes"`
-}
-
-// AdapterConfig selects and configures the I/O adapter(s).
-// Multiple adapters allow the agent to receive input from different channels
-// (e.g., Telegram for chat, Fizzy for card events).
-type AdapterConfig struct {
-	// Type is the primary adapter type ("cli", "telegram", etc.). For backward
-	// compatibility, when Adapters is empty, Type determines a single adapter.
-	Type string `toml:"type"`
-
-	// Adapters is a list of adapter configurations. When non-empty, this
-	// supersedes the legacy Type field for multi-adapter support.
-	Adapters []AdapterInstanceConfig `toml:"adapter"`
 }
 
 // AdapterInstanceConfig configures a single adapter instance.
