@@ -11,6 +11,38 @@ Your personal AI assistant — runs on your machine, works with any LLM, and get
 
 ---
 
+## Goals
+
+**A platform for autonomous agents that work for you.**
+zlaw is built around the idea that a fleet of specialized agents — each with its own personality, model, and toolset — can handle complex, multi-step tasks better than a single monolithic assistant.
+
+**Agents that remember and grow.**
+Long-term memory stored as plain files, searchable by meaning. The agent builds context over time without manual curation.
+
+**You own your data.**
+Everything — config, memory, history — is a plain file you can read, edit, and version-control. No proprietary storage.
+
+**Any model, any endpoint.**
+Works with Anthropic or any OpenAI-compatible API. Swap models without changing behaviour.
+
+---
+
+## Non-Goals
+
+**Minimal resource footprint.**
+Go is chosen for performance and developer experience, not to run on a Raspberry Pi. If you need a lightweight agent, look elsewhere.
+
+**General-purpose AI infrastructure.**
+zlaw is a personal assistant platform, not a replacement for enterprise AI platforms like LangSmith or Weights & Biases.
+
+**Agent-to-agent direct communication.**
+All inter-agent communication routes through the hub (NATS broker). No peer-to-peer networking.
+
+**Plugin ecosystem for external services.**
+Skills are Markdown files executed locally. gRPC/plugin binaries are for local skill tooling only — not for integrating with external SaaS.
+
+---
+
 ## Why zlaw
 
 zlaw is a multi-agent platform built around a hub model: `zlaw hub start` supervises a fleet of agents over an embedded NATS bus, each with its own personality, model, and toolset. A manager agent routes tasks to specialists automatically.
@@ -90,9 +122,33 @@ Personality and behaviour files hot-reload on save — no restart needed for tho
 - **Session persistence** — conversations stored as JSONL; resume any session by ID
 
 ### Multi-agent
-- **Hub supervisor** — `zlaw hub start` spawns, monitors, and auto-restarts a fleet of agent processes
-- **Agent delegation** — manager agent routes tasks to specialist peers and returns a structured result
-- **Per-agent access control** — each agent gets a scoped token at spawn time; permissions enforced at the broker
+
+**Hub supervisor**
+- `zlaw hub start` spawns, monitors, and auto-restarts a fleet of agent processes
+- Configurable restart policy per agent: always, on-failure, or never
+- Per-agent credential injection at spawn time — no secrets in config files
+
+**Agent registry & discovery**
+- Agents register on connect and send heartbeats every 30s
+- Hub maintains a live registry of connected agents with their capabilities and roles
+- All agents can query the registry to discover peers for delegation
+
+**A2A delegation**
+- Manager agent routes tasks to specialist peers via the `agent_delegate` tool
+- Tasks are wrapped in a structured envelope with result schema
+- Messages are durable — JetStream persists them until acknowledged
+- Manager agents can stop or restart peer agents via `agent_stop` / `agent_restart`
+
+**Security model**
+- Each agent gets a scoped NATS token at spawn time
+- Permissions enforced at the broker: specialists can only publish to manager inbox and registry; managers can publish to any agent inbox
+- No agent can create or remove other agents — those operations are hub CLI-only
+- Lifecycle tools include self-protection: manager cannot stop/restart itself
+
+**Durable messaging**
+- All inter-agent messages flow through JetStream streams
+- Unacked messages are redelivered on reconnect — no lost tasks
+- WorkQueue retention: messages are deleted after successful processing
 
 ### Under the hood
 - **Embedded NATS** — agent-to-agent messaging over a local message bus; no external broker needed
