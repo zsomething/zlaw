@@ -13,13 +13,13 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
 
-	"github.com/zsomething/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/credentials"
 )
 
 // OpenAICompatConfig holds settings for any OpenAI-compatible backend.
 type OpenAICompatConfig struct {
 	BaseURL     string
-	TokenSource auth.TokenSource
+	TokenSource credentials.TokenSource
 	Model       string
 	MaxTokens   int
 	Timeout     time.Duration

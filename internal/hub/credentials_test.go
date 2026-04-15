@@ -7,8 +7,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/hub"
-	"github.com/zsomething/zlaw/internal/llm/auth"
 )
 
 // writeAgentTOML writes a minimal agent.toml with the given auth_profile to dir.
@@ -17,7 +17,7 @@ func writeAgentTOML(t *testing.T, dir, authProfile string) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	content := "[agent]\nname = \"test\"\n"
+	content := "[agent]\nid = \"test\"\n"
 	if authProfile != "" {
 		content += "[llm]\nauth_profile = \"" + authProfile + "\"\n"
 	}
@@ -26,14 +26,14 @@ func writeAgentTOML(t *testing.T, dir, authProfile string) {
 	}
 }
 
-// writeCredentials writes a credentials.toml with the given apikey profiles to path.
-func writeCredentials(t *testing.T, path string, profiles map[string]string) {
+// writeCredentials writes a credentials.toml with the given profiles to path.
+func writeCredentials(t *testing.T, path string, profiles map[string]credentials.CredentialProfile) {
 	t.Helper()
-	store := auth.CredentialStore{Profiles: make(map[string]auth.CredentialProfile, len(profiles))}
-	for name, key := range profiles {
-		store.Profiles[name] = auth.CredentialProfile{Type: auth.ProfileTypeAPIKey, Key: key}
+	store := credentials.CredentialStore{Profiles: make(map[string]credentials.CredentialProfile, len(profiles))}
+	for name, p := range profiles {
+		store.Profiles[name] = p
 	}
-	if err := auth.SaveStore(path, store); err != nil {
+	if err := credentials.SaveStore(path, store); err != nil {
 		t.Fatalf("write credentials: %v", err)
 	}
 }
@@ -43,15 +43,18 @@ func TestBuildCredentialEnv_InjectsFile(t *testing.T) {
 	agentDir := filepath.Join(tmp, "agents", "coding")
 	writeAgentTOML(t, agentDir, "my-profile")
 
-	credsPath := filepath.Join(tmp, "credentials.toml")
-	writeCredentials(t, credsPath, map[string]string{"my-profile": "secret-key"})
+	// Per-agent credentials.toml in agent dir.
+	credsPath := filepath.Join(agentDir, "credentials.toml")
+	writeCredentials(t, credsPath, map[string]credentials.CredentialProfile{
+		"my-profile": {Name: "my-profile", Data: map[string]string{"api_key": "secret-key"}},
+	})
 
-	// Override ZLAW_HOME so resolveAgentDir and run-dir use our temp dir.
+	// Override ZLAW_HOME so resolveAgentDir uses our temp dir.
 	t.Setenv("ZLAW_HOME", tmp)
 
 	entry := config.AgentEntry{Name: "coding"} // Dir empty → uses ZLAW_HOME/agents/coding
 
-	envVars, err := hub.BuildCredentialEnv(entry, credsPath)
+	envVars, err := hub.BuildCredentialEnv(entry)
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
 	}
@@ -70,13 +73,16 @@ func TestBuildCredentialEnv_InjectsFile(t *testing.T) {
 	if injectedPath == "" {
 		t.Fatalf("ZLAW_CREDENTIALS_FILE not in env vars: %v", envVars)
 	}
+	if injectedPath != credsPath {
+		t.Errorf("expected credsPath %q, got %q", credsPath, injectedPath)
+	}
 
-	// Injected file should be readable and contain only the needed profile.
+	// Injected file should be readable and contain the profile.
 	data, err := os.ReadFile(injectedPath)
 	if err != nil {
 		t.Fatalf("read injected creds file: %v", err)
 	}
-	var store auth.CredentialStore
+	var store credentials.CredentialStore
 	if _, err := toml.Decode(string(data), &store); err != nil {
 		t.Fatalf("parse injected creds file: %v", err)
 	}
@@ -87,8 +93,8 @@ func TestBuildCredentialEnv_InjectsFile(t *testing.T) {
 	if !ok {
 		t.Error("my-profile not in injected credentials")
 	}
-	if p.Key != "secret-key" {
-		t.Errorf("key = %q, want %q", p.Key, "secret-key")
+	if p.Data["api_key"] != "secret-key" {
+		t.Errorf("api_key = %q, want %q", p.Data["api_key"], "secret-key")
 	}
 }
 
@@ -97,14 +103,17 @@ func TestBuildCredentialEnv_MissingProfile(t *testing.T) {
 	agentDir := filepath.Join(tmp, "agents", "coding")
 	writeAgentTOML(t, agentDir, "missing-profile")
 
-	credsPath := filepath.Join(tmp, "credentials.toml")
-	writeCredentials(t, credsPath, map[string]string{"other-profile": "key"})
+	// Per-agent credentials.toml with different profile.
+	credsPath := filepath.Join(agentDir, "credentials.toml")
+	writeCredentials(t, credsPath, map[string]credentials.CredentialProfile{
+		"other-profile": {Name: "other-profile", Data: map[string]string{"api_key": "key"}},
+	})
 
 	t.Setenv("ZLAW_HOME", tmp)
 
 	entry := config.AgentEntry{Name: "coding"}
 
-	_, err := hub.BuildCredentialEnv(entry, credsPath)
+	_, err := hub.BuildCredentialEnv(entry)
 	if err == nil {
 		t.Fatal("expected error for missing profile, got nil")
 	}
@@ -119,7 +128,7 @@ func TestBuildCredentialEnv_NoAuthProfile(t *testing.T) {
 
 	entry := config.AgentEntry{Name: "noauth"}
 
-	envVars, err := hub.BuildCredentialEnv(entry, "")
+	envVars, err := hub.BuildCredentialEnv(entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -135,7 +144,7 @@ func TestBuildCredentialEnv_MissingAgentTOML(t *testing.T) {
 
 	entry := config.AgentEntry{Name: "ghost"}
 
-	envVars, err := hub.BuildCredentialEnv(entry, "")
+	envVars, err := hub.BuildCredentialEnv(entry)
 	if err != nil {
 		t.Fatalf("missing agent.toml should be a no-op, got err: %v", err)
 	}
@@ -149,19 +158,24 @@ func TestBuildCredentialEnv_ExplicitDir(t *testing.T) {
 	agentDir := filepath.Join(tmp, "custom-dir")
 	writeAgentTOML(t, agentDir, "my-profile")
 
-	credsPath := filepath.Join(tmp, "credentials.toml")
-	writeCredentials(t, credsPath, map[string]string{"my-profile": "s3cr3t"})
+	credsPath := filepath.Join(agentDir, "credentials.toml")
+	writeCredentials(t, credsPath, map[string]credentials.CredentialProfile{
+		"my-profile": {Name: "my-profile", Data: map[string]string{"api_key": "s3cr3t"}},
+	})
 
 	t.Setenv("ZLAW_HOME", tmp)
 
 	// Explicit Dir overrides the default ZLAW_HOME/agents/<name> resolution.
 	entry := config.AgentEntry{Name: "coding", Dir: agentDir}
 
-	envVars, err := hub.BuildCredentialEnv(entry, credsPath)
+	envVars, err := hub.BuildCredentialEnv(entry)
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
 	}
 	if len(envVars) == 0 {
 		t.Fatal("expected env vars, got none")
+	}
+	if envVars[0] != "ZLAW_CREDENTIALS_FILE="+credsPath {
+		t.Errorf("expected %q, got %q", "ZLAW_CREDENTIALS_FILE="+credsPath, envVars[0])
 	}
 }

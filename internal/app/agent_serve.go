@@ -13,20 +13,24 @@ import (
 	"github.com/zsomething/zlaw/internal/adapters/telegram"
 	"github.com/zsomething/zlaw/internal/agent"
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/cron"
 	"github.com/zsomething/zlaw/internal/llm"
 	"github.com/zsomething/zlaw/internal/messaging"
 	"github.com/zsomething/zlaw/internal/push"
 	"github.com/zsomething/zlaw/internal/session"
+	"github.com/zsomething/zlaw/internal/slashcmd"
 	"github.com/zsomething/zlaw/internal/tools/builtin"
 	"github.com/zsomething/zlaw/internal/transport"
 	"github.com/zsomething/zlaw/internal/version"
 )
 
-// ServeAgent wires up an agent from agentDir and runs it as a daemon
-// (Unix socket + optional Telegram).
-func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error {
+// ServeAgent wires up an agent from agentDir and runs it as a daemon.
+// workspaceDir contains SOUL.md and IDENTITY.md; agent has read access.
+// agentDir contains agent.toml and credentials.toml; agent accesses via env var only.
+func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logger *slog.Logger) error {
 	logger.Info("agent dir resolved", "path", agentDir)
+	logger.Info("workspace resolved", "path", workspaceDir)
 
 	var promptPtr atomic.Pointer[string]
 	var stickyBlocks []agent.StickyBlock
@@ -40,7 +44,7 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 			"prompt_len", len(s),
 		)
 	}
-	loader, err := config.NewLoader(agentDir, onChange, logger)
+	loader, err := config.NewLoader(agentDir, workspaceDir, onChange, logger)
 	if err != nil {
 		return fmt.Errorf("create config loader: %w", err)
 	}
@@ -123,6 +127,13 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 
 	pushRegistry := push.NewRegistry()
 
+	// Register adapters from config (multi-adapter support).
+	credPath := credentials.DefaultCredentialsPath()
+	for _, adapterCfg := range adaptersFromConfig(cfg) {
+		registerAdapterFromConfig(ctx, adapterCfg, sessionManager, history, pushRegistry, credPath, logger)
+	}
+
+	// Legacy: also check TELEGRAM_BOT_TOKEN for backward compat.
 	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
 		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
 		tgAdapter.SetHistoryManager(history)
@@ -216,6 +227,81 @@ func ServeAgent(ctx context.Context, agentDir string, logger *slog.Logger) error
 
 	drainTimeout := time.Duration(cfg.Serve.ShutdownTimeoutSec) * time.Second
 	return d.Serve(ctx, drainTimeout)
+}
+
+// adaptersFromConfig returns the list of adapter configs.
+// When Adapters is non-empty, it returns those (multi-adapter mode).
+// Otherwise, it returns a single entry based on the legacy Type field.
+func adaptersFromConfig(cfg config.AgentConfig) []config.AdapterInstanceConfig {
+	if len(cfg.Adapter.Adapters) > 0 {
+		return cfg.Adapter.Adapters
+	}
+	// Legacy single-adapter mode.
+	if cfg.Adapter.Type != "" {
+		return []config.AdapterInstanceConfig{{Type: cfg.Adapter.Type}}
+	}
+	return nil
+}
+
+// registerAdapterFromConfig loads adapter credentials and registers the adapter.
+func registerAdapterFromConfig(
+	ctx context.Context,
+	adapterCfg config.AdapterInstanceConfig,
+	sessionManager *session.Manager,
+	history slashcmd.HistoryManager,
+	pushRegistry *push.Registry,
+	credPath string,
+	logger *slog.Logger,
+) {
+	var token string
+
+	if adapterCfg.AuthProfile != "" {
+		profile, err := credentials.GetProfile(credPath, adapterCfg.AuthProfile)
+		if err != nil {
+			logger.Warn("adapter credential profile not found, skipping",
+				"adapter_type", adapterCfg.Type,
+				"auth_profile", adapterCfg.AuthProfile,
+				"err", err,
+			)
+			return
+		}
+
+		// Adapter-specific key lookup.
+		switch adapterCfg.Type {
+		case "telegram":
+			token = profile.GetData("telegram_bot_token")
+		case "fizzy":
+			token = profile.GetData("fizzy_api_key")
+		// Add other adapter types here as needed.
+		default:
+			logger.Debug("unknown adapter type for credential loading", "type", adapterCfg.Type)
+		}
+
+		if token == "" {
+			logger.Warn("adapter profile has no required credential",
+				"adapter_type", adapterCfg.Type,
+				"auth_profile", adapterCfg.AuthProfile,
+			)
+			return
+		}
+	}
+
+	// Register the adapter.
+	switch adapterCfg.Type {
+	case "telegram":
+		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
+		tgAdapter.SetHistoryManager(history)
+		pushRegistry.Register("telegram", tgAdapter)
+		go func() {
+			if err := tgAdapter.Run(ctx); err != nil {
+				logger.Error("telegram adapter stopped", "error", err)
+			}
+		}()
+		logger.Info("telegram adapter registered", "auth_profile", adapterCfg.AuthProfile)
+	// Add other adapter types here.
+	default:
+		logger.Debug("adapter type not yet implemented", "type", adapterCfg.Type)
+	}
 }
 
 // ── Internal adapters ─────────────────────────────────────────────────────────

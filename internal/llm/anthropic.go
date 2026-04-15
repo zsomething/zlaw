@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zsomething/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/credentials"
 )
 
 const anthropicVersion = "2023-06-01"
@@ -20,7 +20,7 @@ const anthropicVersion = "2023-06-01"
 // AnthropicConfig holds settings for the Anthropic Messages API backend.
 type AnthropicConfig struct {
 	BaseURL     string
-	TokenSource auth.TokenSource
+	TokenSource credentials.TokenSource
 	Model       string
 	MaxTokens   int
 	Timeout     time.Duration

@@ -23,8 +23,9 @@ type AgentRunOptions struct {
 	ShowUsage bool
 }
 
-// RunAgent wires up an agent from agentDir and runs it in interactive or stdin mode.
-func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger *slog.Logger) error {
+// RunAgent wires up an agent from agentDir and workspace, and runs it
+// in interactive or stdin mode.
+func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts AgentRunOptions, logger *slog.Logger) error {
 	var promptPtr atomic.Pointer[string]
 	var stickyBlocks []agent.StickyBlock
 
@@ -33,7 +34,7 @@ func RunAgent(ctx context.Context, agentDir string, opts AgentRunOptions, logger
 		promptPtr.Store(&s)
 		logger.Info("system prompt reloaded")
 	}
-	loader, err := config.NewLoader(agentDir, onChange, logger)
+	loader, err := config.NewLoader(agentDir, workspaceDir, onChange, logger)
 	if err != nil {
 		return fmt.Errorf("create config loader: %w", err)
 	}

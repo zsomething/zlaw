@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/llm/auth"
+	"github.com/zsomething/zlaw/internal/credentials"
 )
 
 // NewClientFromConfig constructs the appropriate Client based on agent config.
@@ -18,10 +18,10 @@ import (
 //  3. Dispatch to the matching Client implementation by APIFormat.
 func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *slog.Logger) (Client, error) {
 	if credentialsPath == "" {
-		credentialsPath = auth.DefaultCredentialsPath()
+		credentialsPath = credentials.DefaultCredentialsPath()
 	}
 
-	src, err := auth.NewTokenSourceFromStore(credentialsPath, cfg.AuthProfile)
+	src, err := credentials.NewTokenSourceFromStore(credentialsPath, cfg.AuthProfile)
 	if err != nil {
 		return nil, fmt.Errorf("llm: load auth profile %q: %w", cfg.AuthProfile, err)
 	}
