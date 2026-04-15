@@ -74,11 +74,17 @@ func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 		needed.Profiles[name] = profile
 	}
 
-	// Write the expanded credentials to the runtime-active file.
+	// Write the expanded credentials to the runtime-active file under $ZLAW_HOME/run/.
 	// This file is owned by the hub and regenerated on every agent spawn.
-	activeCredsPath := filepath.Join(agentDir, "credentials.active.toml")
+	// Located in run/ alongside sockets, pids, and logs — all ephemeral runtime data.
+	runDir := filepath.Join(config.ZlawHome(), "run")
+	runtimeCredsDir := filepath.Join(runDir, "credentials")
+	if err := os.MkdirAll(runtimeCredsDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create runtime credentials dir: %w", err)
+	}
+	activeCredsPath := filepath.Join(runtimeCredsDir, entry.Name+".toml")
 	if err := credentials.SaveStore(activeCredsPath, needed); err != nil {
-		return nil, fmt.Errorf("write credentials.active.toml: %w", err)
+		return nil, fmt.Errorf("write credentials: %w", err)
 	}
 
 	return []string{"ZLAW_CREDENTIALS_FILE=" + activeCredsPath}, nil

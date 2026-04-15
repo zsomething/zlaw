@@ -43,21 +43,19 @@ func TestBuildCredentialEnv_WritesActiveFile(t *testing.T) {
 	agentDir := filepath.Join(tmp, "agents", "coding")
 	writeAgentTOML(t, agentDir, "my-profile")
 
-	// User-maintained source credentials file.
+	// User-maintained source credentials file — never touched by hub.
 	sourceCredsPath := filepath.Join(agentDir, "credentials.toml")
 	writeCredentials(t, sourceCredsPath, map[string]credentials.CredentialProfile{
 		"my-profile":    {Name: "my-profile", Data: map[string]string{"api_key": "secret-key"}},
 		"extra-profile": {Name: "extra-profile", Data: map[string]string{"api_key": "extra"}},
 	})
 
-	// Also put extra content in source so we can verify it survives.
+	// Snapshot source so we can verify it survives.
 	srcContent, _ := os.ReadFile(sourceCredsPath)
 
 	t.Setenv("ZLAW_HOME", tmp)
 
-	entry := config.AgentEntry{Name: "coding"}
-
-	envVars, err := hub.BuildCredentialEnv(entry)
+	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "coding"})
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
 	}
@@ -65,9 +63,10 @@ func TestBuildCredentialEnv_WritesActiveFile(t *testing.T) {
 		t.Fatal("expected env vars, got none")
 	}
 
-	// ZLAW_CREDENTIALS_FILE must point to credentials.active.toml, not credentials.toml.
+	// Active file goes to run/credentials/<name>.toml.
 	const prefix = "ZLAW_CREDENTIALS_FILE="
-	activeCredsPath := filepath.Join(agentDir, "credentials.active.toml")
+	runDir := filepath.Join(tmp, "run")
+	activeCredsPath := filepath.Join(runDir, "credentials", "coding.toml")
 	var injectedPath string
 	for _, kv := range envVars {
 		if len(kv) > len(prefix) && kv[:len(prefix)] == prefix {
@@ -87,18 +86,18 @@ func TestBuildCredentialEnv_WritesActiveFile(t *testing.T) {
 	// Active file should be readable and contain only the referenced profile.
 	data, err := os.ReadFile(activeCredsPath)
 	if err != nil {
-		t.Fatalf("read credentials.active.toml: %v", err)
+		t.Fatalf("read active credentials: %v", err)
 	}
 	var store credentials.CredentialStore
 	if _, err := toml.Decode(string(data), &store); err != nil {
-		t.Fatalf("parse credentials.active.toml: %v", err)
+		t.Fatalf("parse active credentials: %v", err)
 	}
 	if len(store.Profiles) != 1 {
 		t.Errorf("expected 1 profile in active file, got %d", len(store.Profiles))
 	}
 	p, ok := store.Profiles["my-profile"]
 	if !ok {
-		t.Error("my-profile not in credentials.active.toml")
+		t.Error("my-profile not in active credentials")
 	}
 	if p.Data["api_key"] != "secret-key" {
 		t.Errorf("api_key = %q, want %q", p.Data["api_key"], "secret-key")
@@ -164,7 +163,8 @@ func TestBuildCredentialEnv_ExplicitDir(t *testing.T) {
 
 	t.Setenv("ZLAW_HOME", tmp)
 
-	activeCredsPath := filepath.Join(agentDir, "credentials.active.toml")
+	runDir := filepath.Join(tmp, "run")
+	activeCredsPath := filepath.Join(runDir, "credentials", "coding.toml")
 	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "coding", Dir: agentDir})
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
