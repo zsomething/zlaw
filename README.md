@@ -95,6 +95,10 @@ you: research the top open-source vector databases, then draft a comparison doc
 
 The manager figures out who does what. You just get the result.
 
+**Adapters are optional.**
+
+Each agent can have zero or more adapters — CLI, Telegram, or others. A common pattern is a headless specialist fleet (no adapters) that only responds to delegation from the manager. But you're also free to give agents their own Telegram bots for direct human interaction, or mix and match as needed.
+
 **Manage your session without touching the agent.**
 
 Slash commands are handled directly — no LLM call, no cost:
