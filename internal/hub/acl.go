@@ -82,9 +82,10 @@ func agentPermissions(name string) *server.Permissions {
 	return &server.Permissions{
 		Publish: &server.SubjectPermission{
 			Allow: []string{
-				"agent.*.inbox", // P2P: send delegation to any agent
-				"zlaw.registry", // heartbeat / registry
-				"$JS.API.>",     // JetStream management API
+				"agent.*.inbox",      // P2P: send delegation to any agent
+				"zlaw.registry",      // heartbeat / registry
+				"zlaw.registry.list", // registry query
+				"$JS.API.>",          // JetStream management API
 			},
 		},
 		Subscribe: &server.SubjectPermission{
