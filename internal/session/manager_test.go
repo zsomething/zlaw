@@ -60,7 +60,7 @@ func TestManager_GetOrCreate_NewSession(t *testing.T) {
 	mgr := session.NewManager(runner, func() string { return "system" }, nil)
 	ctx := context.Background()
 
-	s := mgr.GetOrCreate(ctx, "sess1")
+	s := mgr.GetOrCreate(ctx, "sess1", "")
 	if s == nil {
 		t.Fatal("GetOrCreate returned nil")
 	}
@@ -77,8 +77,8 @@ func TestManager_GetOrCreate_Idempotent(t *testing.T) {
 	mgr := session.NewManager(runner, func() string { return "system" }, nil)
 	ctx := context.Background()
 
-	s1 := mgr.GetOrCreate(ctx, "sess1")
-	s2 := mgr.GetOrCreate(ctx, "sess1")
+	s1 := mgr.GetOrCreate(ctx, "sess1", "")
+	s2 := mgr.GetOrCreate(ctx, "sess1", "")
 	if s1 != s2 {
 		t.Fatal("GetOrCreate returned different sessions for the same ID")
 	}
@@ -116,7 +116,7 @@ func TestManager_Submit_BroadcastsEvents(t *testing.T) {
 	ctx := context.Background()
 
 	sink := &mockSink{caps: session.ChannelCaps{Streaming: true}}
-	s := mgr.GetOrCreate(ctx, "sess2")
+	s := mgr.GetOrCreate(ctx, "sess2", "")
 	s.Broadcaster.Add(sink)
 
 	mgr.Submit(ctx, "sess2", "ping", "test")
