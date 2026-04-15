@@ -41,6 +41,10 @@ type JetStreamer interface {
 	// each delivered message and must Ack() or Nak() the JetMsg.
 	Fetch(ctx context.Context, consumer string, stream string, handler func(*JetMsg)) error
 
+	// FetchOnSubject is like Fetch but subscribes to a specific subject first.
+	// Use this when the consumer has a filter subject that must match.
+	FetchOnSubject(ctx context.Context, consumer string, stream string, subject string, handler func(*JetMsg)) error
+
 	// CreatePullConsumer creates a durable pull consumer on stream named consumer.
 	// If it already exists, CreatePullConsumer is a no-op.
 	CreatePullConsumer(ctx context.Context, consumer string, stream string, filter string) error

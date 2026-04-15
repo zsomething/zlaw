@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -44,6 +45,10 @@ func (a *chanMessengerAdapter) Request(ctx context.Context, subject string, payl
 
 func (a *chanMessengerAdapter) JetStream() messaging.JetStreamer {
 	return nil
+}
+
+func (a *chanMessengerAdapter) FetchOnSubject(ctx context.Context, consumer string, stream string, subject string, handler func(*messaging.JetMsg)) error {
+	return fmt.Errorf("not implemented")
 }
 
 var _ messaging.Messenger = (*chanMessengerAdapter)(nil)

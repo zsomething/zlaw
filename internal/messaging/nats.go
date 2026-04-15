@@ -95,6 +95,26 @@ func (a *jetStreamAdapter) Fetch(ctx context.Context, consumer string, stream st
 	return nil
 }
 
+func (a *jetStreamAdapter) FetchOnSubject(ctx context.Context, consumer string, stream string, subject string, handler func(*JetMsg)) error {
+	sub, err := a.js.PullSubscribe(subject, consumer,
+		nats.AckExplicit(),
+		nats.Bind(stream, consumer),
+	)
+	if err != nil {
+		return fmt.Errorf("pull subscribe: %w", err)
+	}
+	defer sub.Unsubscribe() //nolint:errcheck
+
+	msgs, err := sub.Fetch(1, nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("fetch: %w", err)
+	}
+	for _, msg := range msgs {
+		handler(&JetMsg{msg: msg})
+	}
+	return nil
+}
+
 func (a *jetStreamAdapter) CreatePullConsumer(ctx context.Context, consumer string, stream string, filter string) error {
 	cfg := &nats.ConsumerConfig{
 		Name:          consumer,

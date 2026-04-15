@@ -134,7 +134,7 @@ func (h *HubClient) runJetStreamInbox(ctx context.Context, inboxSubject string, 
 		default:
 			// Non-blocking fetch with a short timeout so we don't miss ctx cancellation.
 			fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
-			err := js.Fetch(fetchCtx, consumer, agentInboxStream, func(msg *messaging.JetMsg) {
+			err := js.FetchOnSubject(fetchCtx, consumer, agentInboxStream, inboxSubject, func(msg *messaging.JetMsg) {
 				h.processInboxMessage(ctx, msg.Data())
 				_ = msg.Ack() // ack after successful processing
 			})
