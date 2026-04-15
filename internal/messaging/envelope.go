@@ -4,6 +4,10 @@ package messaging
 // From and To carry the stable agent ID (not display name). The receiving agent
 // uses SessionID to look up or create the appropriate history, runs the Task as
 // an agent turn, and publishes a TaskReply to ReplyTo when done.
+//
+// Sub-agents receiving a delegation create a fresh session (ignoring SessionID)
+// so each delegation is processed independently. SourceAgent and SessionContext
+// are provided for logging, auditing, and context propagation.
 type TaskEnvelope struct {
 	// From is the agent ID of the delegating agent.
 	From string `json:"from"`
@@ -21,8 +25,19 @@ type TaskEnvelope struct {
 	// to once the turn completes. Required.
 	ReplyTo string `json:"reply_to"`
 
-	// SessionID identifies the conversation session.
+	// SessionID identifies the originating conversation session for correlation
+	// in TaskReply. The receiving agent creates a fresh session per delegation
+	// and ignores this field for history management.
 	SessionID string `json:"session_id"`
+
+	// SourceAgent is the delegating agent's ID, used for logging and ACL
+	// decisions on the receiving end. Mirrors From for clarity in hub logs.
+	SourceAgent string `json:"source_agent,omitempty"`
+
+	// SessionContext holds additional metadata about the originating session
+	// (e.g., originating_channel, user_id, trace_id). Passed through for
+	// logging and audit purposes; the agent may use it to enrich the task.
+	SessionContext map[string]any `json:"session_context,omitempty"`
 
 	// TraceID propagates a distributed trace identifier across agent hops.
 	TraceID string `json:"trace_id,omitempty"`
