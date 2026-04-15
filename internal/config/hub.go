@@ -53,9 +53,6 @@ type AgentEntry struct {
 	// RestartPolicy controls when the supervisor restarts a crashed agent.
 	// Valid values: "always", "on-failure", "never". Defaults to "on-failure".
 	RestartPolicy RestartPolicy `toml:"restart_policy"`
-	// Manager is deprecated; all agents have equal permissions in the P2P
-	// delegation model. Kept for config compatibility; has no effect.
-	Manager bool `toml:"manager"`
 }
 
 // NATSConfig holds embedded NATS server settings.

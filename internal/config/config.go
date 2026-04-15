@@ -93,9 +93,6 @@ type AgentMeta struct {
 	// Used by hub registry and manager routing for peer discovery.
 	// Example: roles = ["calendar", "scheduling"]
 	Roles []string `toml:"roles"`
-	// Manager is deprecated; all agents have equal P2P permissions (#273).
-	// Kept for config compatibility during migration; has no runtime effect.
-	Manager bool `toml:"manager"`
 }
 
 // DisplayName returns the human-readable display name. When Name is empty it
