@@ -29,12 +29,11 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 	var promptPtr atomic.Pointer[string]
 	var stickyBlocks []agent.StickyBlock
 
-	onChange := func(_ config.AgentConfig, p config.Personality) {
-		s := agent.BuildSystemPrompt(nil, p)
+	loader, err := config.NewLoader(agentDir, workspaceDir, func(_ config.AgentConfig, p config.Personality) {
+		s := agent.BuildSystemPrompt(nil, p, "")
 		promptPtr.Store(&s)
 		logger.Info("system prompt reloaded")
-	}
-	loader, err := config.NewLoader(agentDir, workspaceDir, onChange, logger)
+	}, logger)
 	if err != nil {
 		return fmt.Errorf("create config loader: %w", err)
 	}
@@ -42,6 +41,22 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+
+	// Override onChange with agentID now that cfg is loaded.
+	loader.SetOnChange(func(_ config.AgentConfig, p config.Personality) {
+		s := agent.BuildSystemPrompt(nil, p, cfg.Agent.ID)
+		promptPtr.Store(&s)
+		logger.Info("system prompt reloaded")
+	})
+
+	// Self-identity sticky block for multi-agent self-awareness.
+	displayName := cfg.Agent.Name
+	if displayName == "" {
+		displayName = cfg.Agent.ID
+	}
+	selfIdentityBlock := agent.BuildSelfIdentitySticky(displayName, cfg.Agent.ID, cfg.Agent.Roles)
+	stickyBlocks = append(stickyBlocks, selfIdentityBlock)
+	logger.Info("sticky block enabled", "name", selfIdentityBlock.Name, "agent", cfg.Agent.ID)
 
 	if cfg.Sticky.ProactiveMemorySave {
 		stickyBlocks = append(stickyBlocks, agent.StickyBlock{
@@ -51,7 +66,7 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 		logger.Info("sticky block enabled", "name", "memory-behavior")
 	}
 
-	initial := agent.BuildSystemPrompt(nil, personality)
+	initial := agent.BuildSystemPrompt(nil, personality, cfg.Agent.ID)
 	promptPtr.Store(&initial)
 
 	llmClient, err := llm.NewClientFromConfig(cfg.LLM, "", logger)
@@ -129,7 +144,8 @@ func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *conf
 	registry.Register(delegateTool)
 
 	// Agent discovery tools — read-only, available to all agents.
-	registry.Register(&builtin.ListAgents{Registry: builtin.NewAgentRegistry(nil)})
+	listAgentsTool := &builtin.ListAgents{Registry: builtin.NewAgentRegistry(nil), AgentID: cfg.Agent.ID}
+	registry.Register(listAgentsTool)
 	registry.Register(&builtin.GetAgent{Registry: builtin.NewAgentRegistry(nil)})
 
 	memStore := buildMemoryStore(ctx, cfg, "", logger)

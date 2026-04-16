@@ -35,16 +35,11 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	var promptPtr atomic.Pointer[string]
 	var stickyBlocks []agent.StickyBlock
 
-	onChange := func(_ config.AgentConfig, p config.Personality) {
-		s := agent.BuildSystemPrompt(nil, p)
+	loader, err := config.NewLoader(agentDir, workspaceDir, func(_ config.AgentConfig, p config.Personality) {
+		s := agent.BuildSystemPrompt(nil, p, "")
 		promptPtr.Store(&s)
-		logger.Info("system prompt reloaded",
-			"soul_len", len(p.Soul),
-			"identity_len", len(p.Identity),
-			"prompt_len", len(s),
-		)
-	}
-	loader, err := config.NewLoader(agentDir, workspaceDir, onChange, logger)
+		logger.Info("system prompt reloaded")
+	}, logger)
 	if err != nil {
 		return fmt.Errorf("create config loader: %w", err)
 	}
@@ -52,14 +47,41 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+
 	logger.Info("personality loaded",
 		"soul_len", len(personality.Soul),
 		"identity_len", len(personality.Identity),
 	)
-	logger.Debug("personality content",
-		"soul", personality.Soul,
-		"identity", personality.Identity,
-	)
+
+	// id is resolved after Load(); update the onChange callback to include agentID.
+	var id string
+	var displayName string
+	if cfg.Agent.ID != "" {
+		id = cfg.Agent.ID
+	} else {
+		id = os.Getenv("ZLAW_AGENT")
+	}
+	if id == "" {
+		id = "default"
+	}
+	displayName = cfg.Agent.Name
+	if displayName == "" {
+		displayName = id
+	}
+	loader.SetOnChange(func(_ config.AgentConfig, p config.Personality) {
+		s := agent.BuildSystemPrompt(nil, p, id)
+		promptPtr.Store(&s)
+		logger.Info("system prompt reloaded",
+			"soul_len", len(p.Soul),
+			"identity_len", len(p.Identity),
+			"prompt_len", len(s),
+		)
+	})
+
+	// Self-identity sticky block for multi-agent self-awareness.
+	selfIdentityBlock := agent.BuildSelfIdentitySticky(displayName, id, cfg.Agent.Roles)
+	stickyBlocks = append(stickyBlocks, selfIdentityBlock)
+	logger.Info("sticky block enabled", "name", selfIdentityBlock.Name, "agent", id)
 
 	if cfg.Sticky.ProactiveMemorySave {
 		stickyBlocks = append(stickyBlocks, agent.StickyBlock{
@@ -69,7 +91,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 		logger.Info("sticky block enabled", "name", "memory-behavior")
 	}
 
-	initial := agent.BuildSystemPrompt(nil, personality)
+	initial := agent.BuildSystemPrompt(nil, personality, id)
 	promptPtr.Store(&initial)
 	logger.Debug("initial system prompt", "prompt", initial)
 
@@ -111,16 +133,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("create run dir: %w", err)
 	}
-	// ZLAW_AGENT is injected by the hub and matches the hub's agent entry name.
-	// Use cfg.Agent.ID for all runtime paths — it's the stable agent identifier.
-	// Fall back to ZLAW_AGENT if ID is not set (standalone mode with init-based config).
-	id := cfg.Agent.ID
-	if id == "" {
-		id = os.Getenv("ZLAW_AGENT")
-	}
-	if id == "" {
-		id = "default"
-	}
+
 	sockPath := filepath.Join(runDir, "agent-"+id+".sock")
 	pidPath := filepath.Join(runDir, "agent-"+id+".pid")
 	t := transport.NewUnixTransport(sockPath)
@@ -179,6 +192,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 		if listAgents := registry.Get("list_agents"); listAgents != nil {
 			if la, ok := listAgents.(*builtin.ListAgents); ok {
 				la.Registry = builtin.NewAgentRegistry(nm)
+				la.AgentID = id // mark "is_self" for current agent
 			}
 		}
 		if getAgent := registry.Get("get_agent"); getAgent != nil {

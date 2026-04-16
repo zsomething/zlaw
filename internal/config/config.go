@@ -346,6 +346,14 @@ func (l *Loader) SetCronChangeHandler(fn func(CronConfig)) {
 	l.onCronChange = fn
 }
 
+// SetOnChange replaces the onChange callback. It is safe to call
+// concurrently.
+func (l *Loader) SetOnChange(fn func(AgentConfig, Personality)) {
+	l.mu.Lock()
+	l.onChange = fn
+	l.mu.Unlock()
+}
+
 // Watch starts watching the agent directory and workspace (if set) for changes.
 // It blocks until ctx is cancelled. Call in a goroutine.
 func (l *Loader) Watch(ctx context.Context) error {
