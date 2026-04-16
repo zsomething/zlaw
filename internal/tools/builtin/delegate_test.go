@@ -36,6 +36,7 @@ func newRespondingMessenger(inboxSubject, replyOutput string) *respondingMesseng
 	rm := &respondingMessenger{ChanMessenger: cm, replyOutput: replyOutput}
 	ctx := context.Background()
 	_, _ = cm.Subscribe(ctx, inboxSubject, func(data []byte) {
+		// Extract reply subject from envelope's reply_to field.
 		var env messaging.TaskEnvelope
 		if err := json.Unmarshal(data, &env); err != nil || env.ReplyTo == "" {
 			return

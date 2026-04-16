@@ -91,7 +91,7 @@ When you learn something worth retaining — user preferences, facts, decisions,
 // BuildSelfIdentitySticky to inject agent name, stable ID, and roles into the system prompt.
 const StickySelfIdentity = `[Self identity]
 You are {agent_name} (stable_id: {agent_id}). Roles: {agent_roles}.
-When delegating tasks, use the list_agents tool to find other agents — list_agents marks "is_self: true" on the current agent.
+When delegating tasks, use the agent_list tool to find other agents — agent_list marks "is_self: true" on the current agent.
 Never impersonate another agent.`
 
 // BuildSkillsSection returns a formatted [Available Skills] block for injection
