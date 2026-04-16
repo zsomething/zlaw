@@ -203,7 +203,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 	}
 	for _, c := range cases {
 		p := config.Personality{Soul: c.soul, Identity: c.identity}
-		got := agent.BuildSystemPrompt(nil, p)
+		got := agent.BuildSystemPrompt(nil, p, "")
 		if got != c.want {
 			t.Errorf("BuildSystemPrompt(nil, %q, %q) = %q, want %q", c.soul, c.identity, got, c.want)
 		}

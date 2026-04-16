@@ -69,6 +69,7 @@ func NewAgentRegistry(messenger messaging.Messenger) *NATSAgentRegistry {
 // from the hub registry via NATS request/reply.
 type ListAgents struct {
 	Registry AgentRegistry
+	AgentID  string // injected at registration time so the tool can mark "is_self"
 }
 
 var listAgentsSchema = []byte(`{
@@ -80,12 +81,13 @@ var listAgentsSchema = []byte(`{
 func (*ListAgents) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "list_agents",
-		Description: "List all agents registered in the hub. Returns name, version, capabilities, roles, and connection status for each agent.",
+		Description: "List all agents registered in the hub. Returns name, version, capabilities, roles, and connection status for each agent. The current agent is marked with is_self: true.",
 		InputSchema: listAgentsSchema,
 	}
 }
 
 // Execute queries the hub registry and returns the agent list as JSON.
+// The current agent is marked with is_self: true.
 func (t *ListAgents) Execute(ctx context.Context, input json.RawMessage) (string, error) {
 	if t.Registry == nil {
 		return "", fmt.Errorf("list_agents: not connected to hub")
@@ -94,7 +96,20 @@ func (t *ListAgents) Execute(ctx context.Context, input json.RawMessage) (string
 	if err != nil {
 		return "", err
 	}
-	out := map[string]any{"agents": entries, "count": len(entries)}
+	// Mark the current agent.
+	agentList := make([]map[string]any, len(entries))
+	for i, e := range entries {
+		m := map[string]any{
+			"name":         e.Name,
+			"version":      e.Version,
+			"capabilities": e.Capabilities,
+			"roles":        e.Roles,
+			"status":       e.Status,
+			"is_self":      e.Name == t.AgentID,
+		}
+		agentList[i] = m
+	}
+	out := map[string]any{"agents": agentList, "count": len(agentList)}
 	data, err := json.Marshal(out)
 	if err != nil {
 		return "", err
