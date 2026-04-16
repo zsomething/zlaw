@@ -32,7 +32,7 @@ type HubACL struct {
 // AgentEntry, plus a privileged token for the hub's own internal connection.
 //
 // In the P2P delegation model all agents have equal permissions:
-//   - publish: agent.*.inbox, agent.manager.inbox, zlaw.registry, zlaw.registry.list, _INBOX.>, $JS.ACK.>, $JS.API.>
+//   - publish: agent.*.inbox, zlaw.registry, zlaw.registry.list, _INBOX.>, $JS.ACK.>, $JS.API.>
 //   - subscribe: zlaw.registry, agent.<name>.inbox, _INBOX.>, $JS.API.>
 //
 // Hub internal (_hub): no permission restrictions (full access).
@@ -82,14 +82,12 @@ func agentPermissions(name string) *server.Permissions {
 	return &server.Permissions{
 		Publish: &server.SubjectPermission{
 			Allow: []string{
-				"agent.*.inbox",       // P2P: send delegation to any agent
-				"agent.manager.inbox", // reply inbox for delegations
-				"zlaw.registry",       // heartbeat / registry
-				"zlaw.registry.list",  // registry query
-				"_INBOX.>",            // NATS reply subjects (delegate reply, etc.)
-				"$JS.API.>",           // JetStream management API
-				"$JS.ACK.>",           // JetStream message acks
-				"_INBOX.delegate.>",   // delegate reply subjects
+				"agent.*.inbox",      // P2P: send delegation to any agent
+				"zlaw.registry",      // heartbeat / registry
+				"zlaw.registry.list", // registry query
+				"_INBOX.>",           // NATS reply subjects (delegate reply, etc.)
+				"$JS.API.>",          // JetStream management API
+				"$JS.ACK.>",          // JetStream message acks
 			},
 		},
 		Subscribe: &server.SubjectPermission{
