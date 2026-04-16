@@ -112,13 +112,28 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 		sessionCtx["originating_channel"] = sourceChannel
 	}
 
+	// Generate a unique reply subject and subscribe before publishing.
+	// This ensures we receive the reply even if the target processes in parallel.
+	replySubject := fmt.Sprintf("_INBOX.delegate.%s.%d", d.AgentID, time.Now().UnixNano())
+	replyCh := make(chan []byte, 1)
+	sub, err := d.Messenger.Subscribe(ctx, replySubject, func(data []byte) {
+		select {
+		case replyCh <- data:
+		default:
+		}
+	})
+	if err != nil {
+		return "", fmt.Errorf("agent_delegate: subscribe reply inbox: %w", err)
+	}
+	defer sub.Unsubscribe() //nolint:errcheck
+
 	env := messaging.TaskEnvelope{
 		From:           d.AgentID,
 		To:             in.ID,
 		Task:           in.Task,
 		Context:        in.Context,
 		SessionID:      sessionID,
-		ReplyTo:        inboxSubject, // informational - Request() handles reply routing
+		ReplyTo:        replySubject,
 		SourceAgent:    d.AgentID,
 		SessionContext: sessionCtx,
 		TraceID:        traceID,
@@ -129,17 +144,24 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 		return "", fmt.Errorf("agent_delegate: marshal envelope: %w", err)
 	}
 
-	replyData, err := d.Messenger.Request(ctx, inboxSubject, payload, delegateTimeout)
-	if err != nil {
-		return "", fmt.Errorf("agent_delegate: request to %q: %w", in.ID, err)
+	if err := d.Messenger.Publish(ctx, inboxSubject, payload); err != nil {
+		return "", fmt.Errorf("agent_delegate: publish to %q: %w", in.ID, err)
 	}
 
-	var reply messaging.TaskReply
-	if err := json.Unmarshal(replyData, &reply); err != nil {
-		return "", fmt.Errorf("agent_delegate: malformed reply from %q: %w", in.ID, err)
+	tctx, cancel := context.WithTimeout(ctx, delegateTimeout)
+	defer cancel()
+
+	select {
+	case replyData := <-replyCh:
+		var reply messaging.TaskReply
+		if err := json.Unmarshal(replyData, &reply); err != nil {
+			return "", fmt.Errorf("agent_delegate: malformed reply from %q: %w", in.ID, err)
+		}
+		if reply.Error != "" {
+			return "", fmt.Errorf("agent_delegate: agent %q returned error: %s", in.ID, reply.Error)
+		}
+		return reply.Output, nil
+	case <-tctx.Done():
+		return "", fmt.Errorf("agent_delegate: timeout waiting for reply from %q", in.ID)
 	}
-	if reply.Error != "" {
-		return "", fmt.Errorf("agent_delegate: agent %q returned error: %s", in.ID, reply.Error)
-	}
-	return reply.Output, nil
 }

@@ -36,29 +36,17 @@ func newRespondingMessenger(inboxSubject, replyOutput string) *respondingMesseng
 	rm := &respondingMessenger{ChanMessenger: cm, replyOutput: replyOutput}
 	ctx := context.Background()
 	_, _ = cm.Subscribe(ctx, inboxSubject, func(data []byte) {
-		// Extract reply subject - prefer _ChanMessenger_ReplyTo (injected by ChanMessenger.Request)
-		// over reply_to (from envelope) since _ChanMessenger_ReplyTo is the actual reply subject.
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(data, &m); err != nil {
-			return
-		}
-		replyTo := ""
-		// _ChanMessenger_ReplyTo is the actual reply subject for ChanMessenger.Request
-		if v, ok := m["_ChanMessenger_ReplyTo"]; ok {
-			json.Unmarshal(v, &replyTo)
-		}
-		if replyTo == "" {
-			return
-		}
-
+		// Extract reply subject from envelope's reply_to field.
 		var env messaging.TaskEnvelope
-		json.Unmarshal(data, &env)
+		if err := json.Unmarshal(data, &env); err != nil || env.ReplyTo == "" {
+			return
+		}
 		reply := messaging.TaskReply{
 			SessionID: env.SessionID,
 			Output:    replyOutput,
 		}
 		replyData, _ := json.Marshal(reply)
-		_ = cm.Publish(ctx, replyTo, replyData)
+		_ = cm.Publish(ctx, env.ReplyTo, replyData)
 	})
 	return rm
 }
@@ -117,27 +105,16 @@ func TestAgentDelegate_TargetReturnsError(t *testing.T) {
 	cm := messaging.NewChanMessenger()
 	ctx := context.Background()
 	_, _ = cm.Subscribe(ctx, "agent.worker.inbox", func(data []byte) {
-		// Extract reply subject - prefer _ChanMessenger_ReplyTo (injected by ChanMessenger.Request)
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(data, &m); err != nil {
-			return
-		}
-		replyTo := ""
-		if v, ok := m["_ChanMessenger_ReplyTo"]; ok {
-			json.Unmarshal(v, &replyTo)
-		}
-		if replyTo == "" {
-			return
-		}
-
 		var env messaging.TaskEnvelope
-		json.Unmarshal(data, &env)
+		if err := json.Unmarshal(data, &env); err != nil || env.ReplyTo == "" {
+			return
+		}
 		reply := messaging.TaskReply{
 			SessionID: env.SessionID,
 			Error:     "worker failed to process task",
 		}
 		replyData, _ := json.Marshal(reply)
-		_ = cm.Publish(ctx, replyTo, replyData)
+		_ = cm.Publish(ctx, env.ReplyTo, replyData)
 	})
 
 	tool := &builtin.AgentDelegate{
