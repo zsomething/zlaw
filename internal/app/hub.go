@@ -18,8 +18,8 @@ import (
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
-// StartHub loads the hub config and starts the hub process.
-func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+// runHub loads the hub config and starts the hub process. It blocks until ctx is cancelled.
+func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
 	cfg, err := config.LoadHubConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
