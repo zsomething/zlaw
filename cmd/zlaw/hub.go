@@ -10,13 +10,17 @@ import (
 )
 
 type HubCmd struct {
-	Start  HubStartCmd  `cmd:"" help:"start the hub"`
-	Status HubStatusCmd `cmd:"" help:"show hub status"`
-	Auth   HubAuthCmd   `cmd:"" help:"manage per-agent credentials"`
+	Start   HubStartCmd   `cmd:"" help:"start the hub in the background (daemon mode)"`
+	Run     HubRunCmd     `cmd:"" help:"run the hub in the foreground (blocking)"`
+	Stop    HubStopCmd    `cmd:"" help:"stop a running hub"`
+	Restart HubRestartCmd `cmd:"" help:"restart the hub (stop then start)"`
+	Status  HubStatusCmd  `cmd:"" help:"show hub status"`
+	Auth    HubAuthCmd    `cmd:"" help:"manage per-agent credentials"`
 }
 
 // ── hub start ─────────────────────────────────────────────────────────────────
 
+// HubStartCmd starts the hub in the background (daemon mode).
 type HubStartCmd struct {
 	Config  string `help:"path to zlaw.toml"`
 	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
@@ -32,6 +36,50 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		return app.StartHub(ctx, configPath, c.NatsURL, logger, true)
 	}
 	return app.StartHub(ctx, configPath, c.NatsURL, logger, false)
+}
+
+// ── hub run ─────────────────────────────────────────────────────────────────
+
+// HubRunCmd runs the hub in the foreground (blocking). Equivalent to the
+// current "hub start" behavior — kept for clarity.
+type HubRunCmd struct {
+	Config  string `help:"path to zlaw.toml"`
+	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
+	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
+}
+
+func (c *HubRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	configPath := c.Config
+	if configPath == "" {
+		configPath = config.DefaultHubConfigPath()
+	}
+	if c.NoColor || hub.DefaultNoColor() {
+		return app.RunHub(ctx, configPath, c.NatsURL, logger, true)
+	}
+	return app.RunHub(ctx, configPath, c.NatsURL, logger, false)
+}
+
+// ── hub stop ─────────────────────────────────────────────────────────────────
+
+type HubStopCmd struct{}
+
+func (c *HubStopCmd) Run() error {
+	return app.StopHub()
+}
+
+// ── hub restart ───────────────────────────────────────────────────────────────
+
+type HubRestartCmd struct {
+	Config  string `help:"path to zlaw.toml"`
+	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
+	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
+}
+
+func (c *HubRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	if err := app.StopHub(); err != nil {
+		return err
+	}
+	return app.StartHub(ctx, c.Config, c.NatsURL, logger, c.NoColor || hub.DefaultNoColor())
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
