@@ -134,15 +134,16 @@ func (h *HubClient) runJetStreamInbox(ctx context.Context, inboxSubject string, 
 				h.logger.Warn("hub: heartbeat failed", "agent", h.name, "err", err)
 			}
 		case <-fetchTick.C:
-			// Short timeout: if no message, loop immediately. Only log unexpected
-			// errors — routine timeouts are expected when the inbox is idle.
+			// Short timeout: if no message, loop immediately. Routine timeouts
+			// (DeadlineExceeded) are expected when the inbox is idle - don't log them.
+			// Only log unexpected errors like network issues.
 			fetchCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			err := js.FetchOnSubject(fetchCtx, consumer, agentInboxStream, inboxSubject, func(msg *messaging.JetMsg) {
 				h.processInboxMessage(ctx, msg.Data())
 				_ = msg.Ack() // ack after successful processing
 			})
 			cancel()
-			if err != nil && ctx.Err() == nil {
+			if err != nil && ctx.Err() == nil && !isRoutineTimeout(err) {
 				h.logger.Debug("hub: fetch", "agent", h.name, "err", err)
 			}
 		}
@@ -252,4 +253,13 @@ func (h *HubClient) processInboxMessage(ctx context.Context, data []byte) {
 			"err", err,
 		)
 	}
+}
+
+// isRoutineTimeout returns true if err is a routine timeout (no message available).
+// These are expected when polling an idle inbox and should not be logged as errors.
+func isRoutineTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err.Error() == "context deadline exceeded" || err.Error() == "context: deadline exceeded"
 }
