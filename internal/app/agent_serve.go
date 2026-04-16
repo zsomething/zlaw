@@ -110,7 +110,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	registry.Register(builtin.CreateCronjob{Writer: cronWriter})
 	registry.Register(builtin.DeleteCronjob{Writer: cronWriter})
 
-	// Agent discovery tools (list_agents, get_agent) are registered by buildToolRegistry.
+	// Agent discovery tools (agent_list, agent_get) are registered by buildToolRegistry.
 
 	applyToolConfig(cfg, registry, logger)
 
@@ -189,13 +189,13 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 		delegateTool.Registry = regCache
 
 		// Inject messenger into discovery tools that were registered by buildToolRegistry.
-		if listAgents := registry.Get("list_agents"); listAgents != nil {
+		if listAgents := registry.Get("agent_list"); listAgents != nil {
 			if la, ok := listAgents.(*builtin.AgentList); ok {
 				la.Registry = builtin.NewAgentRegistry(nm)
 				la.AgentID = id // mark "is_self" for current agent
 			}
 		}
-		if getAgent := registry.Get("get_agent"); getAgent != nil {
+		if getAgent := registry.Get("agent_get"); getAgent != nil {
 			if ga, ok := getAgent.(*builtin.AgentGet); ok {
 				ga.Registry = builtin.NewAgentRegistry(nm)
 			}
