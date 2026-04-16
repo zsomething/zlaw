@@ -7,9 +7,12 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"text/tabwriter"
 	"time"
 
+	"github.com/BurntSushi/toml"
+	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/nats.go"
 
 	"github.com/zsomething/zlaw/internal/config"
@@ -112,6 +115,9 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 		"agents", len(cfg.Agents),
 		"control", controlPath,
 	)
+
+	// Watch zlaw.toml for agent list changes.
+	go watchAgentList(ctx, configPath, sup, reg, sm, result.Conn, selfBin, result.ACL.AgentTokens, logger)
 
 	// Block until context is cancelled (signal or parent shutdown).
 	<-ctx.Done()
@@ -298,3 +304,167 @@ func (s *natsSubscription) Unsubscribe() error {
 }
 
 var _ messaging.Messenger = (*natsMessengerAdapter)(nil)
+
+// watchAgentList watches zlaw.toml for changes and updates the supervised
+// agent set without requiring a hub restart. It runs until ctx is cancelled.
+func watchAgentList(
+	ctx context.Context,
+	configPath string,
+	sup *hub.Supervisor,
+	reg *hub.Registry,
+	sm *hub.StreamManager,
+	natsConn *nats.Conn,
+	selfBin string,
+	agentTokens hub.AgentTokens,
+	logger *slog.Logger,
+) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logger.Warn("zlaw.toml watcher: create failed", "err", err)
+		return
+	}
+	defer watcher.Close() //nolint:errcheck
+
+	// Watch the directory so we catch writes to zlaw.toml.
+	dir := filepath.Dir(configPath)
+	if err := watcher.Add(dir); err != nil {
+		logger.Warn("zlaw.toml watcher: add dir failed", "dir", dir, "err", err)
+		return
+	}
+	logger.Info("zlaw.toml watcher started", "dir", dir)
+
+	// debounceTicks prevents rapid successive events from reloading too often.
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	var pending bool
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			// Only care about writes to the specific config file.
+			if filepath.Base(event.Name) != filepath.Base(configPath) {
+				continue
+			}
+			if event.Op&fsnotify.Write == 0 {
+				continue
+			}
+			pending = true
+		case <-ticker.C:
+			if !pending {
+				continue
+			}
+			pending = false
+			reloadConfig(ctx, configPath, sup, reg, sm, natsConn, selfBin, agentTokens, logger)
+		}
+	}
+}
+
+// reloadConfig reloads zlaw.toml and syncs the supervised agent set:
+// - New agents are spawned (unless disabled in agent.toml).
+// - Removed agents are stopped and deregistered.
+func reloadConfig(
+	ctx context.Context,
+	configPath string,
+	sup *hub.Supervisor,
+	reg *hub.Registry,
+	sm *hub.StreamManager,
+	natsConn *nats.Conn,
+	selfBin string,
+	agentTokens hub.AgentTokens,
+	logger *slog.Logger,
+) {
+	newCfg, err := config.LoadHubConfig(configPath)
+	if err != nil {
+		logger.Warn("zlaw.toml watcher: reload failed", "err", err)
+		return
+	}
+
+	// Get current supervised names.
+	current := sup.Statuses()
+	currentNames := make(map[string]bool, len(current))
+	for _, s := range current {
+		currentNames[s.Name] = true
+	}
+
+	// Get new names from config.
+	newNames := make(map[string]bool, len(newCfg.Agents))
+	for _, a := range newCfg.Agents {
+		newNames[a.Name] = true
+	}
+
+	// Remove agents that are no longer in the config.
+	for _, name := range sortedKeys(currentNames) {
+		if !newNames[name] {
+			logger.Info("zlaw.toml watcher: removing agent", "name", name)
+			if err := sup.Remove(name); err != nil {
+				logger.Warn("zlaw.toml watcher: remove failed", "name", name, "err", err)
+			}
+			reg.Deregister(name)
+		}
+	}
+
+	// Add new agents from the config.
+	for _, entry := range newCfg.Agents {
+		if currentNames[entry.Name] {
+			continue // already supervised
+		}
+
+		// Skip disabled agents.
+		if agentDisabled(entry.Dir) {
+			logger.Info("zlaw.toml watcher: skipping disabled agent", "name", entry.Name)
+			continue
+		}
+
+		logger.Info("zlaw.toml watcher: spawning agent", "name", entry.Name)
+		// Ensure JetStream consumer exists.
+		if err := sm.EnsureAgentConsumers(ctx, []string{entry.Name}); err != nil {
+			logger.Warn("zlaw.toml watcher: create consumer failed", "name", entry.Name, "err", err)
+		}
+		if err := sup.Spawn(ctx, entry); err != nil {
+			logger.Warn("zlaw.toml watcher: spawn failed", "name", entry.Name, "err", err)
+		}
+	}
+}
+
+// agentDisabled returns true if the agent's agent.toml has disabled = true.
+func agentDisabled(agentDir string) bool {
+	if agentDir == "" {
+		return false
+	}
+	if !filepath.IsAbs(agentDir) {
+		agentDir = filepath.Join(config.ZlawHome(), agentDir)
+	}
+	path := filepath.Join(agentDir, "agent.toml")
+	var raw map[string]any
+	_, err := toml.DecodeFile(path, &raw)
+	if err != nil {
+		return false
+	}
+	if v, ok := raw["agent"].(map[string]any); ok {
+		if b, ok := v["disabled"].(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	// deterministic order for tests
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if keys[i] > keys[j] {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+	return keys
+}
