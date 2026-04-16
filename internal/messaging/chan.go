@@ -1,7 +1,9 @@
 package messaging
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -65,12 +67,21 @@ func (m *ChanMessenger) Request(ctx context.Context, subject string, payload []b
 	}
 	defer sub.Unsubscribe() //nolint:errcheck
 
-	// Deliver to subscribers on the target subject, passing replySubject via
-	// a simple convention: ChanMessenger does not model NATS reply-to at the
-	// wire level. For test purposes, the handler is expected to call
-	// Publish(replySubject, ...) itself if it wants to reply.
-	// We publish the payload and wait for a reply.
-	if err := m.Publish(ctx, subject, payload); err != nil {
+	// For test harness: inject _ChanMessenger_ReplyTo into JSON payload.
+	// This allows the respondingMessenger to extract the reply subject.
+	var enrichedPayload []byte
+	if !bytes.Contains(payload, []byte("_ChanMessenger_ReplyTo")) {
+		var m map[string]any
+		if err := json.Unmarshal(payload, &m); err == nil {
+			m["_ChanMessenger_ReplyTo"] = replySubject
+			enrichedPayload, _ = json.Marshal(m)
+		}
+	}
+	if enrichedPayload == nil {
+		enrichedPayload = payload
+	}
+
+	if err := m.Publish(ctx, subject, enrichedPayload); err != nil {
 		return nil, err
 	}
 
