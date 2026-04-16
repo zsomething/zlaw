@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -258,8 +259,5 @@ func (h *HubClient) processInboxMessage(ctx context.Context, data []byte) {
 // isRoutineTimeout returns true if err is a routine timeout (no message available).
 // These are expected when polling an idle inbox and should not be logged as errors.
 func isRoutineTimeout(err error) bool {
-	if err == nil {
-		return false
-	}
-	return err.Error() == "context deadline exceeded" || err.Error() == "context: deadline exceeded"
+	return errors.Is(err, context.DeadlineExceeded)
 }
