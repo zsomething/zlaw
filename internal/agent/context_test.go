@@ -81,7 +81,7 @@ func TestBuildSystemPrompt_WithStickyBlocks(t *testing.T) {
 		{Name: "rules", Content: "always be concise"},
 	}
 	p := config.Personality{Soul: "you are helpful", Identity: ""}
-	got := agent.BuildSystemPrompt(sticky, p)
+	got := agent.BuildSystemPrompt(sticky, p, "")
 	if !strings.HasPrefix(got, "always be concise") {
 		t.Errorf("sticky block should be first, got: %q", got)
 	}
@@ -92,7 +92,7 @@ func TestBuildSystemPrompt_WithStickyBlocks(t *testing.T) {
 
 func TestBuildSystemPrompt_NoSticky(t *testing.T) {
 	p := config.Personality{Soul: "you are helpful", Identity: ""}
-	got := agent.BuildSystemPrompt(nil, p)
+	got := agent.BuildSystemPrompt(nil, p, "")
 	if got != "you are helpful" {
 		t.Errorf("no sticky: want %q, got %q", "you are helpful", got)
 	}

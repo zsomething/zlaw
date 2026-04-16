@@ -29,15 +29,16 @@ func resolveWorkspaceDir(entry config.AgentEntry) string {
 
 // BuildCredentialEnv reads the agent's agent.toml to discover required auth
 // profiles (LLM + memory embedder + adapters), validates them against the
-// per-agent credentials file at agents/<name>/credentials.toml,
-// and returns the env var to inject (ZLAW_CREDENTIALS_FILE=<path>).
+// user-maintained credentials file (agents/<name>/credentials.toml),
+// expands ${VAR} env-var references, and writes a runtime-only copy to
+// agents/<name>/credentials.active.toml which is injected to the agent.
 //
-// The per-agent credentials file is owned by the hub. The agent never has
-// access to it at rest — only through this injected env var at runtime.
+// The source file (credentials.toml) is never modified by the hub.
+// The active file (credentials.active.toml) is regenerated on every spawn.
 //
 // If agent.toml references no auth profiles the function is a no-op and
-// returns nil. If a referenced profile is absent from the store, an error
-// naming the missing profile is returned and the caller must abort the spawn.
+// returns nil. If a referenced profile is absent from the source store,
+// an error naming the missing profile is returned and the caller must abort.
 func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 	agentDir := resolveAgentDir(entry)
 
@@ -56,12 +57,11 @@ func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 		return nil, nil
 	}
 
-	// Per-agent credentials file.
-	credsPath := filepath.Join(agentDir, "credentials.toml")
-
-	store, err := credentials.LoadStore(credsPath)
+	// Read from the user-maintained source file (credentials.toml).
+	sourceCredsPath := filepath.Join(agentDir, "credentials.toml")
+	store, err := credentials.LoadStore(sourceCredsPath)
 	if err != nil {
-		return nil, fmt.Errorf("load credentials store: %w", err)
+		return nil, fmt.Errorf("load credentials from %s: %w", sourceCredsPath, err)
 	}
 
 	// Validate every required profile exists; collect only what's needed.
@@ -69,17 +69,25 @@ func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 	for _, name := range profiles {
 		profile, ok := store.Profiles[name]
 		if !ok {
-			return nil, fmt.Errorf("agent %q requires auth profile %q which does not exist in %s", entry.Name, name, credsPath)
+			return nil, fmt.Errorf("agent %q requires auth profile %q which does not exist in %s", entry.Name, name, sourceCredsPath)
 		}
 		needed.Profiles[name] = profile
 	}
 
-	// Write the validated credentials (hub owns this file, agent gets via env var).
-	if err := credentials.SaveStore(credsPath, needed); err != nil {
-		return nil, fmt.Errorf("write agent credentials file: %w", err)
+	// Write the expanded credentials to the runtime-active file under $ZLAW_HOME/run/.
+	// This file is owned by the hub and regenerated on every agent spawn.
+	// Located in run/ alongside sockets, pids, and logs — all ephemeral runtime data.
+	runDir := filepath.Join(config.ZlawHome(), "run")
+	runtimeCredsDir := filepath.Join(runDir, "credentials")
+	if err := os.MkdirAll(runtimeCredsDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create runtime credentials dir: %w", err)
+	}
+	activeCredsPath := filepath.Join(runtimeCredsDir, entry.Name+".toml")
+	if err := credentials.SaveStore(activeCredsPath, needed); err != nil {
+		return nil, fmt.Errorf("write credentials: %w", err)
 	}
 
-	return []string{"ZLAW_CREDENTIALS_FILE=" + credsPath}, nil
+	return []string{"ZLAW_CREDENTIALS_FILE=" + activeCredsPath}, nil
 }
 
 // collectAuthProfiles returns the unique, non-empty auth profile names

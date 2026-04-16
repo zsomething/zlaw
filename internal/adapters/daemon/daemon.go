@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+
+	"github.com/zsomething/zlaw/internal/ctxkey"
 	"time"
 
 	"github.com/zsomething/zlaw/internal/session"
@@ -131,9 +133,10 @@ func (d *Daemon) handleConn(ctx context.Context, conn net.Conn) {
 	}
 
 	sessionID := sub.SessionID
-	s := d.manager.GetOrCreate(ctx, sessionID)
+	s := d.manager.GetOrCreate(ctx, sessionID, "")
 	sink := newConnSink(conn, enc)
 	s.Broadcaster.Add(sink)
+	ctx = ctxkey.WithTraceID(ctx, s.TraceID)
 	defer func() {
 		s.Broadcaster.Remove(sink)
 		sink.Close() //nolint:errcheck

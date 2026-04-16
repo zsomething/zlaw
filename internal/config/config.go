@@ -93,9 +93,6 @@ type AgentMeta struct {
 	// Used by hub registry and manager routing for peer discovery.
 	// Example: roles = ["calendar", "scheduling"]
 	Roles []string `toml:"roles"`
-	// Manager marks this agent as the designated hub manager agent.
-	// The manager receives user input and can delegate to peer agents.
-	Manager bool `toml:"manager"`
 }
 
 // DisplayName returns the human-readable display name. When Name is empty it
@@ -344,6 +341,14 @@ func WriteRuntimeFieldToDir(agentDir, key, value string) error {
 // Must be called before Watch.
 func (l *Loader) SetCronChangeHandler(fn func(CronConfig)) {
 	l.onCronChange = fn
+}
+
+// SetOnChange replaces the onChange callback. It is safe to call
+// concurrently.
+func (l *Loader) SetOnChange(fn func(AgentConfig, Personality)) {
+	l.mu.Lock()
+	l.onChange = fn
+	l.mu.Unlock()
 }
 
 // Watch starts watching the agent directory and workspace (if set) for changes.

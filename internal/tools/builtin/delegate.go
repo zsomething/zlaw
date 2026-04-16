@@ -99,7 +99,9 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 		return "", fmt.Errorf("agent_delegate: agent %q is not registered", in.ID)
 	}
 
-	sessionID, _ := ctx.Value(ctxkey.SessionID).(string)
+	sessionID := ctxkey.SessionIDFrom(ctx)
+	traceID := ctxkey.TraceIDOf(ctx)
+	sourceChannel := ctxkey.SourceChannelOf(ctx)
 
 	// Generate a unique reply subject and subscribe before publishing, so we
 	// don't miss the reply.
@@ -116,13 +118,25 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 	}
 	defer sub.Unsubscribe() //nolint:errcheck
 
+	// Build session context for the delegation.
+	sessionCtx := map[string]any{}
+	if traceID != "" {
+		sessionCtx["trace_id"] = traceID
+	}
+	if sourceChannel != "" {
+		sessionCtx["originating_channel"] = sourceChannel
+	}
+
 	env := messaging.TaskEnvelope{
-		From:      d.AgentID,
-		To:        in.ID,
-		Task:      in.Task,
-		Context:   in.Context,
-		SessionID: sessionID,
-		ReplyTo:   replySubject,
+		From:           d.AgentID,
+		To:             in.ID,
+		Task:           in.Task,
+		Context:        in.Context,
+		SessionID:      sessionID,
+		ReplyTo:        replySubject,
+		SourceAgent:    d.AgentID,
+		SessionContext: sessionCtx,
+		TraceID:        traceID,
 	}
 
 	payload, err := json.Marshal(env)

@@ -23,9 +23,6 @@ const (
 	// agentInboxStream is the JetStream stream name for agent inbox messages.
 	// Mirrors hub/internal/hub/stream.go constants.
 	agentInboxStream = "AGENT_INBOX"
-
-	// fetchTimeout is how long Fetch() waits for a message before looping.
-	fetchTimeout = 5 * time.Second
 )
 
 // HubTaskRunner executes an incoming task envelope and returns the output text.
@@ -119,6 +116,11 @@ func (h *HubClient) runJetStreamInbox(ctx context.Context, inboxSubject string, 
 		"consumer", consumer,
 	)
 
+	// fetchTick controls how often the agent polls JetStream for new messages.
+	// Keep it short enough to feel responsive but longer than the fetch timeout
+	// so idle cycles don't spam logs with expected timeouts.
+	fetchTick := time.NewTicker(2 * time.Second)
+	defer fetchTick.Stop()
 	ticker := time.NewTicker(hubHeartbeatInterval)
 	defer ticker.Stop()
 
@@ -131,17 +133,17 @@ func (h *HubClient) runJetStreamInbox(ctx context.Context, inboxSubject string, 
 			if err := h.publishRegistration(ctx); err != nil {
 				h.logger.Warn("hub: heartbeat failed", "agent", h.name, "err", err)
 			}
-		default:
-			// Non-blocking fetch with a short timeout so we don't miss ctx cancellation.
-			fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
+		case <-fetchTick.C:
+			// Short timeout: if no message, loop immediately. Only log unexpected
+			// errors — routine timeouts are expected when the inbox is idle.
+			fetchCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			err := js.FetchOnSubject(fetchCtx, consumer, agentInboxStream, inboxSubject, func(msg *messaging.JetMsg) {
 				h.processInboxMessage(ctx, msg.Data())
 				_ = msg.Ack() // ack after successful processing
 			})
 			cancel()
 			if err != nil && ctx.Err() == nil {
-				// Log and loop; fetch timeout is expected when idle.
-				h.logger.Debug("hub: fetch loop", "agent", h.name, "err", err)
+				h.logger.Debug("hub: fetch", "agent", h.name, "err", err)
 			}
 		}
 	}

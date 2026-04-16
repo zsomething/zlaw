@@ -70,12 +70,10 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("start supervisor: %w", err)
 	}
 
-	managerName := managerAgentName(cfg)
 	mgmtHandler := hub.NewManagementHandler(
 		result.Conn,
 		sup,
 		reg,
-		managerName,
 		config.ZlawHome(),
 		logger,
 	)
@@ -112,7 +110,6 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
 		"agents", len(cfg.Agents),
-		"manager", managerName,
 		"control", controlPath,
 	)
 
@@ -127,17 +124,6 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 type hubConfigAdapter struct{ cfg config.HubConfig }
 
 func (a hubConfigAdapter) HubName() string { return a.cfg.Hub.Name }
-
-// managerAgentName returns the name of the first agent entry marked Manager,
-// or empty string if none.
-func managerAgentName(cfg config.HubConfig) string {
-	for _, a := range cfg.Agents {
-		if a.Manager {
-			return a.Name
-		}
-	}
-	return ""
-}
 
 // HubStatus prints the current hub status via the control socket.
 // If the hub is not running (socket unreachable), it prints a note.
