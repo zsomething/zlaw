@@ -151,3 +151,134 @@ func TestAgentDelegate_NoRegistry_Succeeds(t *testing.T) {
 		t.Errorf("output = %q, want ok", output)
 	}
 }
+
+func TestAgentDelegate_Timeout(t *testing.T) {
+	// Messenger receives but never replies — delegate should time out.
+	cm := messaging.NewChanMessenger()
+	ctx := context.Background()
+	_, _ = cm.Subscribe(ctx, "agent.worker.inbox", func(data []byte) {
+		// Never reply — simulate a hung agent.
+	})
+
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: cm,
+		Registry:  newStaticRegistry("worker"),
+	}
+
+	// Use a short timeout for the test.
+	toolExecute := func(ctx context.Context) (string, error) {
+		return tool.Execute(ctx, json.RawMessage(`{"id":"worker","task":"do it"}`))
+	}
+
+	// The delegate tool uses its own 60s timeout internally, so we test with
+	// a context that's cancelled while waiting for reply.
+	shortCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+
+	_, err := toolExecute(shortCtx)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	// Should be a context deadline exceeded error.
+	if !strings.Contains(err.Error(), "timeout") && !strings.Contains(err.Error(), "context") {
+		t.Errorf("expected timeout/context error, got: %v", err)
+	}
+}
+
+func TestAgentDelegate_ContextCancelled(t *testing.T) {
+	// Parent context cancelled mid-delegation — the delegate should return
+	// with the context error rather than waiting for a reply.
+	cm := messaging.NewChanMessenger()
+	// Buffered so the subscription handler never blocks (simulates a slow target).
+	ctx := context.Background()
+	_, _ = cm.Subscribe(ctx, "agent.worker.inbox", func(data []byte) {
+		// Deliberately never reply — simulate a slow/stuck target agent.
+		// The handler returns immediately; the tool will time out waiting for reply.
+	})
+
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: cm,
+		Registry:  newStaticRegistry("worker"),
+	}
+
+	parentCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		_, err := tool.Execute(parentCtx, json.RawMessage(`{"id":"worker","task":"do it"}`))
+		done <- err
+	}()
+
+	// Give the goroutine time to enter the reply wait.
+	time.Sleep(100 * time.Millisecond)
+	// Cancel while reply is still pending.
+	cancel()
+
+	select {
+	case err := <-done:
+		// Cancelled context should produce an error (timeout or context cancelled).
+		if err == nil {
+			t.Error("expected error from cancelled context, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("delegate did not return after context cancellation")
+	}
+}
+
+func TestAgentDelegate_InvalidInput_MissingID(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: cm,
+		Registry:  newStaticRegistry("worker"),
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"do it"}`))
+	if err == nil || !strings.Contains(err.Error(), "id is required") {
+		t.Errorf("expected 'id is required' error, got: %v", err)
+	}
+}
+
+func TestAgentDelegate_InvalidInput_MissingTask(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: cm,
+		Registry:  newStaticRegistry("worker"),
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"id":"worker"}`))
+	if err == nil || !strings.Contains(err.Error(), "task is required") {
+		t.Errorf("expected 'task is required' error, got: %v", err)
+	}
+}
+
+func TestAgentDelegate_InvalidInput_NotJSON(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: cm,
+		Registry:  newStaticRegistry("worker"),
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`not json`))
+	if err == nil || !strings.Contains(err.Error(), "invalid input") {
+		t.Errorf("expected 'invalid input' error, got: %v", err)
+	}
+}
+
+func TestAgentDelegate_SelfDelegation(t *testing.T) {
+	// Delegating to self should succeed (no special handling needed).
+	rm := newRespondingMessenger("agent.manager.inbox", "self-reply")
+	tool := &builtin.AgentDelegate{
+		AgentID:   "manager",
+		Messenger: rm,
+		Registry:  newStaticRegistry("manager"),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := tool.Execute(ctx, json.RawMessage(`{"id":"manager","task":"reflect"}`))
+	if err != nil {
+		t.Errorf("self-delegation should not error, got: %v", err)
+	}
+}

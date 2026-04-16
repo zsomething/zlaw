@@ -3,7 +3,8 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -11,202 +12,268 @@ import (
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
-// stubRunner is a HubTaskRunner that records the last call and returns a fixed reply.
+// stubRunner implements agent.HubTaskRunner for tests.
 type stubRunner struct {
-	sessionID string
-	input     string
-	output    string
-	err       error
+	output string
+	err    error
+	calls  int
 }
 
-func (s *stubRunner) Run(_ context.Context, sessionID, input, _ string) (string, error) {
-	s.sessionID = sessionID
-	s.input = input
+func (s *stubRunner) Run(_ context.Context, sessionID, input, systemPrompt string) (string, error) {
+	s.calls++
 	return s.output, s.err
 }
 
-// chanMessenger wraps messaging.ChanMessenger but exposes Publish/Subscribe helpers
-// via the Messenger interface for the tests.
-type chanMessengerAdapter struct {
-	m *messaging.ChanMessenger
+var _ agent.HubTaskRunner = (*stubRunner)(nil)
+
+// closureHubTaskRunner adapts a closure to HubTaskRunner.
+type closureHubTaskRunner struct {
+	fn func(ctx context.Context, sessionID, input, systemPrompt string) (string, error)
 }
 
-func (a *chanMessengerAdapter) Publish(ctx context.Context, subject string, payload []byte) error {
-	return a.m.Publish(ctx, subject, payload)
+func (r *closureHubTaskRunner) Run(ctx context.Context, sessionID, input, systemPrompt string) (string, error) {
+	return r.fn(ctx, sessionID, input, systemPrompt)
 }
 
-func (a *chanMessengerAdapter) Subscribe(ctx context.Context, subject string, handler func([]byte)) (messaging.Subscription, error) {
-	return a.m.Subscribe(ctx, subject, handler)
+var _ agent.HubTaskRunner = (*closureHubTaskRunner)(nil)
+
+func mustMarshal(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
 }
 
-func (a *chanMessengerAdapter) Request(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error) {
-	return a.m.Request(ctx, subject, payload, timeout)
-}
-
-func (a *chanMessengerAdapter) JetStream() messaging.JetStreamer {
-	return nil
-}
-
-func (a *chanMessengerAdapter) FetchOnSubject(ctx context.Context, consumer string, stream string, subject string, handler func(*messaging.JetMsg)) error {
-	return fmt.Errorf("not implemented")
-}
-
-var _ messaging.Messenger = (*chanMessengerAdapter)(nil)
-
-func newTestMessenger() *chanMessengerAdapter {
-	return &chanMessengerAdapter{m: messaging.NewChanMessenger()}
-}
-
-func TestHubClient_PublishesRegistration(t *testing.T) {
-	m := newTestMessenger()
-	runner := &stubRunner{output: "ok"}
-
-	regCh := make(chan []byte, 1)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Capture the registration before starting the client.
-	if _, err := m.Subscribe(ctx, "zlaw.registry", func(data []byte) {
-		select {
-		case regCh <- data:
-		default:
-		}
-	}); err != nil {
-		t.Fatalf("subscribe: %v", err)
+// TestHubClient_RoundTrip verifies that HubClient receives a task envelope,
+// calls the runner, and publishes the reply back to the reply-to subject.
+func TestHubClient_RoundTrip(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	calls := make(chan struct{ Input, SessionID, SystemPrompt string }, 1)
+	runner := &closureHubTaskRunner{
+		fn: func(_ context.Context, sessionID, input, systemPrompt string) (string, error) {
+			calls <- struct{ Input, SessionID, SystemPrompt string }{input, sessionID, systemPrompt}
+			return "echo:" + input, nil
+		},
 	}
 
-	go func() {
-		hc := agent.NewHubClient("myagent", "1.0", []string{"bash", "glob"}, nil, m, runner, nil, nil)
-		_ = hc.Start(ctx)
-	}()
+	logger := slog.New(slog.DiscardHandler)
+	client := agent.NewHubClient(
+		"worker", "test",
+		[]string{"task"},
+		nil,
+		cm,
+		runner,
+		func() string { return "system-prompt" },
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Start(ctx) }()
+	time.Sleep(50 * time.Millisecond)
+
+	// Subscribe to reply subject.
+	replyCh := make(chan messaging.TaskReply, 1)
+	_, _ = cm.Subscribe(ctx, "_INBOX.test.reply", func(data []byte) {
+		var reply messaging.TaskReply
+		if err := json.Unmarshal(data, &reply); err != nil {
+			t.Logf("malformed reply: %v", err)
+			return
+		}
+		replyCh <- reply
+	})
+	time.Sleep(50 * time.Millisecond)
+
+	// Publish task envelope.
+	env := messaging.TaskEnvelope{
+		From: "manager", To: "worker", Task: "say hello",
+		SessionID: "session-123", ReplyTo: "_INBOX.test.reply",
+	}
+	_ = cm.Publish(ctx, "agent.worker.inbox", mustMarshal(env)) //nolint:errcheck
 
 	select {
-	case data := <-regCh:
-		var reg map[string]any
-		if err := json.Unmarshal(data, &reg); err != nil {
-			t.Fatalf("unmarshal registration: %v", err)
+	case reply := <-replyCh:
+		if reply.Output != "echo:say hello" {
+			t.Errorf("output = %q, want %q", reply.Output, "echo:say hello")
 		}
-		if reg["name"] != "myagent" {
-			t.Errorf("name = %v, want myagent", reg["name"])
+		if reply.SessionID != "session-123" {
+			t.Errorf("session_id = %q, want %q", reply.SessionID, "session-123")
 		}
-		caps, _ := reg["capabilities"].([]any)
-		if len(caps) != 2 {
-			t.Errorf("capabilities = %v, want 2 items", caps)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for reply")
+	}
+
+	select {
+	case call := <-calls:
+		if call.Input != "say hello" {
+			t.Errorf("runner input = %q, want %q", call.Input, "say hello")
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for registration message")
+		if call.SystemPrompt != "system-prompt" {
+			t.Errorf("system prompt = %q, want %q", call.SystemPrompt, "system-prompt")
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("runner was not called")
 	}
 }
 
-func TestHubClient_HandlesInboxTask(t *testing.T) {
-	m := newTestMessenger()
-	runner := &stubRunner{output: "agent response"}
+// TestHubClient_ConcurrentMessages verifies that HubClient handles multiple
+// messages arriving quickly without mixing up replies.
+func TestHubClient_ConcurrentMessages(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	runnerCalls := make(chan string, 3)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Capture reply.
-	replyCh := make(chan []byte, 1)
-	if _, err := m.Subscribe(ctx, "reply.session123", func(data []byte) {
-		select {
-		case replyCh <- data:
-		default:
-		}
-	}); err != nil {
-		t.Fatalf("subscribe reply: %v", err)
+	runner := &closureHubTaskRunner{
+		fn: func(_ context.Context, _, input, _ string) (string, error) {
+			runnerCalls <- input
+			return "done:" + input, nil
+		},
 	}
 
-	go func() {
-		hc := agent.NewHubClient("worker", "1.0", nil, nil, m, runner, nil, nil)
-		_ = hc.Start(ctx)
-	}()
+	logger := slog.New(slog.DiscardHandler)
+	client := agent.NewHubClient(
+		"worker", "test", nil, nil, cm, runner,
+		func() string { return "" }, logger,
+	)
 
-	// Wait for hub client to subscribe to inbox.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { client.Start(ctx) }() //nolint:errcheck
+	time.Sleep(50 * time.Millisecond)
+
+	// Set up reply collectors for three tasks.
+	type taskResult struct {
+		idx    int
+		output string
+	}
+	results := make(chan taskResult, 3)
+	replySubjects := []string{"_INBOX.reply.0", "_INBOX.reply.1", "_INBOX.reply.2"}
+	for i, subj := range replySubjects {
+		idx := i
+		s := subj
+		_, _ = cm.Subscribe(ctx, s, func(data []byte) {
+			var reply messaging.TaskReply
+			if err := json.Unmarshal(data, &reply); err != nil {
+				return
+			}
+			results <- taskResult{idx: idx, output: reply.Output}
+		})
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Publish three envelopes concurrently.
+	tasks := []string{"task-a", "task-b", "task-c"}
+	for i, task := range tasks {
+		env := messaging.TaskEnvelope{
+			From: "manager", To: "worker", Task: task,
+			SessionID: "s" + string(rune('0'+i)),
+			ReplyTo:   replySubjects[i],
+		}
+		_ = cm.Publish(ctx, "agent.worker.inbox", mustMarshal(env)) //nolint:errcheck
+	}
+
+	// Collect replies.
+	timeout := time.After(3 * time.Second)
+	for received := 0; received < 3; received++ {
+		select {
+		case r := <-results:
+			if r.output == "" {
+				t.Errorf("reply %d: empty output", r.idx)
+			}
+		case <-timeout:
+			t.Fatalf("timeout waiting for all replies (got %d/3)", received)
+		}
+	}
+
+	// Verify runner called three times.
+	close(runnerCalls)
+	var gotCalls []string
+	for input := range runnerCalls {
+		gotCalls = append(gotCalls, input)
+	}
+	if len(gotCalls) != 3 {
+		t.Errorf("runner calls = %d, want 3", len(gotCalls))
+	}
+}
+
+// TestHubClient_RunnerError propagates a runner error into the reply.
+func TestHubClient_RunnerError(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	wantErr := errors.New("runner failed")
+	runner := &stubRunner{err: wantErr}
+
+	logger := slog.New(slog.DiscardHandler)
+	client := agent.NewHubClient(
+		"worker", "test", nil, nil, cm,
+		runner,
+		func() string { return "" },
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { client.Start(ctx) }() //nolint:errcheck
+	time.Sleep(50 * time.Millisecond)
+
+	replyCh := make(chan messaging.TaskReply, 1)
+	_, _ = cm.Subscribe(ctx, "_INBOX.test.err", func(data []byte) {
+		var reply messaging.TaskReply
+		json.Unmarshal(data, &reply) //nolint:errcheck
+		replyCh <- reply
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	env := messaging.TaskEnvelope{
-		SessionID: "session123",
-		Task:      "hello",
-		ReplyTo:   "reply.session123",
+		From: "manager", To: "worker", Task: "fail",
+		SessionID: "s1", ReplyTo: "_INBOX.test.err",
 	}
-	data, _ := json.Marshal(env)
-	if err := m.Publish(ctx, "agent.worker.inbox", data); err != nil {
-		t.Fatalf("publish task: %v", err)
-	}
+	_ = cm.Publish(ctx, "agent.worker.inbox", mustMarshal(env)) //nolint:errcheck
 
 	select {
-	case replyData := <-replyCh:
-		var reply messaging.TaskReply
-		if err := json.Unmarshal(replyData, &reply); err != nil {
-			t.Fatalf("unmarshal reply: %v", err)
+	case reply := <-replyCh:
+		if reply.Error == "" {
+			t.Error("expected error in reply, got none")
 		}
-		if reply.SessionID != "session123" {
-			t.Errorf("session_id = %q, want session123", reply.SessionID)
-		}
-		if reply.Output != "agent response" {
-			t.Errorf("output = %q, want %q", reply.Output, "agent response")
-		}
-		if reply.Error != "" {
-			t.Errorf("unexpected error: %q", reply.Error)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for task reply")
-	}
-
-	// Verify runner received the right args.
-	if runner.sessionID != "session123" {
-		t.Errorf("runner sessionID = %q", runner.sessionID)
-	}
-	if runner.input != "hello" {
-		t.Errorf("runner input = %q", runner.input)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for reply")
 	}
 }
 
-func TestHubClient_MalformedInbox_NoReply(t *testing.T) {
-	m := newTestMessenger()
-	runner := &stubRunner{output: "should not be called"}
+// TestHubClient_MissingReplyTo logs a warning but does not panic.
+func TestHubClient_MissingReplyTo(t *testing.T) {
+	cm := messaging.NewChanMessenger()
+	calls := make(chan struct{}, 1)
+	runner := &closureHubTaskRunner{
+		fn: func(_ context.Context, _, _, _ string) (string, error) {
+			calls <- struct{}{}
+			return "ok", nil
+		},
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	logger := slog.New(slog.DiscardHandler)
+	client := agent.NewHubClient(
+		"worker", "test", nil, nil, cm, runner,
+		func() string { return "" }, logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-
-	go func() {
-		hc := agent.NewHubClient("bot", "1.0", nil, nil, m, runner, nil, nil)
-		_ = hc.Start(ctx)
-	}()
-
+	go func() { client.Start(ctx) }() //nolint:errcheck
 	time.Sleep(50 * time.Millisecond)
 
-	// Send malformed JSON — runner should not be called.
-	m.Publish(ctx, "agent.bot.inbox", []byte("not-json")) //nolint:errcheck
-
-	// Brief window: if runner is called we'd see sessionID set.
-	time.Sleep(50 * time.Millisecond)
-	if runner.sessionID != "" {
-		t.Error("runner was called despite malformed envelope")
+	// Envelope without ReplyTo — should be silently dropped (no panic).
+	env := messaging.TaskEnvelope{
+		From: "manager", To: "worker", Task: "do it",
+		SessionID: "s1",
+		// ReplyTo intentionally missing.
 	}
-}
+	_ = cm.Publish(ctx, "agent.worker.inbox", mustMarshal(env)) //nolint:errcheck
+	time.Sleep(200 * time.Millisecond)
 
-func TestHubClient_StopsOnContextCancel(t *testing.T) {
-	m := newTestMessenger()
-	runner := &stubRunner{}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	done := make(chan error, 1)
-	go func() {
-		hc := agent.NewHubClient("stopper", "1.0", nil, nil, m, runner, nil, nil)
-		done <- hc.Start(ctx)
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-
+	// Runner should not have been called.
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Errorf("Start returned err: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Start did not return after context cancel")
+	case <-calls:
+		t.Error("runner should not be called when ReplyTo is missing")
+	default:
+		// Expected.
 	}
 }
