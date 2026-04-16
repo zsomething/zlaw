@@ -12,6 +12,25 @@ import (
 	"github.com/zsomething/zlaw/internal/skills"
 )
 
+// BuildSelfIdentitySticky returns a StickyBlock that injects the agent's own
+// identity (name + roles) into every system prompt. This gives the agent
+// self-awareness without relying on personality files.
+func BuildSelfIdentitySticky(name string, id string, roles []string) StickyBlock {
+	content := strings.ReplaceAll(StickySelfIdentity, "{agent_name}", name)
+	content = strings.ReplaceAll(content, "{agent_id}", id)
+	var rolesStr string
+	if len(roles) > 0 {
+		rolesStr = strings.Join(roles, ", ")
+	} else {
+		rolesStr = "(none)"
+	}
+	content = strings.ReplaceAll(content, "{agent_roles}", rolesStr)
+	return StickyBlock{
+		Name:    "self-identity",
+		Content: content,
+	}
+}
+
 // StickyBlock is a named, framework-level instruction block injected at the
 // head of every system prompt. Content lives in Go source, not markdown files,
 // so user personality files cannot override it.
@@ -66,6 +85,14 @@ func BuildPrefill(agentDir string, sources []string) (string, error) {
 // so it cannot be silently broken by a personality edit.
 const StickyProactiveMemorySave = `[Memory behavior]
 When you learn something worth retaining — user preferences, facts, decisions, recurring context — call memory_save immediately. Keep memories short, factual, and tagged. Do not save transient info or things already in session history.`
+
+// StickySelfIdentity is the hardcoded instruction block injected as cache
+// checkpoint 1 that tells the agent its own identity. It is used by
+// BuildSelfIdentitySticky to inject agent name, stable ID, and roles into the system prompt.
+const StickySelfIdentity = `[Self identity]
+You are {agent_name} (stable_id: {agent_id}). Roles: {agent_roles}.
+When delegating tasks, use the list_agents tool to find other agents — list_agents marks "is_self: true" on the current agent.
+Never impersonate another agent.`
 
 // BuildSkillsSection returns a formatted [Available Skills] block for injection
 // into the system prompt. Each skill is listed as:
@@ -157,7 +184,10 @@ func formatMemoryLine(m Memory) string {
 // BuildSystemPrompt assembles the full system prompt from sticky blocks and
 // personality files. Sticky blocks are prepended before SOUL.md and
 // IDENTITY.md. Pass nil sticky for the personality-only string.
-func BuildSystemPrompt(sticky []StickyBlock, p config.Personality) string {
+//
+// When agentID is non-empty, a [System Identity] block is appended to the
+// identity section so the agent always knows its own identifier.
+func BuildSystemPrompt(sticky []StickyBlock, p config.Personality, agentID string) string {
 	var b strings.Builder
 	for _, s := range sticky {
 		if c := strings.TrimSpace(s.Content); c != "" {
@@ -178,6 +208,13 @@ func BuildSystemPrompt(sticky []StickyBlock, p config.Personality) string {
 			b.WriteString("\n\n")
 		}
 		b.WriteString(strings.TrimSpace(p.Identity))
+	}
+	// Append system identity block with agent ID if provided.
+	if agentID != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		fmt.Fprintf(&b, "[System Identity]\nagent_id: %s", agentID)
 	}
 	return b.String()
 }
