@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/hub"
 )
 
 // hubPIDPath returns the path to the hub PID file.
@@ -18,9 +19,9 @@ func hubPIDPath() string {
 	return filepath.Join(runDir(), "hub.pid")
 }
 
-// runDir returns the zlaw run directory.
+// runDir returns the zlaw run directory, consistent with config.ZlawHome().
 func runDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".zlaw", "run")
+	return filepath.Join(config.ZlawHome(), "run")
 }
 
 // StartHub daemonizes the hub and starts it in the background.
@@ -38,6 +39,12 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 	// Ensure run dir exists.
 	if err := os.MkdirAll(runDir(), 0o700); err != nil {
 		return fmt.Errorf("create run dir: %w", err)
+	}
+
+	// Remove stale control socket from a crashed hub so we can bind a fresh one.
+	controlPath := hub.ControlSocketPath(config.ZlawHome())
+	if _, err := os.Stat(controlPath); err == nil {
+		os.Remove(controlPath) //nolint:errcheck
 	}
 
 	// Find our own binary.
@@ -159,10 +166,12 @@ func isHubRunning() (pid int, running bool) {
 		return 0, false
 	}
 	// Signal 0 checks liveness without sending a signal.
-	if err := proc.Signal(syscall.Signal(0)); err == nil {
-		return p, true
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		// Process is gone — stale PID file.
+		cleanupPIDFile()
+		return 0, false
 	}
-	return 0, false
+	return p, true
 }
 
 func cleanupPIDFile() {

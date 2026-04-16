@@ -16,14 +16,19 @@ import (
 )
 
 type AgentCmd struct {
-	Run     AgentRunCmd     `cmd:"" help:"start the agent (interactive or stdin)"`
-	Serve   AgentServeCmd   `cmd:"" help:"start the agent in daemon mode"`
-	Attach  AgentAttachCmd  `cmd:"" help:"attach a terminal to a running daemon"`
-	Logs    AgentLogsCmd    `cmd:"" help:"stream agent logs in pretty format"`
-	List    AgentListCmd    `cmd:"" help:"list all agents managed by the hub"`
-	Status  AgentStatusCmd  `cmd:"" help:"show status of a specific agent"`
-	Stop    AgentStopCmd    `cmd:"" help:"stop a running agent"`
-	Restart AgentRestartCmd `cmd:"" help:"restart a stopped or running agent"`
+	Run       AgentRunCmd       `cmd:"" help:"start the agent (interactive or stdin)"`
+	Serve     AgentServeCmd     `cmd:"" help:"start the agent in daemon mode"`
+	Attach    AgentAttachCmd    `cmd:"" help:"attach a terminal to a running daemon"`
+	Logs      AgentLogsCmd      `cmd:"" help:"stream agent logs in pretty format"`
+	List      AgentListCmd      `cmd:"" help:"list all agents managed by the hub"`
+	Status    AgentStatusCmd    `cmd:"" help:"show status of a specific agent"`
+	Create    AgentCreateCmd    `cmd:"" help:"create a new agent (scaffold dirs + register in zlaw.toml + spawn)"`
+	Configure AgentConfigureCmd `cmd:"" help:"update a runtime field for an agent"`
+	Disable   AgentDisableCmd   `cmd:"" help:"stop an agent and disable it so the hub does not respawn"`
+	Enable    AgentEnableCmd    `cmd:"" help:"re-enable a disabled agent"`
+	Delete    AgentDeleteCmd    `cmd:"" help:"stop and remove an agent (deletes dirs + removes from zlaw.toml)"`
+	Stop      AgentStopCmd      `cmd:"" help:"stop a running agent"`
+	Restart   AgentRestartCmd   `cmd:"" help:"restart a stopped or running agent"`
 }
 
 // AgentFlags are embedded by commands that need to resolve an agent directory.
@@ -132,6 +137,110 @@ func (c *AgentStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return nil
 }
 
+// ── agent create ──────────────────────────────────────────────────────────────
+
+type AgentCreateCmd struct {
+	Name      string `arg:"true" help:"agent name"`
+	Workspace string `help:"agent workspace path (defaults to $ZLAW_HOME/workspaces/<name>)"`
+}
+
+func (c *AgentCreateCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	params := map[string]any{"name": c.Name}
+	if c.Workspace != "" {
+		params["workspace"] = c.Workspace
+	}
+	// agent.create returns a result payload, not just OK.
+	conn, err := socketConn()
+	if err != nil {
+		return fmt.Errorf("connect to hub (is it running?): %w", err)
+	}
+	defer func() { conn.Close() }() //nolint:errcheck
+
+	req := map[string]any{"method": "agent.create", "params": params}
+	data, _ := json.Marshal(req)
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))  //nolint:errcheck
+	if _, err := conn.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("send agent.create: %w", err)
+	}
+	var raw json.RawMessage
+	if err := json.NewDecoder(conn).Decode(&raw); err != nil {
+		return fmt.Errorf("read agent.create response: %w", err)
+	}
+	var resp struct {
+		OK     bool            `json:"ok"`
+		Error  string          `json:"error"`
+		Result json.RawMessage `json:"result,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return fmt.Errorf("parse agent.create response: %w", err)
+	}
+	if !resp.OK {
+		return fmt.Errorf("agent.create error: %s", resp.Error)
+	}
+	fmt.Printf("agent %q created and spawned\n", c.Name)
+	return nil
+}
+
+// ── agent configure ─────────────────────────────────────────────────────────────
+
+type AgentConfigureCmd struct {
+	Name  string `arg:"true" help:"agent name"`
+	Key   string `arg:"true" help:"field key (e.g., llm.model, llm.backend)"`
+	Value string `arg:"true" help:"field value"`
+}
+
+func (c *AgentConfigureCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	params := map[string]any{"name": c.Name, "key": c.Key, "value": c.Value}
+	if err := agentAction(ctx, "agent.configure", params); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q configured: %s = %s\n", c.Name, c.Key, c.Value)
+	return nil
+}
+
+// ── agent disable ─────────────────────────────────────────────────────────────
+
+type AgentDisableCmd struct {
+	Name string `arg:"true" help:"agent name"`
+}
+
+func (c *AgentDisableCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := agentAction(ctx, "agent.disable", map[string]any{"name": c.Name}); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q disabled\n", c.Name)
+	return nil
+}
+
+// ── agent enable ──────────────────────────────────────────────────────────────
+
+type AgentEnableCmd struct {
+	Name string `arg:"true" help:"agent name"`
+}
+
+func (c *AgentEnableCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := agentAction(ctx, "agent.enable", map[string]any{"name": c.Name}); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q enabled\n", c.Name)
+	return nil
+}
+
+// ── agent delete ──────────────────────────────────────────────────────────────
+
+type AgentDeleteCmd struct {
+	Name string `arg:"true" help:"agent name"`
+}
+
+func (c *AgentDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := agentAction(ctx, "agent.remove", map[string]any{"name": c.Name}); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q deleted\n", c.Name)
+	return nil
+}
+
 // ── agent stop ─────────────────────────────────────────────────────────────────
 
 type AgentStopCmd struct {
@@ -139,7 +248,11 @@ type AgentStopCmd struct {
 }
 
 func (c *AgentStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	return agentAction(ctx, "agent.stop", map[string]any{"name": c.Name})
+	if err := agentAction(ctx, "agent.stop", map[string]any{"name": c.Name}); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q stopped\n", c.Name)
+	return nil
 }
 
 // ── agent restart ─────────────────────────────────────────────────────────────
@@ -149,7 +262,11 @@ type AgentRestartCmd struct {
 }
 
 func (c *AgentRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	return agentAction(ctx, "agent.restart", map[string]any{"name": c.Name})
+	if err := agentAction(ctx, "agent.restart", map[string]any{"name": c.Name}); err != nil {
+		return err
+	}
+	fmt.Printf("agent %q restarted\n", c.Name)
+	return nil
 }
 
 // ── Socket helpers ────────────────────────────────────────────────────────────
