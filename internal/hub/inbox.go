@@ -24,7 +24,7 @@ description = ""
 
 [llm]
 backend = "anthropic"
-model = "claude-opus-4-5"
+model = "claude-sonnet-4-5"
 auth_profile = "anthropic"
 max_tokens = 4096
 timeout_sec = 60
@@ -32,13 +32,10 @@ timeout_sec = 60
 [tools]
 allowed = []
 
-[[adapter]]
-type = "telegram"
-auth_profile = "telegram"
-
-[[adapter]]
-type = "fizzy"
-auth_profile = "fizzy"
+# Uncomment and configure adapters after setting up credentials:
+# [[adapter]]
+# type = "telegram"
+# auth_profile = "telegram"
 `
 
 	// scaffoldCredentialsTOML is the initial credentials file for a new agent.
@@ -219,6 +216,15 @@ func (h *ManagementHandler) opAgentList() (any, error) {
 	return h.registry.List(), nil
 }
 
+// AgentCreate scaffolds a new agent directory and spawns the agent.
+// It is the public equivalent of opAgentCreate used by the control socket.
+func (h *ManagementHandler) AgentCreate(ctx context.Context, name string, workspaceDir string) error {
+	return h.opAgentCreate(ctx, map[string]any{
+		"name":      name,
+		"workspace": workspaceDir,
+	})
+}
+
 // opAgentCreate scaffolds a new agent directory and spawns the agent.
 func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string]any) error {
 	name, ok := stringParam(params, "name")
@@ -227,7 +233,11 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 	}
 
 	agentDir := filepath.Join(h.zlawHome, "agents", name)
-	workspaceDir := filepath.Join(h.zlawHome, "workspaces", name)
+	ws, _ := stringParam(params, "workspace")
+	if ws == "" {
+		ws = filepath.Join(h.zlawHome, "workspaces", name)
+	}
+	workspaceDir := ws
 
 	// Create agent dir and workspace dir.
 	if err := os.MkdirAll(agentDir, 0o700); err != nil {
@@ -278,6 +288,12 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 
 	if err := h.supervisor.Spawn(ctx, entry); err != nil {
 		return fmt.Errorf("agent.create: spawn: %w", err)
+	}
+
+	// Persist the agent to zlaw.toml so it survives hub restarts.
+	var cfg config.HubConfig
+	if err := cfg.AddAgent(entry); err != nil {
+		h.logger.Warn("hub inbox: agent spawned but not persisted to zlaw.toml", "name", name, "err", err)
 	}
 
 	h.logger.Info("hub inbox: agent created", "name", name, "dir", entry.Dir, "workspace", entry.Workspace)

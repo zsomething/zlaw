@@ -21,6 +21,7 @@ type ControlSupervisor interface {
 	Stop(name string) error
 	Restart(name string) error
 	Spawn(ctx context.Context, entry config.AgentEntry) error
+	Remove(name string) error
 }
 
 // ControlSocket provides a JSON-RPC-like interface over a Unix domain socket.
@@ -174,12 +175,18 @@ func (cs *ControlSocket) dispatch(ctx context.Context, req ControlRequest) (json
 		return cs.agentList()
 	case "agent.status":
 		return cs.agentStatus(req.Params)
+	case "agent.create":
+		return nil, cs.agentCreate(ctx, req.Params)
 	case "agent.configure":
 		return nil, cs.agentConfigure(ctx, req.Params)
 	case "agent.stop":
 		return nil, cs.agentStop(req.Params)
 	case "agent.restart":
 		return nil, cs.agentRestart(req.Params)
+	case "agent.disable":
+		return nil, cs.agentDisable(req.Params)
+	case "agent.enable":
+		return nil, cs.agentEnable(req.Params)
 	case "agent.remove":
 		return nil, cs.agentRemove(req.Params)
 	default:
@@ -331,6 +338,65 @@ func (cs *ControlSocket) agentStatus(params json.RawMessage) (json.RawMessage, e
 	return json.Marshal(info)
 }
 
+// agentCreate creates a new agent entry and scaffolds its directories.
+// It delegates to mgmtHandler.opAgentCreate.
+func (cs *ControlSocket) agentCreate(ctx context.Context, params json.RawMessage) error {
+	var p struct {
+		Name      string `json:"name"`
+		Workspace string `json:"workspace,omitempty"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("parse params: %w", err)
+	}
+	if p.Name == "" {
+		return fmt.Errorf("param 'name' is required")
+	}
+	return cs.mgmtHandler.AgentCreate(ctx, p.Name, p.Workspace)
+}
+
+// agentDisable stops an agent and marks it disabled so the hub does not respawn it.
+func (cs *ControlSocket) agentDisable(params json.RawMessage) error {
+	var p struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("parse params: %w", err)
+	}
+	if p.Name == "" {
+		return fmt.Errorf("param 'name' is required")
+	}
+
+	// Stop the agent.
+	if err := cs.supervisor.Stop(p.Name); err != nil {
+		cs.logger.Warn("control: stop before disable failed", "name", p.Name, "err", err)
+	}
+
+	// Write disabled=true to agent.toml.
+	agentDir := filepath.Join(config.ZlawHome(), "agents", p.Name)
+	if err := config.WriteAgentDisabled(agentDir, true); err != nil {
+		return fmt.Errorf("agent.disable: write disabled flag: %w", err)
+	}
+	return nil
+}
+
+// agentEnable clears the disabled flag so the hub can spawn the agent again.
+func (cs *ControlSocket) agentEnable(params json.RawMessage) error {
+	var p struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("parse params: %w", err)
+	}
+	if p.Name == "" {
+		return fmt.Errorf("param 'name' is required")
+	}
+	agentDir := filepath.Join(config.ZlawHome(), "agents", p.Name)
+	if err := config.WriteAgentDisabled(agentDir, false); err != nil {
+		return fmt.Errorf("agent.enable: write disabled flag: %w", err)
+	}
+	return nil
+}
+
 // agentConfigure updates a runtime field for a named agent.
 func (cs *ControlSocket) agentConfigure(ctx context.Context, params json.RawMessage) error {
 	var p struct {
@@ -392,10 +458,16 @@ func (cs *ControlSocket) agentRemove(params json.RawMessage) error {
 		return fmt.Errorf("param 'name' is required")
 	}
 
-	if err := cs.supervisor.Stop(p.Name); err != nil {
-		cs.logger.Warn("control: stop before remove failed", "name", p.Name, "err", err)
+	// Remove from supervisor (stops agent + removes from map so no respawn).
+	if err := cs.supervisor.Remove(p.Name); err != nil {
+		cs.logger.Warn("control: supervisor.Remove failed", "name", p.Name, "err", err)
 	}
 	cs.registry.Deregister(p.Name)
+
+	// Remove from zlaw.toml.
+	if err := cs.cfg.RemoveAgent(p.Name); err != nil {
+		return fmt.Errorf("agent.remove: update zlaw.toml: %w", err)
+	}
 	return nil
 }
 

@@ -58,6 +58,8 @@ type managedAgent struct {
 	pid     int
 	lastErr error
 
+	// stopOnce ensures the stop channel is closed exactly once.
+	stopOnce sync.Once
 	// stopCh is closed to signal the monitor goroutine to stop respawning.
 	stopCh chan struct{}
 }
@@ -194,7 +196,7 @@ func (s *Supervisor) Stop(name string) error {
 	if ma == nil {
 		return fmt.Errorf("supervisor: agent %q not found", name)
 	}
-	close(ma.stopCh)
+	ma.stopOnce.Do(func() { close(ma.stopCh) })
 	return s.kill(ma)
 }
 
@@ -207,10 +209,28 @@ func (s *Supervisor) Restart(name string) error {
 	if err := s.kill(ma); err != nil {
 		return err
 	}
-	// Drain the old stopCh so the monitor goroutine picks up a fresh one.
+	// Reset stopCh so the monitor goroutine picks up a fresh one.
 	ma.mu.Lock()
+	ma.stopOnce = sync.Once{}
 	ma.stopCh = make(chan struct{})
 	ma.mu.Unlock()
+	return nil
+}
+
+// Remove permanently removes the named agent from supervision. It stops the
+// agent first if running, then removes it from the internal map so it will not
+// be restarted. Use this when permanently deleting an agent.
+func (s *Supervisor) Remove(name string) error {
+	ma := s.get(name)
+	if ma == nil {
+		return fmt.Errorf("supervisor: agent %q not found", name)
+	}
+	// Signal the monitor goroutine to stop and remove from map.
+	ma.stopOnce.Do(func() { close(ma.stopCh) })
+	_ = s.kill(ma)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.agents, name)
 	return nil
 }
 

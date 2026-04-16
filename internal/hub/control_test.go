@@ -27,6 +27,7 @@ func (m *mockControlSupervisor) Status(name string) (AgentStatus, error) {
 func (m *mockControlSupervisor) Stop(name string) error                             { return nil }
 func (m *mockControlSupervisor) Restart(name string) error                          { return nil }
 func (m *mockControlSupervisor) Spawn(_ context.Context, _ config.AgentEntry) error { return nil }
+func (m *mockControlSupervisor) Remove(name string) error                           { return nil }
 
 type mockControlRegistry struct {
 	entries map[string]RegistryEntry
