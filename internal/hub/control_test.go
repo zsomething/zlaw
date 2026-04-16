@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,6 +16,11 @@ import (
 type mockControlSupervisor struct {
 	statuses []AgentStatus
 	status   map[string]AgentStatus
+	// Track lifecycle calls for assertions.
+	SpawnedNames   []string
+	RemovedNames   []string
+	StoppedNames   []string
+	RestartedNames []string
 }
 
 func (m *mockControlSupervisor) Statuses() []AgentStatus { return m.statuses }
@@ -24,10 +30,22 @@ func (m *mockControlSupervisor) Status(name string) (AgentStatus, error) {
 	}
 	return AgentStatus{}, nil
 }
-func (m *mockControlSupervisor) Stop(name string) error                             { return nil }
-func (m *mockControlSupervisor) Restart(name string) error                          { return nil }
-func (m *mockControlSupervisor) Spawn(_ context.Context, _ config.AgentEntry) error { return nil }
-func (m *mockControlSupervisor) Remove(name string) error                           { return nil }
+func (m *mockControlSupervisor) Stop(name string) error {
+	m.StoppedNames = append(m.StoppedNames, name)
+	return nil
+}
+func (m *mockControlSupervisor) Restart(name string) error {
+	m.RestartedNames = append(m.RestartedNames, name)
+	return nil
+}
+func (m *mockControlSupervisor) Spawn(_ context.Context, entry config.AgentEntry) error {
+	m.SpawnedNames = append(m.SpawnedNames, entry.Name)
+	return nil
+}
+func (m *mockControlSupervisor) Remove(name string) error {
+	m.RemovedNames = append(m.RemovedNames, name)
+	return nil
+}
 
 type mockControlRegistry struct {
 	entries map[string]RegistryEntry
@@ -49,6 +67,29 @@ func (m *mockControlRegistry) Deregister(name string) {}
 func TestControlSocket(t *testing.T) {
 	dir := t.TempDir()
 	sockPath := filepath.Join(dir, "test.sock")
+
+	// agent.disable/enable need agent dirs; agent.remove needs zlaw.toml.
+	t.Setenv("ZLAW_HOME", dir)
+
+	for _, name := range []string{"alice", "bob", "carol"} {
+		agentDir := filepath.Join(dir, "agents", name)
+		if err := os.MkdirAll(agentDir, 0o700); err != nil {
+			t.Fatalf("mkdir %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(agentDir, "agent.toml"), []byte(`[agent]`), 0o600); err != nil {
+			t.Fatalf("write agent.toml: %v", err)
+		}
+	}
+
+	// Create a minimal zlaw.toml for agent.remove.
+	zlawTOML := filepath.Join(dir, "zlaw.toml")
+	if err := os.WriteFile(zlawTOML, []byte(`[hub]
+name = "test"
+[[agents]]
+name = "bob"
+`), 0o600); err != nil {
+		t.Fatalf("write zlaw.toml: %v", err)
+	}
 
 	sup := &mockControlSupervisor{
 		statuses: []AgentStatus{
@@ -213,6 +254,139 @@ func TestControlSocket(t *testing.T) {
 		}
 		if resp.OK {
 			t.Fatal("expected not ok")
+		}
+	})
+
+	t.Run("agent.disable", func(t *testing.T) {
+		req := map[string]any{"method": "agent.disable", "params": map[string]any{"name": "alice"}}
+		data, _ := json.Marshal(req)
+		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
+		_, _ = conn.Write(append(data, '\n'))
+		var raw json.RawMessage
+		dec := json.NewDecoder(conn)
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatalf("read response: %v", err)
+		}
+		var resp struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("not ok: %s", resp.Error)
+		}
+		if len(sup.StoppedNames) != 1 || sup.StoppedNames[0] != "alice" {
+			t.Errorf("StoppedNames = %v, want [alice]", sup.StoppedNames)
+		}
+	})
+
+	t.Run("agent.enable", func(t *testing.T) {
+		// agent.enable doesn't call supervisor, just writes to agent.toml.
+		// It still needs the agent dir to exist; we test the happy path via
+		// WriteAgentDisabled directly (covered by config tests). Here we just
+		// verify the socket round-trip returns OK.
+		req := map[string]any{"method": "agent.enable", "params": map[string]any{"name": "bob"}}
+		data, _ := json.Marshal(req)
+		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
+		_, _ = conn.Write(append(data, '\n'))
+		var raw json.RawMessage
+		dec := json.NewDecoder(conn)
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatalf("read response: %v", err)
+		}
+		var resp struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("not ok: %s", resp.Error)
+		}
+	})
+
+	t.Run("agent.stop", func(t *testing.T) {
+		sup.StoppedNames = nil // reset from agent.disable
+		req := map[string]any{"method": "agent.stop", "params": map[string]any{"name": "carol"}}
+		data, _ := json.Marshal(req)
+		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
+		_, _ = conn.Write(append(data, '\n'))
+		var raw json.RawMessage
+		dec := json.NewDecoder(conn)
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatalf("read response: %v", err)
+		}
+		var resp struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("not ok: %s", resp.Error)
+		}
+		if len(sup.StoppedNames) != 1 || sup.StoppedNames[0] != "carol" {
+			t.Errorf("StoppedNames = %v, want [carol]", sup.StoppedNames)
+		}
+	})
+
+	t.Run("agent.restart", func(t *testing.T) {
+		sup.RestartedNames = nil // reset from previous subtests
+		req := map[string]any{"method": "agent.restart", "params": map[string]any{"name": "alice"}}
+		data, _ := json.Marshal(req)
+		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
+		_, _ = conn.Write(append(data, '\n'))
+		var raw json.RawMessage
+		dec := json.NewDecoder(conn)
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatalf("read response: %v", err)
+		}
+		var resp struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("not ok: %s", resp.Error)
+		}
+		if len(sup.RestartedNames) != 1 || sup.RestartedNames[0] != "alice" {
+			t.Errorf("RestartedNames = %v, want [alice]", sup.RestartedNames)
+		}
+	})
+
+	t.Run("agent.remove", func(t *testing.T) {
+		req := map[string]any{"method": "agent.remove", "params": map[string]any{"name": "bob"}}
+		data, _ := json.Marshal(req)
+		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
+		_, _ = conn.Write(append(data, '\n'))
+		var raw json.RawMessage
+		dec := json.NewDecoder(conn)
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatalf("read response: %v", err)
+		}
+		var resp struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("not ok: %s", resp.Error)
+		}
+		if len(sup.RemovedNames) != 1 || sup.RemovedNames[0] != "bob" {
+			t.Errorf("RemovedNames = %v, want [bob]", sup.RemovedNames)
 		}
 	})
 }

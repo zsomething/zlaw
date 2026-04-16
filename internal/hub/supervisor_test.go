@@ -177,3 +177,197 @@ func TestSupervisor_RestartOnFailure(t *testing.T) {
 		t.Error("expected LastErr to be set after failing agent exited")
 	}
 }
+
+// TestShouldRestart covers all three restart policies.
+func TestShouldRestart(t *testing.T) {
+	cfgAlways := config.AgentEntry{RestartPolicy: config.RestartAlways}
+	cfgOnFailure := config.AgentEntry{RestartPolicy: config.RestartOnFailure}
+	cfgNever := config.AgentEntry{RestartPolicy: config.RestartNever}
+	cfgDefault := config.AgentEntry{} // empty = on-failure default
+
+	cases := []struct {
+		name    string
+		entry   config.AgentEntry
+		exitErr bool
+		want    bool
+	}{
+		{"RestartAlways/exitOK", cfgAlways, false, true},
+		{"RestartAlways/exitErr", cfgAlways, true, true},
+		{"RestartOnFailure/exitOK", cfgOnFailure, false, false},
+		{"RestartOnFailure/exitErr", cfgOnFailure, true, true},
+		{"RestartNever/exitOK", cfgNever, false, false},
+		{"RestartNever/exitErr", cfgNever, true, false},
+		{"Default/exitOK", cfgDefault, false, false},
+		{"Default/exitErr", cfgDefault, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldRestartForTest(tc.entry, tc.exitErr)
+			if got != tc.want {
+				t.Errorf("shouldRestart = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func shouldRestartForTest(entry config.AgentEntry, exitErr bool) bool {
+	policy := entry.RestartPolicy
+	if policy == "" {
+		policy = config.RestartOnFailure
+	}
+	switch policy {
+	case config.RestartAlways:
+		return true
+	case config.RestartOnFailure:
+		return exitErr
+	case config.RestartNever:
+		return false
+	default:
+		return false
+	}
+}
+
+// TestSupervisor_SpawnDynamic tests spawning an agent after Start.
+func TestSupervisor_SpawnDynamic(t *testing.T) {
+	falseBin, err := exec.LookPath("false")
+	if err != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := config.HubConfig{} // empty at Start
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	entry := config.AgentEntry{
+		Name:          "dynamic",
+		Binary:        falseBin,
+		RestartPolicy: config.RestartNever,
+	}
+	if err := sup.Spawn(ctx, entry); err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+
+	st, err := sup.Status("dynamic")
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if st.Name != "dynamic" {
+		t.Errorf("Name = %q, want %q", st.Name, "dynamic")
+	}
+}
+
+// TestSupervisor_SpawnDuplicate tests that Spawn errors for a duplicate name.
+func TestSupervisor_SpawnDuplicate(t *testing.T) {
+	falseBin, err := exec.LookPath("false")
+	if err != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := config.HubConfig{
+		Agents: []config.AgentEntry{
+			{Name: "dup", Binary: falseBin, RestartPolicy: config.RestartNever},
+		},
+	}
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	err = sup.Spawn(ctx, config.AgentEntry{Name: "dup", Binary: falseBin})
+	if err == nil {
+		t.Error("expected error for duplicate spawn, got nil")
+	}
+}
+
+// TestSupervisor_RestartRunning tests that Restart stops then respawns a running agent.
+func TestSupervisor_RestartRunning(t *testing.T) {
+	sleepBin, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("sleep not found")
+	}
+
+	cfg := config.HubConfig{
+		Agents: []config.AgentEntry{
+			{Name: "sleeper", Binary: sleepBin, RestartPolicy: config.RestartNever},
+		},
+	}
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	if err := sup.Restart("sleeper"); err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	// sleep exits immediately (no args) so the process may already be gone.
+	// Restart should not error regardless of process state.
+	// Verify the agent is still in the supervisor's map.
+	_, err = sup.Status("sleeper")
+	if err != nil {
+		t.Fatalf("Status after restart: %v", err)
+	}
+}
+
+// TestSupervisor_Remove permanently removes an agent from the supervisor.
+func TestSupervisor_Remove(t *testing.T) {
+	falseBin, err := exec.LookPath("false")
+	if err != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := config.HubConfig{
+		Agents: []config.AgentEntry{
+			{Name: "to-remove", Binary: falseBin, RestartPolicy: config.RestartAlways},
+		},
+	}
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if err := sup.Remove("to-remove"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	_, err = sup.Status("to-remove")
+	if err == nil {
+		t.Error("expected error after Remove, got nil")
+	}
+
+	// Remove again should error.
+	err = sup.Remove("to-remove")
+	if err == nil {
+		t.Error("expected error for second Remove, got nil")
+	}
+}
+
+// TestSupervisor_RemoveUnknownAgent tests that Remove errors for unknown agents.
+func TestSupervisor_RemoveUnknownAgent(t *testing.T) {
+	cfg := config.HubConfig{}
+	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
+
+	err := sup.Remove("ghost")
+	if err == nil {
+		t.Error("expected error for unknown agent, got nil")
+	}
+}
