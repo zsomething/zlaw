@@ -30,15 +30,15 @@ type NATSAgentRegistry struct {
 // ListAgents queries zlaw.registry.list and returns all registered agents.
 func (r *NATSAgentRegistry) ListAgents(ctx context.Context) ([]hub.RegistryEntry, error) {
 	if r.Messenger == nil {
-		return nil, fmt.Errorf("list_agents: not connected to hub")
+		return nil, fmt.Errorf("agent_list: not connected to hub")
 	}
 	data, err := r.Messenger.Request(ctx, registryListSubject, nil, listAgentsTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("list_agents: request to hub registry: %w", err)
+		return nil, fmt.Errorf("agent_list: request to hub registry: %w", err)
 	}
 	var entries []hub.RegistryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, fmt.Errorf("list_agents: parse registry response: %w", err)
+		return nil, fmt.Errorf("agent_list: parse registry response: %w", err)
 	}
 	return entries, nil
 }
@@ -65,39 +65,39 @@ func NewAgentRegistry(messenger messaging.Messenger) *NATSAgentRegistry {
 	return &NATSAgentRegistry{Messenger: messenger}
 }
 
-// ListAgents is a read-only builtin tool that returns the list of live agents
+// AgentList is a read-only builtin tool that returns the list of live agents
 // from the hub registry via NATS request/reply.
-type ListAgents struct {
+type AgentList struct {
 	Registry AgentRegistry
 	AgentID  string // injected at registration time so the tool can mark "is_self"
 }
 
-var listAgentsSchema = []byte(`{
+var agentListSchema = []byte(`{
   "type": "object",
   "properties": {},
   "required": []
 }`)
 
-func (*ListAgents) Definition() llm.ToolDefinition {
+func (*AgentList) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "list_agents",
+		Name:        "agent_list",
 		Description: "List all agents registered in the hub. Returns name, version, capabilities, roles, and connection status for each agent. The current agent is marked with is_self: true.",
-		InputSchema: listAgentsSchema,
+		InputSchema: agentListSchema,
 	}
 }
 
 // Execute queries the hub registry and returns the agent list as JSON.
 // The current agent is marked with is_self: true.
-func (t *ListAgents) Execute(ctx context.Context, input json.RawMessage) (string, error) {
+func (t *AgentList) Execute(ctx context.Context, input json.RawMessage) (string, error) {
 	if t.Registry == nil {
-		return "", fmt.Errorf("list_agents: not connected to hub")
+		return "", fmt.Errorf("agent_list: not connected to hub")
 	}
 	entries, err := t.Registry.ListAgents(ctx)
 	if err != nil {
 		return "", err
 	}
 	// Mark the current agent.
-	agentList := make([]map[string]any, len(entries))
+	agentListOut := make([]map[string]any, len(entries))
 	for i, e := range entries {
 		m := map[string]any{
 			"name":         e.Name,
@@ -107,9 +107,9 @@ func (t *ListAgents) Execute(ctx context.Context, input json.RawMessage) (string
 			"status":       e.Status,
 			"is_self":      e.Name == t.AgentID,
 		}
-		agentList[i] = m
+		agentListOut[i] = m
 	}
-	out := map[string]any{"agents": agentList, "count": len(agentList)}
+	out := map[string]any{"agents": agentListOut, "count": len(agentListOut)}
 	data, err := json.Marshal(out)
 	if err != nil {
 		return "", err
@@ -117,13 +117,13 @@ func (t *ListAgents) Execute(ctx context.Context, input json.RawMessage) (string
 	return string(data), nil
 }
 
-// GetAgent is a read-only builtin tool that returns a single agent's registry
+// AgentGet is a read-only builtin tool that returns a single agent's registry
 // entry by name.
-type GetAgent struct {
+type AgentGet struct {
 	Registry AgentRegistry
 }
 
-var getAgentSchema = []byte(`{
+var agentGetSchema = []byte(`{
   "type": "object",
   "properties": {
     "name": {
@@ -134,36 +134,36 @@ var getAgentSchema = []byte(`{
   "required": ["name"]
 }`)
 
-func (*GetAgent) Definition() llm.ToolDefinition {
+func (*AgentGet) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "get_agent",
+		Name:        "agent_get",
 		Description: "Get details for a specific agent by name. Returns version, capabilities, roles, and connection status.",
-		InputSchema: getAgentSchema,
+		InputSchema: agentGetSchema,
 	}
 }
 
-type getAgentInput struct {
+type agentGetInput struct {
 	Name string `json:"name"`
 }
 
 // Execute looks up name in the hub registry.
-func (t *GetAgent) Execute(ctx context.Context, input json.RawMessage) (string, error) {
+func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, error) {
 	if t.Registry == nil {
-		return "", fmt.Errorf("get_agent: not connected to hub")
+		return "", fmt.Errorf("agent_get: not connected to hub")
 	}
-	var in getAgentInput
+	var in agentGetInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("get_agent: invalid input: %w", err)
+		return "", fmt.Errorf("agent_get: invalid input: %w", err)
 	}
 	if in.Name == "" {
-		return "", fmt.Errorf("get_agent: name is required")
+		return "", fmt.Errorf("agent_get: name is required")
 	}
 	entry, err := t.Registry.GetAgent(ctx, in.Name)
 	if err != nil {
 		return "", err
 	}
 	if entry == nil {
-		return "", fmt.Errorf("get_agent: agent %q not found in registry", in.Name)
+		return "", fmt.Errorf("agent_get: agent %q not found in registry", in.Name)
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

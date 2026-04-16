@@ -100,7 +100,7 @@ Prefill keeps the system prompt cache clean by putting volatile context (time, d
 
 ```toml
 [tools]
-allowed          = ["read_file", "bash", "memory_save", "memory_recall", "memory_delete"]
+allowed          = ["read", "bash", "memory_save", "memory_recall", "memory_delete"]
 max_result_bytes = 65536
 ```
 

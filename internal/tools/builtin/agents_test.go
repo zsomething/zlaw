@@ -31,14 +31,14 @@ func (m *mockAgentRegistry) GetAgent(ctx context.Context, name string) (*hub.Reg
 	return nil, nil
 }
 
-func TestListAgents_Execute(t *testing.T) {
+func TestAgentList_Execute(t *testing.T) {
 	mock := &mockAgentRegistry{
 		entries: []hub.RegistryEntry{
 			{Name: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
 			{Name: "assistant", Version: "2.0", Roles: []string{"general"}},
 		},
 	}
-	tool := &ListAgents{Registry: mock}
+	tool := &AgentList{Registry: mock}
 
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
@@ -53,30 +53,30 @@ func TestListAgents_Execute(t *testing.T) {
 	}
 }
 
-func TestListAgents_ExecuteNilRegistry(t *testing.T) {
-	tool := &ListAgents{}
+func TestAgentList_ExecuteNilRegistry(t *testing.T) {
+	tool := &AgentList{}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("expected error for nil registry")
 	}
 }
 
-func TestListAgents_ExecuteError(t *testing.T) {
+func TestAgentList_ExecuteError(t *testing.T) {
 	mock := &mockAgentRegistry{err: errors.New("network error")}
-	tool := &ListAgents{Registry: mock}
+	tool := &AgentList{Registry: mock}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestGetAgent_Execute(t *testing.T) {
+func TestAgentGet_Execute(t *testing.T) {
 	mock := &mockAgentRegistry{
 		entries: []hub.RegistryEntry{
 			{Name: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
 		},
 	}
-	tool := &GetAgent{Registry: mock}
+	tool := &AgentGet{Registry: mock}
 
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"name":"coding"}`))
 	if err != nil {
@@ -94,24 +94,24 @@ func TestGetAgent_Execute(t *testing.T) {
 	}
 }
 
-func TestGetAgent_ExecuteMissingName(t *testing.T) {
-	tool := &GetAgent{Registry: &mockAgentRegistry{}}
+func TestAgentGet_ExecuteMissingName(t *testing.T) {
+	tool := &AgentGet{Registry: &mockAgentRegistry{}}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("expected error for missing name")
 	}
 }
 
-func TestGetAgent_ExecuteNotFound(t *testing.T) {
-	tool := &GetAgent{Registry: &mockAgentRegistry{entries: []hub.RegistryEntry{}}}
+func TestAgentGet_ExecuteNotFound(t *testing.T) {
+	tool := &AgentGet{Registry: &mockAgentRegistry{entries: []hub.RegistryEntry{}}}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"name":"unknown"}`))
 	if err == nil {
 		t.Fatal("expected error for unknown agent")
 	}
 }
 
-func TestGetAgent_ExecuteNilRegistry(t *testing.T) {
-	tool := &GetAgent{}
+func TestAgentGet_ExecuteNilRegistry(t *testing.T) {
+	tool := &AgentGet{}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"name":"x"}`))
 	if err == nil {
 		t.Fatal("expected error for nil registry")
