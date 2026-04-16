@@ -19,10 +19,8 @@ type AgentLookup interface {
 }
 
 // AgentDelegate is a builtin tool that delegates a task to another agent via
-// the hub. It builds a TaskEnvelope with an explicit ReplyTo subject, publishes
-// it to the target agent's inbox, and waits for a TaskReply on that subject.
-//
-// The request-reply cycle is managed explicitly (Subscribe → Publish → wait)
+// the hub. It uses Messenger.Request() which handles the NATS request/reply
+// pattern with auto-generated _INBOX subjects.
 // rather than via Messenger.Request, because the reply subject must appear in
 // the envelope JSON so the receiving agent knows where to publish its reply.
 //
@@ -103,20 +101,7 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 	traceID := ctxkey.TraceIDOf(ctx)
 	sourceChannel := ctxkey.SourceChannelOf(ctx)
 
-	// Generate a unique reply subject and subscribe before publishing, so we
-	// don't miss the reply.
-	replySubject := fmt.Sprintf("_INBOX.delegate.%s.%d", d.AgentID, time.Now().UnixNano())
-	replyCh := make(chan []byte, 1)
-	sub, err := d.Messenger.Subscribe(ctx, replySubject, func(data []byte) {
-		select {
-		case replyCh <- data:
-		default:
-		}
-	})
-	if err != nil {
-		return "", fmt.Errorf("agent_delegate: subscribe reply inbox: %w", err)
-	}
-	defer sub.Unsubscribe() //nolint:errcheck
+	inboxSubject := fmt.Sprintf("agent.%s.inbox", in.ID)
 
 	// Build session context for the delegation.
 	sessionCtx := map[string]any{}
@@ -133,7 +118,7 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 		Task:           in.Task,
 		Context:        in.Context,
 		SessionID:      sessionID,
-		ReplyTo:        replySubject,
+		ReplyTo:        inboxSubject, // informational - Request() handles reply routing
 		SourceAgent:    d.AgentID,
 		SessionContext: sessionCtx,
 		TraceID:        traceID,
@@ -144,25 +129,17 @@ func (d *AgentDelegate) Execute(ctx context.Context, input json.RawMessage) (str
 		return "", fmt.Errorf("agent_delegate: marshal envelope: %w", err)
 	}
 
-	inboxSubject := fmt.Sprintf("agent.%s.inbox", in.ID)
-	if err := d.Messenger.Publish(ctx, inboxSubject, payload); err != nil {
-		return "", fmt.Errorf("agent_delegate: publish to %q: %w", in.ID, err)
+	replyData, err := d.Messenger.Request(ctx, inboxSubject, payload, delegateTimeout)
+	if err != nil {
+		return "", fmt.Errorf("agent_delegate: request to %q: %w", in.ID, err)
 	}
 
-	tctx, cancel := context.WithTimeout(ctx, delegateTimeout)
-	defer cancel()
-
-	select {
-	case replyData := <-replyCh:
-		var reply messaging.TaskReply
-		if err := json.Unmarshal(replyData, &reply); err != nil {
-			return "", fmt.Errorf("agent_delegate: malformed reply from %q: %w", in.ID, err)
-		}
-		if reply.Error != "" {
-			return "", fmt.Errorf("agent_delegate: agent %q returned error: %s", in.ID, reply.Error)
-		}
-		return reply.Output, nil
-	case <-tctx.Done():
-		return "", fmt.Errorf("agent_delegate: timeout waiting for reply from %q", in.ID)
+	var reply messaging.TaskReply
+	if err := json.Unmarshal(replyData, &reply); err != nil {
+		return "", fmt.Errorf("agent_delegate: malformed reply from %q: %w", in.ID, err)
 	}
+	if reply.Error != "" {
+		return "", fmt.Errorf("agent_delegate: agent %q returned error: %s", in.ID, reply.Error)
+	}
+	return reply.Output, nil
 }
