@@ -66,7 +66,7 @@ Goal: a single zlaw-agent binary that accepts input, runs an agentic loop, and e
 ### P6 — Scheduled Tasks
 
 - [x] **Cron scheduler** — cron.toml defines recurring agent jobs; Go cron expression parser; jobs run as agent turns
-- [x] **Cron tools** — `list_cronjobs`, `create_cronjob`, `delete_cronjob` let the agent manage its own schedule
+- [x] **Cron tools** — `cronjob_list`, `cronjob_create`, `cronjob_delete` let the agent manage its own schedule
 - [x] **Hot-reload** — cron.toml changes apply without restart
 
 ### P7 — Observability

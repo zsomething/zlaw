@@ -42,7 +42,7 @@ type readFileInput struct {
 
 func (ReadFile) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "read_file",
+		Name:        "read",
 		Description: "Read the contents of a file. Returns the file contents as text. Use offset and limit to read a specific range of lines.",
 		InputSchema: readFileSchema,
 	}

@@ -41,7 +41,7 @@ type editFileInput struct {
 
 func (EditFile) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "edit_file",
+		Name:        "edit",
 		Description: "Replace an exact string in a file. Fails if the string is not found or appears more than once (ambiguous match). Use read_file first to confirm the exact text.",
 		InputSchema: editFileSchema,
 	}
