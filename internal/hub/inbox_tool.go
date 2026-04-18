@@ -11,17 +11,17 @@ import (
 
 // HubToolDefinition describes a hub-level built-in tool.
 type HubToolDefinition struct {
-	Name        string
-	Description string
-	Parameters  []HubToolParam
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  []HubToolParam `json:"parameters"`
 }
 
 // HubToolParam describes a single parameter for a hub tool.
 type HubToolParam struct {
-	Name        string
-	Type        string
-	Description string
-	Required    bool
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
 }
 
 // GlobalTools returns the list of all hub-level built-in tools available
