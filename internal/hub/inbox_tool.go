@@ -46,7 +46,7 @@ func GlobalTools() []HubToolDefinition {
 			},
 		},
 		{
-			Name:        "get_agent",
+			Name:        "agent_get",
 			Description: "Returns the full registry entry for a named agent (capabilities, version, config path).",
 			Parameters: []HubToolParam{
 				{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
@@ -179,8 +179,8 @@ func (h *HubInbox) HandleToolRequest(ctx context.Context, req ToolRequest) ToolR
 		return h.agentRestart(ctx, req.Args)
 	case "agent_list":
 		return h.agentList()
-	case "get_agent":
-		return h.getAgent(ctx, req.Args)
+	case "agent_get":
+		return h.agentGet(ctx, req.Args)
 	default:
 		return ToolReply{
 			Tool:  req.Tool,
@@ -267,18 +267,18 @@ func (h *HubInbox) agentList() ToolReply {
 	}
 }
 
-// getAgent returns the registry entry for a named agent.
-func (h *HubInbox) getAgent(ctx context.Context, args map[string]any) ToolReply {
+// agentGet returns the registry entry for a named agent.
+func (h *HubInbox) agentGet(ctx context.Context, args map[string]any) ToolReply {
 	name := stringArg(args, "name")
 	if name == "" {
-		return errorReply("get_agent", "param 'name' is required")
+		return errorReply("agent_get", "param 'name' is required")
 	}
 	entry, ok := h.registry.Get(name)
 	if !ok {
-		return errorReply("get_agent", "agent not found: "+name)
+		return errorReply("agent_get", "agent not found: "+name)
 	}
 	return ToolReply{
-		Tool:   "get_agent",
+		Tool:   "agent_get",
 		OK:     true,
 		Output: marshalJSON(entry),
 	}
