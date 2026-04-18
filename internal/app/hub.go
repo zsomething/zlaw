@@ -216,6 +216,10 @@ func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry
 	return hub.ReadAuditLog(s.auditPath, limit, eventType)
 }
 
+func (s hubWebState) Tools() []hub.HubToolDefinition {
+	return hub.GlobalTools()
+}
+
 type hubConfigAdapter struct{ cfg config.HubConfig }
 
 func (a hubConfigAdapter) HubName() string { return a.cfg.Hub.Name }

@@ -71,6 +71,13 @@ type HubMessenger interface {
 	Request(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error)
 }
 
+// HubMessengerFunc adapts a function to HubMessenger.
+type HubMessengerFunc func(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error)
+
+func (f HubMessengerFunc) Request(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error) {
+	return f(ctx, subject, payload, timeout)
+}
+
 // AgentList is a read-only builtin tool that returns the list of live agents
 // from the hub registry via NATS request/reply.
 type AgentList struct {
@@ -178,7 +185,7 @@ func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, 
 	return string(data), nil
 }
 
-// AgentStop stops a running agent by name. Manager agents only.
+// AgentStop stops a running agent by name.
 type AgentStop struct {
 	SelfID    string
 	Messenger HubMessenger
@@ -198,7 +205,7 @@ var agentStopSchema = []byte(`{
 func (*AgentStop) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "agent_stop",
-		Description: "Stop a running agent by name. Only available to manager agents. Cannot stop the manager agent itself.",
+		Description: "Stop a running agent by name.",
 		InputSchema: agentStopSchema,
 	}
 }
@@ -220,7 +227,7 @@ func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string,
 	}
 	// Self-protection: cannot stop self
 	if in.Name == t.SelfID {
-		return "", fmt.Errorf("agent_stop: cannot stop manager agent. Operation refused")
+		return "", fmt.Errorf("agent_stop: cannot stop self. Operation refused")
 	}
 
 	// Forward to hub inbox
@@ -248,7 +255,7 @@ func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string,
 	return reply.Output, nil
 }
 
-// AgentRestart restarts a stopped or running agent by name. Manager agents only.
+// AgentRestart restarts a stopped or running agent by name.
 type AgentRestart struct {
 	SelfID    string
 	Messenger HubMessenger
@@ -268,7 +275,7 @@ var agentRestartSchema = []byte(`{
 func (*AgentRestart) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "agent_restart",
-		Description: "Restart an agent by name. The agent will be stopped and re-spawned. Only available to manager agents. Cannot restart the manager agent itself.",
+		Description: "Restart an agent by name. The agent will be stopped and re-spawned.",
 		InputSchema: agentRestartSchema,
 	}
 }
@@ -290,7 +297,7 @@ func (t *AgentRestart) Execute(ctx context.Context, input json.RawMessage) (stri
 	}
 	// Self-protection: cannot restart self
 	if in.Name == t.SelfID {
-		return "", fmt.Errorf("agent_restart: cannot restart manager agent. Operation refused")
+		return "", fmt.Errorf("agent_restart: cannot restart self. Operation refused")
 	}
 
 	// Forward to hub inbox
