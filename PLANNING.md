@@ -89,7 +89,7 @@ Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity 
 ### P0 — Hub CLI & Bootstrap
 
 - [ ] **`zlaw-hub init`** — generate `$ZLAW_HOME/zlaw.toml` skeleton, `credentials.toml` (0600), and default manager agent scaffold under `agents/manager/`
-- [ ] **`zlaw-hub auth add`** — add credential profiles to credentials.toml (API keys, Telegram bot token, OAuth2); mirrors `zlaw-agent auth` UX
+- [ ] **`zlaw-hub init`** — generate `$ZLAW_HOME/zlaw.toml` skeleton and default manager agent scaffold under `agents/`
 - [ ] **`zlaw-hub start`** — start hub process, embed NATS, spawn registered agents
 - [ ] **`zlaw-hub status`** — hub health + per-agent status summary
 - [ ] **`zlaw-hub agent list/logs/restart/stop/remove`** — operational management subcommands
