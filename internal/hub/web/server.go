@@ -213,10 +213,7 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 		{Name: "memory_delete", Description: "Delete information from the agent's persistent memory.", Parameters: []ParamInfo{
 			{Name: "key", Type: "string", Description: "Memory key to delete", Required: true},
 		}},
-		{Name: "delegate", Description: "Delegate a task to another registered agent in the hub.", Parameters: []ParamInfo{
-			{Name: "agent", Type: "string", Description: "Target agent name", Required: true},
-			{Name: "task", Type: "string", Description: "Task description for the agent", Required: true},
-		}},
+
 		{Name: "list_cronjobs", Description: "List all scheduled cron jobs for this agent.", Parameters: []ParamInfo{}},
 		{Name: "create_cronjob", Description: "Create a new scheduled cron job.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Job name", Required: true},
@@ -234,7 +231,11 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 
 	// Hub tools (routed via hub NATS inbox)
 	hubTools := []ToolInfo{
-		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}},
+		{Name: "agent_delegate", Description: "Delegate a task to another agent in the hub. The target agent runs the task and returns its response. Requires hub connection.", Parameters: []ParamInfo{
+			{Name: "id", Type: "string", Description: "Target agent ID", Required: true},
+			{Name: "task", Type: "string", Description: "Task instruction for the target agent", Required: true},
+			{Name: "context", Type: "object", Description: "Optional structured metadata to pass with the task", Required: false},
+		}},
 		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}},
 		{Name: "agent_get", Description: "Get details for a specific agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
@@ -248,6 +249,7 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 		{Name: "agent_restart", Description: "Restarts a stopped or running agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to restart", Required: true},
 		}},
+		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}},
 	}
 
 	// Set EnabledFor for agent tools
