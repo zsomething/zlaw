@@ -69,6 +69,24 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	// Create a messenger from the NATS connection for log publishing.
 	messenger := &natsMessengerAdapter{conn: result.Conn}
 
+	// Start audit logger if configured.
+	var auditLogger *hub.AuditLogger
+	if cfg.Hub.AuditLogPath != "" {
+		auditLogger, err = hub.NewAuditLogger(cfg.Hub.AuditLogPath, messenger, logger)
+		if err != nil {
+			return fmt.Errorf("start audit logger: %w", err)
+		}
+		if auditLogger != nil {
+			auditLogger.SetSubjects(hub.DefaultAuditSubjects)
+			go func() {
+				if err := auditLogger.Start(); err != nil {
+					logger.Error("audit logger stopped", "err", err)
+				}
+			}()
+			logger.Info("audit logger started", "path", cfg.Hub.AuditLogPath)
+		}
+	}
+
 	sup := hub.NewSupervisorWithMessenger(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor, messenger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
@@ -143,6 +161,9 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	ctrlSock.Stop() //nolint:errcheck
 	if webUI != nil {
 		webUI.Stop(ctx) //nolint:errcheck
+	}
+	if auditLogger != nil {
+		auditLogger.Close() //nolint:errcheck
 	}
 	return nil
 }
