@@ -152,6 +152,13 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 		"web", dashboardAddr,
 	)
 
+	if auditLogger != nil {
+		auditLogger.LogEvent(hub.AuditEntry{
+			Type:  hub.AuditEventMgmt,
+			Extra: map[string]any{"event": "hub_start", "name": cfg.Hub.Name},
+		})
+	}
+
 	// Watch zlaw.toml for agent list changes.
 	go watchAgentList(ctx, configPath, sup, reg, sm, result.Conn, selfBin, result.ACL.AgentTokens, logger)
 
@@ -163,6 +170,10 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 		webUI.Stop(ctx) //nolint:errcheck
 	}
 	if auditLogger != nil {
+		auditLogger.LogEvent(hub.AuditEntry{
+			Type:  hub.AuditEventMgmt,
+			Extra: map[string]any{"event": "hub_stop"},
+		})
 		auditLogger.Close() //nolint:errcheck
 	}
 	return nil
