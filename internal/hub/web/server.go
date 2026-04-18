@@ -21,6 +21,21 @@ type Server struct {
 	addr  string
 }
 
+// ToolInfo exposes hub-level tool metadata for the web UI.
+type ToolInfo struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Parameters  []ParamInfo `json:"parameters"`
+}
+
+// ParamInfo describes a tool parameter.
+type ParamInfo struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
+}
+
 // State exposes read-only hub state for the web UI.
 type State interface {
 	HubConfig() config.HubConfig
@@ -51,9 +66,11 @@ func NewServer(addr string, state State, log *slog.Logger) *Server {
 	}
 
 	mux.Handle("GET /", http.HandlerFunc(srv.handleIndex))
+	mux.Handle("GET /tools", http.HandlerFunc(srv.handleToolsPage))
 	mux.Handle("GET /audit", http.HandlerFunc(srv.handleAuditPage))
 	mux.Handle("GET /api/hub", http.HandlerFunc(srv.handleHub))
 	mux.Handle("GET /api/agents", http.HandlerFunc(srv.handleAgents))
+	mux.Handle("GET /api/tools", http.HandlerFunc(srv.handleTools))
 	mux.Handle("GET /api/audit", http.HandlerFunc(srv.handleAudit))
 
 	return srv
@@ -103,6 +120,11 @@ func (s *Server) handleAuditPage(w http.ResponseWriter, r *http.Request) {
 	s.serveTemplate(w, "templates/pages/audit.html", pongo2.Context{})
 }
 
+// handleToolsPage serves the hub tools HTML page.
+func (s *Server) handleToolsPage(w http.ResponseWriter, r *http.Request) {
+	s.serveTemplate(w, "templates/pages/tools.html", pongo2.Context{})
+}
+
 // handleHub returns hub identity and NATS status as JSON.
 func (s *Server) handleHub(w http.ResponseWriter, r *http.Request) {
 	cfg := s.state.HubConfig()
@@ -129,6 +151,27 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, s.state.Agents())
+}
+
+// handleTools returns hub-level built-in tools as JSON.
+func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
+	tools := []ToolInfo{
+		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}},
+		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}},
+		{Name: "agent_status", Description: "Returns the current status of a named agent (running state, PID, last heartbeat).", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Name of the agent to check", Required: true},
+		}},
+		{Name: "get_agent", Description: "Returns the full registry entry for a named agent (capabilities, version, config path).", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
+		}},
+		{Name: "agent_stop", Description: "Stops a running agent by name.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Name of the agent to stop", Required: true},
+		}},
+		{Name: "agent_restart", Description: "Restarts a stopped or running agent by name.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Name of the agent to restart", Required: true},
+		}},
+	}
+	s.writeJSON(w, tools)
 }
 
 // handleAudit returns recent audit entries as JSON.
