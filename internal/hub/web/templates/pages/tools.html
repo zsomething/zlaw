@@ -23,11 +23,12 @@
     .tool-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: #f8fafc; border-bottom: 1px solid #e5e7eb; cursor: pointer; }
     .tool-header:hover { background: #f1f5f9; }
     .tool-name { font-weight: 600; font-family: ui-monospace, monospace; color: #2563eb; }
-    .tool-badge { font-size: 0.7rem; background: #e0f2fe; color: #0369a1; padding: 0.15rem 0.5rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .agent-badge { display: inline-flex; align-items: center; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; background: #f1f5f9; color: #475569; }
     .tool-body { padding: 1.25rem; display: none; }
     .tool-body.open { display: block; }
     .tool-description { color: #374151; margin-bottom: 1rem; }
     .params-title { font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .enabled-title { font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; margin-top: 1rem; }
     .param { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.5rem; }
     .param:last-child { margin-bottom: 0; }
     .param-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
@@ -99,19 +100,23 @@
           `).join('')
           : '<p class="no-params">No parameters</p>';
 
+        const enabledFor = tool.enabled_for && tool.enabled_for.length > 0
+          ? '<p class="enabled-title">Enabled for</p><div style="display:flex;flex-wrap:wrap;gap:0.5rem;">' +
+            tool.enabled_for.map(a => '<span class="agent-badge">' + a + '</span>').join('') +
+            '</div>'
+          : '<p class="enabled-title">Enabled for</p><p class="no-params">No agents</p>';
+
         return `
         <div class="card">
           <div class="tool-header" onclick="toggleTool(this)">
-            <div style="display:flex;align-items:center;gap:0.75rem;">
-              <span class="tool-name">${tool.name}</span>
-              <span class="tool-badge">hub-level</span>
-            </div>
+            <span class="tool-name">${tool.name}</span>
             <span class="toggle-icon">▾</span>
           </div>
           <div class="tool-body">
             <p class="tool-description">${tool.description}</p>
             <p class="params-title">Parameters</p>
             ${params}
+            ${enabledFor}
           </div>
         </div>
         `;

@@ -21,11 +21,12 @@ type Server struct {
 	addr  string
 }
 
-// ToolInfo exposes hub-level tool metadata for the web UI.
+// ToolInfo exposes tool metadata for the web UI.
 type ToolInfo struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	Parameters  []ParamInfo `json:"parameters"`
+	EnabledFor  []string    `json:"enabled_for"` // agent names that have this tool enabled
 }
 
 // ParamInfo describes a tool parameter.
@@ -153,23 +154,29 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, s.state.Agents())
 }
 
-// handleTools returns hub-level built-in tools as JSON.
+// handleTools returns global built-in tools as JSON.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
+	agents := s.state.Agents()
+	agentNames := make([]string, len(agents))
+	for i, a := range agents {
+		agentNames[i] = a.Name
+	}
+
 	tools := []ToolInfo{
-		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}},
-		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}},
+		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}, EnabledFor: agentNames},
+		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}, EnabledFor: agentNames},
 		{Name: "agent_status", Description: "Returns the current status of a named agent (running state, PID, last heartbeat).", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to check", Required: true},
-		}},
+		}, EnabledFor: agentNames},
 		{Name: "get_agent", Description: "Returns the full registry entry for a named agent (capabilities, version, config path).", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
-		}},
+		}, EnabledFor: agentNames},
 		{Name: "agent_stop", Description: "Stops a running agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to stop", Required: true},
-		}},
+		}, EnabledFor: agentNames},
 		{Name: "agent_restart", Description: "Restarts a stopped or running agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to restart", Required: true},
-		}},
+		}, EnabledFor: agentNames},
 	}
 	s.writeJSON(w, tools)
 }
