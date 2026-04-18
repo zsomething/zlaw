@@ -21,6 +21,7 @@ type AgentEntryEditor interface {
 // It is loaded from $ZLAW_HOME/zlaw.toml.
 type HubConfig struct {
 	Hub    HubMeta      `toml:"hub"`
+	Web    WebConfig    `toml:"web"`
 	Agents []AgentEntry `toml:"agents"`
 	NATS   NATSConfig   `toml:"nats"`
 }
@@ -33,7 +34,14 @@ type HubMeta struct {
 	AuditLogPath string `toml:"audit_log_path"`
 }
 
-// RestartPolicy controls when the supervisor restarts a crashed agent process.
+// WebConfig controls the hub's read-only web UI.
+type WebConfig struct {
+	// Enabled starts the web UI when true.
+	Enabled bool `toml:"enabled"`
+	// BindAddress is the listen address for the web UI.
+	// Defaults to "127.0.0.1:7420" when empty.
+	BindAddress string `toml:"bind_address"`
+}
 type RestartPolicy string
 
 const (

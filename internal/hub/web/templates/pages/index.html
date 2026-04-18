@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overview — zlaw</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; background: #f9fafb; color: #111; line-height: 1.5; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { background: #1e293b; color: #e2e8f0; padding: 0 1.5rem; }
+    header nav { display: flex; align-items: center; height: 3rem; gap: 2rem; }
+    header .logo { font-weight: 700; font-size: 1rem; color: #f8fafc; }
+    header nav a { color: #94a3b8; }
+    header nav a:hover { color: #f8fafc; }
+    header nav a.active { color: #f8fafc; font-weight: 600; }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: #374151; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+    .stat { background: #f8fafc; border-radius: 6px; padding: 1rem; }
+    .stat .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .value { font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .badge-running { background: #dcfce7; color: #166534; }
+    .badge-connected { background: #dcfce7; color: #166534; }
+    .badge-disconnected { background: #fee2e2; color: #991b1b; }
+    .badge-cap { background: #e0f2fe; color: #0c4a6e; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
+    footer { text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <span class="logo">zlaw</span>
+      <a href="/">Overview</a>
+      <a href="/audit">Audit Log</a>
+    </nav>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Hub</h2>
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="label">Name</div>
+          <div class="value">{{ HubName|default:"—" }}</div>
+        </div>
+        <div class="stat">
+          <div class="label">NATS Address</div>
+          <div class="value mono">{{ NATSAddr|default:"—" }}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Description</div>
+          <div class="value" style="font-size:0.9rem; font-weight:400;">{{ HubDescription|default:"—" }}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Agents</div>
+          <div class="value">{% if Agents %}{{ Agents|length }}{% else %}0{% endif %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Agents</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>PID</th>
+            <th>Version</th>
+            <th>Capabilities</th>
+            <th>Last Heartbeat</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if Agents %}
+            {% for agent in Agents %}
+            <tr>
+              <td><strong>{{ agent.Name }}</strong></td>
+              <td>
+                {% if agent.Running %}<span class="badge badge-running">running</span>
+                {% elif agent.Status == "connected" %}<span class="badge badge-connected">connected</span>
+                {% else %}<span class="badge badge-disconnected">{{ agent.Status }}</span>{% endif %}
+              </td>
+              <td class="mono">{% if agent.PID %}{{ agent.PID }}{% else %}—{% endif %}</td>
+              <td class="mono">{{ agent.Version|default:"—" }}</td>
+              <td>{% if agent.Capabilities %}{% for cap in agent.Capabilities %}<span class="badge badge-cap">{{ cap }}</span> {% endfor %}{% else %}—{% endif %}</td>
+              <td class="mono">{% if agent.LastHeartbeat %}{{ agent.LastHeartbeat|date:"15:04:05 MST" }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="6" style="color:#94a3b8; text-align:center;">No agents registered</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <footer>
+    zlaw hub — read-only
+  </footer>
+  <script>
+    async function refreshAgents() {
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) return;
+        location.reload();
+      } catch (e) {}
+    }
+    setInterval(refreshAgents, 30000);
+  </script>
+</body>
+</html>

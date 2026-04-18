@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -237,6 +238,15 @@ func (al *AuditLogger) SetSubjects(subjects []string) {
 	}
 }
 
+// ReadEntries reads the last limit audit entries from the log file,
+// optionally filtered by event type.
+func (al *AuditLogger) ReadEntries(limit int, eventType string) ([]AuditEntry, error) {
+	if al == nil || al.path == "" {
+		return nil, nil
+	}
+	return ReadAuditLog(al.path, limit, eventType)
+}
+
 // Messenger implements messaging.Messenger for embedding in a chain.
 // AuditLogger embeds a real Messenger (the NATS connection) and forwards
 // Publish calls to it so it can be placed in a middleware chain.
@@ -267,4 +277,40 @@ func (al *AuditLogger) JetStream() messaging.JetStreamer {
 		return nil
 	}
 	return al.conn.JetStream()
+}
+
+// ReadAuditLog reads the last limit entries from auditPath,
+// optionally filtered by eventType. Entries are returned newest-last.
+func ReadAuditLog(auditPath string, limit int, eventType string) ([]AuditEntry, error) {
+	f, err := os.Open(auditPath)
+	if err != nil {
+		return nil, fmt.Errorf("open audit log: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var entries []AuditEntry
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var entry AuditEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue // skip malformed lines
+		}
+		if eventType != "" && string(entry.Type) != eventType {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan audit log: %w", err)
+	}
+
+	// Trim to last limit entries.
+	if len(entries) > limit {
+		entries = entries[len(entries)-limit:]
+	}
+	return entries, nil
 }

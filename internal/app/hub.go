@@ -17,12 +17,13 @@ import (
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
+	"github.com/zsomething/zlaw/internal/hub/web"
 	"github.com/zsomething/zlaw/internal/logging"
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
 // runHub loads the hub config and starts the hub process. It blocks until ctx is cancelled.
-func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool, dashboardAddr string) error {
 	cfg, err := config.LoadHubConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
@@ -110,10 +111,27 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 		return fmt.Errorf("start control socket: %w", err)
 	}
 
+	// Start the web UI if an address was provided.
+	var webUI *web.Server
+	if dashboardAddr != "" {
+		ws := hubWebState{
+			cfg:       cfg,
+			natsAddr:  result.Conn.ConnectedUrl(),
+			sup:       sup,
+			reg:       reg,
+			auditPath: cfg.Hub.AuditLogPath,
+		}
+		webUI = web.NewServer(dashboardAddr, ws, logger)
+		if err := webUI.Start(ctx); err != nil {
+			return fmt.Errorf("start web: %w", err)
+		}
+	}
+
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
 		"agents", len(cfg.Agents),
 		"control", controlPath,
+		"web", dashboardAddr,
 	)
 
 	// Watch zlaw.toml for agent list changes.
@@ -123,10 +141,49 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	<-ctx.Done()
 	logger.Info("hub shutting down")
 	ctrlSock.Stop() //nolint:errcheck
+	if webUI != nil {
+		webUI.Stop(ctx) //nolint:errcheck
+	}
 	return nil
 }
 
-// hubConfigAdapter adapts config.HubConfig to hub.ToolHubConfig.
+// hubWebState adapts hub components to [web.State].
+type hubWebState struct {
+	cfg       config.HubConfig
+	natsAddr  string
+	sup       *hub.Supervisor
+	reg       *hub.Registry
+	auditPath string
+}
+
+func (s hubWebState) HubConfig() config.HubConfig { return s.cfg }
+func (s hubWebState) NATSAddr() string            { return s.natsAddr }
+func (s hubWebState) Agents() []web.AgentInfo {
+	entries := s.reg.List()
+	statuses := s.sup.Statuses()
+	statusMap := make(map[string]hub.AgentStatus, len(statuses))
+	for _, st := range statuses {
+		statusMap[st.Name] = st
+	}
+	out := make([]web.AgentInfo, 0, len(entries))
+	for _, entry := range entries {
+		info := web.AgentInfo{RegistryEntry: entry}
+		if st, ok := statusMap[entry.Name]; ok {
+			info.PID = st.PID
+			info.Running = st.Running
+			if st.LastErr != nil {
+				info.LastErr = st.LastErr.Error()
+			}
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error) {
+	return hub.ReadAuditLog(s.auditPath, limit, eventType)
+}
+
 type hubConfigAdapter struct{ cfg config.HubConfig }
 
 func (a hubConfigAdapter) HubName() string { return a.cfg.Hub.Name }

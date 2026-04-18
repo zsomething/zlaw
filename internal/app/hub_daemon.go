@@ -28,7 +28,7 @@ func runDir() string {
 // It returns immediately after spawning the hub process.
 // If the hub is already running (PID file exists and process is alive),
 // it returns nil without spawning a new process.
-func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool, dashboardAddr string) error {
 	configPath = resolveConfigPath(configPath)
 	// Check if already running.
 	if pid, running := isHubRunning(); running {
@@ -98,8 +98,8 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 
 // RunHub starts the hub in the foreground and blocks until ctx is cancelled.
 // This is the blocking equivalent of StartHub.
-func RunHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
-	return runHub(ctx, resolveConfigPath(configPath), externalNATSURL, logger, noColor)
+func RunHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool, dashboardAddr string) error {
+	return runHub(ctx, resolveConfigPath(configPath), externalNATSURL, logger, noColor, dashboardAddr)
 }
 
 // StopHub reads the hub PID file and sends SIGTERM to the hub process.

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audit Log — zlaw</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; background: #f9fafb; color: #111; line-height: 1.5; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { background: #1e293b; color: #e2e8f0; padding: 0 1.5rem; }
+    header nav { display: flex; align-items: center; height: 3rem; gap: 2rem; }
+    header .logo { font-weight: 700; font-size: 1rem; color: #f8fafc; }
+    header nav a { color: #94a3b8; }
+    header nav a:hover { color: #f8fafc; }
+    header nav a.active { color: #f8fafc; font-weight: 600; }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: #374151; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
+    footer { text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <span class="logo">zlaw</span>
+      <a href="/">Overview</a>
+      <a href="/audit">Audit Log</a>
+    </nav>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Recent Audit Entries</h2>
+      <div style="margin-bottom:1rem; display:flex; gap:0.75rem; align-items:center;">
+        <label style="font-size:0.85rem; color:#64748b;">Filter by type:</label>
+        <select id="type-filter" style="padding:0.3rem 0.5rem; border:1px solid #e5e7eb; border-radius:4px; font-size:0.85rem;">
+          <option value="">all</option>
+          <option value="delegation.sent">delegation.sent</option>
+          <option value="delegation.reply">delegation.reply</option>
+          <option value="agent.register">agent.register</option>
+          <option value="agent.disconnect">agent.disconnect</option>
+          <option value="hub.management">hub.management</option>
+          <option value="error">error</option>
+        </select>
+        <label style="font-size:0.85rem; color:#64748b;">Limit:</label>
+        <input id="limit-input" type="number" value="100" min="10" max="1000" style="width:5rem; padding:0.3rem 0.5rem; border:1px solid #e5e7eb; border-radius:4px; font-size:0.85rem;">
+        <button onclick="loadAudit()" style="padding:0.3rem 0.75rem; background:#2563eb; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.85rem;">Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Tool</th>
+            <th>Error</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody id="audit-body">
+          <tr><td colspan="7" style="color:#94a3b8; text-align:center;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <footer>
+    zlaw hub — read-only
+  </footer>
+  <script>
+    async function loadAudit() {
+      const type = document.getElementById('type-filter').value;
+      const limit = document.getElementById('limit-input').value || 100;
+      const url = '/api/audit?limit=' + encodeURIComponent(limit) + (type ? '&type=' + encodeURIComponent(type) : '');
+      const tbody = document.getElementById('audit-body');
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#94a3b8; text-align:center;">Loading…</td></tr>';
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('fetch failed');
+        const entries = await res.json();
+        if (!entries.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#94a3b8; text-align:center;">No entries</td></tr>'; return; }
+        tbody.innerHTML = entries.map(e => {
+          const ts = e.ts ? new Date(e.ts).toLocaleString() : '—';
+          const dur = e.duration_ms ? e.duration_ms + 'ms' : '—';
+          const badgeStyle = e.type === 'error' || e.error ? 'background:#fee2e2; color:#991b1b;' : 'background:#f0f9ff; color:#0c4a6e;';
+          return '<tr>' +
+            '<td class="mono">' + esc(ts) + '</td>' +
+            '<td><span class="badge" style="' + badgeStyle + '">' + esc(e.type || '—') + '</span></td>' +
+            '<td class="mono">' + esc(e.from || '—') + '</td>' +
+            '<td class="mono">' + esc(e.to || '—') + '</td>' +
+            '<td class="mono">' + esc(e.tool || '—') + '</td>' +
+            '<td style="color:#dc2626;">' + esc(e.error || '—') + '</td>' +
+            '<td class="mono">' + dur + '</td></tr>';
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#dc2626; text-align:center;">Failed to load audit log</td></tr>';
+      }
+    }
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    loadAudit();
+    setInterval(loadAudit, 10000);
+  </script>
+</body>
+</html>
