@@ -25,7 +25,7 @@ type HubToolParam struct {
 }
 
 // GlobalTools returns the list of all hub-level built-in tools available
-// to manager agents via the hub inbox.
+// to agents via the hub inbox.
 func GlobalTools() []HubToolDefinition {
 	return []HubToolDefinition{
 		{
@@ -69,7 +69,7 @@ func GlobalTools() []HubToolDefinition {
 	}
 }
 
-// ToolRequest is the envelope for a tool-call request sent from a manager
+// ToolRequest is the envelope for a tool-call request sent from an
 // agent to the hub's NATS inbox subject (zlaw.hub.inbox).
 type ToolRequest struct {
 	// Tool is the name of the tool to invoke.
@@ -101,7 +101,7 @@ type ToolHandler interface {
 	HandleTool(ctx context.Context, req ToolRequest) ToolReply
 }
 
-// HubInbox processes incoming tool-call requests from the manager agent via
+// HubInbox processes incoming tool-call requests from agents via
 // the NATS zlaw.hub.inbox subject. It dispatches each request to the
 // appropriate ToolHandler method and publishes the reply to the specified
 // reply-to subject.

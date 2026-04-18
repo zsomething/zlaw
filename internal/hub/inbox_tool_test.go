@@ -136,13 +136,13 @@ func TestHubInbox(t *testing.T) {
 		}
 	})
 
-	t.Run("get_agent", func(t *testing.T) {
+	t.Run("agent_get", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
-			Tool: "get_agent",
+			Tool: "agent_get",
 			Args: map[string]any{"name": "alice"},
 		})
 		if !reply.OK {
-			t.Fatalf("get_agent not ok: %s", reply.Error)
+			t.Fatalf("agent_get not ok: %s", reply.Error)
 		}
 		var result RegistryEntry
 		if err := json.Unmarshal([]byte(reply.Output), &result); err != nil {
@@ -153,9 +153,9 @@ func TestHubInbox(t *testing.T) {
 		}
 	})
 
-	t.Run("get_agent not found", func(t *testing.T) {
+	t.Run("agent_get not found", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
-			Tool: "get_agent",
+			Tool: "agent_get",
 			Args: map[string]any{"name": "nonexistent"},
 		})
 		if reply.OK {
