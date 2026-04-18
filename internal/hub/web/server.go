@@ -154,7 +154,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, s.state.Agents())
 }
 
-// handleTools returns global built-in tools as JSON.
+// handleTools returns all built-in tools as JSON.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	agents := s.state.Agents()
 	agentNames := make([]string, len(agents))
@@ -162,23 +162,108 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 		agentNames[i] = a.Name
 	}
 
-	tools := []ToolInfo{
-		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}, EnabledFor: agentNames},
-		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}, EnabledFor: agentNames},
+	// Agent built-in tools (local execution by each agent)
+	agentTools := []ToolInfo{
+		{Name: "bash", Description: "Execute shell commands in the agent's workspace. Use for file operations, git, npm, or any system task.", Parameters: []ParamInfo{
+			{Name: "command", Type: "string", Description: "Shell command to execute", Required: true},
+			{Name: "cwd", Type: "string", Description: "Working directory (defaults to agent workspace)", Required: false},
+			{Name: "timeout", Type: "number", Description: "Timeout in seconds (default: 60)", Required: false},
+		}},
+		{Name: "read_file", Description: "Read the contents of a file from the agent's workspace.", Parameters: []ParamInfo{
+			{Name: "path", Type: "string", Description: "Relative path to file in workspace", Required: true},
+		}},
+		{Name: "write_file", Description: "Create or overwrite a file in the agent's workspace.", Parameters: []ParamInfo{
+			{Name: "path", Type: "string", Description: "Relative path for the new file", Required: true},
+			{Name: "content", Type: "string", Description: "File content to write", Required: true},
+		}},
+		{Name: "edit_file", Description: "Make targeted edits to an existing file using line-based replacements.", Parameters: []ParamInfo{
+			{Name: "path", Type: "string", Description: "Path to file to edit", Required: true},
+			{Name: "old_text", Type: "string", Description: "Exact text to replace", Required: true},
+			{Name: "new_text", Type: "string", Description: "Replacement text", Required: true},
+		}},
+		{Name: "glob", Description: "Find files matching a glob pattern in the agent's workspace.", Parameters: []ParamInfo{
+			{Name: "pattern", Type: "string", Description: "Glob pattern (e.g., **/*.go)", Required: true},
+		}},
+		{Name: "grep", Description: "Search for text within files using regex.", Parameters: []ParamInfo{
+			{Name: "pattern", Type: "string", Description: "Regex pattern to search", Required: true},
+			{Name: "path", Type: "string", Description: "Directory or file path to search", Required: false},
+			{Name: "file_pattern", Type: "string", Description: "File glob pattern (e.g., *.go)", Required: false},
+		}},
+		{Name: "web_fetch", Description: "Fetch content from a URL.", Parameters: []ParamInfo{
+			{Name: "url", Type: "string", Description: "URL to fetch", Required: true},
+			{Name: "prompt", Type: "string", Description: "Extract specific information from the page", Required: false},
+		}},
+		{Name: "web_search", Description: "Search the web for information.", Parameters: []ParamInfo{
+			{Name: "query", Type: "string", Description: "Search query", Required: true},
+			{Name: "top_n", Type: "number", Description: "Number of results (default: 5)", Required: false},
+		}},
+		{Name: "http_request", Description: "Make HTTP requests with full control over method, headers, and body.", Parameters: []ParamInfo{
+			{Name: "method", Type: "string", Description: "HTTP method (GET, POST, PUT, DELETE, etc.)", Required: true},
+			{Name: "url", Type: "string", Description: "Request URL", Required: true},
+			{Name: "headers", Type: "object", Description: "Request headers", Required: false},
+			{Name: "body", Type: "string", Description: "Request body", Required: false},
+		}},
+		{Name: "memory_save", Description: "Store information in the agent's persistent memory.", Parameters: []ParamInfo{
+			{Name: "key", Type: "string", Description: "Memory key (use snake_case)", Required: true},
+			{Name: "value", Type: "string", Description: "Value to store", Required: true},
+		}},
+		{Name: "memory_recall", Description: "Retrieve information from the agent's persistent memory.", Parameters: []ParamInfo{
+			{Name: "key", Type: "string", Description: "Memory key to retrieve", Required: true},
+		}},
+		{Name: "memory_delete", Description: "Delete information from the agent's persistent memory.", Parameters: []ParamInfo{
+			{Name: "key", Type: "string", Description: "Memory key to delete", Required: true},
+		}},
+		{Name: "delegate", Description: "Delegate a task to another registered agent in the hub.", Parameters: []ParamInfo{
+			{Name: "agent", Type: "string", Description: "Target agent name", Required: true},
+			{Name: "task", Type: "string", Description: "Task description for the agent", Required: true},
+		}},
+		{Name: "list_cronjobs", Description: "List all scheduled cron jobs for this agent.", Parameters: []ParamInfo{}},
+		{Name: "create_cronjob", Description: "Create a new scheduled cron job.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Job name", Required: true},
+			{Name: "schedule", Type: "string", Description: "Cron expression (e.g., 0 * * * *)", Required: true},
+			{Name: "task", Type: "string", Description: "Task description", Required: true},
+		}},
+		{Name: "delete_cronjob", Description: "Delete a scheduled cron job by name.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Job name to delete", Required: true},
+		}},
+		{Name: "skill_load", Description: "Load and activate a skill plugin for this session.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Skill name to load", Required: true},
+		}},
+		{Name: "current_time", Description: "Get the current date and time.", Parameters: []ParamInfo{}},
+	}
+
+	// Hub tools (routed via hub NATS inbox)
+	hubTools := []ToolInfo{
+		{Name: "hub_status", Description: "Returns static hub information including name, JetStream status, and routing configuration.", Parameters: []ParamInfo{}},
+		{Name: "agent_list", Description: "Lists all registered agents in the hub with their registry entries.", Parameters: []ParamInfo{}},
+		{Name: "agent_get", Description: "Get details for a specific agent by name.", Parameters: []ParamInfo{
+			{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
+		}},
 		{Name: "agent_status", Description: "Returns the current status of a named agent (running state, PID, last heartbeat).", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to check", Required: true},
-		}, EnabledFor: agentNames},
-		{Name: "get_agent", Description: "Returns the full registry entry for a named agent (capabilities, version, config path).", Parameters: []ParamInfo{
-			{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
-		}, EnabledFor: agentNames},
+		}},
 		{Name: "agent_stop", Description: "Stops a running agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to stop", Required: true},
-		}, EnabledFor: agentNames},
+		}},
 		{Name: "agent_restart", Description: "Restarts a stopped or running agent by name.", Parameters: []ParamInfo{
 			{Name: "name", Type: "string", Description: "Name of the agent to restart", Required: true},
-		}, EnabledFor: agentNames},
+		}},
 	}
-	s.writeJSON(w, tools)
+
+	// Set EnabledFor for agent tools
+	for i := range agentTools {
+		agentTools[i].EnabledFor = agentNames
+	}
+
+	// Set EnabledFor for hub tools
+	for i := range hubTools {
+		hubTools[i].EnabledFor = agentNames
+	}
+
+	s.writeJSON(w, map[string]any{
+		"agent_tools": agentTools,
+		"hub_tools":   hubTools,
+	})
 }
 
 // handleAudit returns recent audit entries as JSON.
