@@ -15,7 +15,6 @@ type HubCmd struct {
 	Stop    HubStopCmd    `cmd:"" help:"stop a running hub"`
 	Restart HubRestartCmd `cmd:"" help:"restart the hub (stop then start)"`
 	Status  HubStatusCmd  `cmd:"" help:"show hub status"`
-	Auth    HubAuthCmd    `cmd:"" help:"manage per-agent credentials"`
 }
 
 // ── hub start ─────────────────────────────────────────────────────────────────
