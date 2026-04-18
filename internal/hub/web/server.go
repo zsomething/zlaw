@@ -169,14 +169,14 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 			{Name: "cwd", Type: "string", Description: "Working directory (defaults to agent workspace)", Required: false},
 			{Name: "timeout", Type: "number", Description: "Timeout in seconds (default: 60)", Required: false},
 		}},
-		{Name: "read_file", Description: "Read the contents of a file from the agent's workspace.", Parameters: []ParamInfo{
+		{Name: "read", Description: "Read the contents of a file from the agent's workspace.", Parameters: []ParamInfo{
 			{Name: "path", Type: "string", Description: "Relative path to file in workspace", Required: true},
 		}},
-		{Name: "write_file", Description: "Create or overwrite a file in the agent's workspace.", Parameters: []ParamInfo{
+		{Name: "write", Description: "Create or overwrite a file in the agent's workspace.", Parameters: []ParamInfo{
 			{Name: "path", Type: "string", Description: "Relative path for the new file", Required: true},
 			{Name: "content", Type: "string", Description: "File content to write", Required: true},
 		}},
-		{Name: "edit_file", Description: "Make targeted edits to an existing file using line-based replacements.", Parameters: []ParamInfo{
+		{Name: "edit", Description: "Make targeted edits to an existing file using string replacements.", Parameters: []ParamInfo{
 			{Name: "path", Type: "string", Description: "Path to file to edit", Required: true},
 			{Name: "old_text", Type: "string", Description: "Exact text to replace", Required: true},
 			{Name: "new_text", Type: "string", Description: "Replacement text", Required: true},

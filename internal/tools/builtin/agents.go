@@ -12,8 +12,9 @@ import (
 )
 
 const (
+	hubInboxSubject     = "zlaw.hub.inbox"
 	registryListSubject = "zlaw.registry.list"
-	listAgentsTimeout   = 5 * time.Second
+	hubToolTimeout      = 10 * time.Second
 )
 
 // AgentRegistry abstracts the hub registry for query purposes.
@@ -32,7 +33,7 @@ func (r *NATSAgentRegistry) ListAgents(ctx context.Context) ([]hub.RegistryEntry
 	if r.Messenger == nil {
 		return nil, fmt.Errorf("agent_list: not connected to hub")
 	}
-	data, err := r.Messenger.Request(ctx, registryListSubject, nil, listAgentsTimeout)
+	data, err := r.Messenger.Request(ctx, registryListSubject, nil, hubToolTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("agent_list: request to hub registry: %w", err)
 	}
@@ -63,6 +64,11 @@ var _ AgentRegistry = (*NATSAgentRegistry)(nil)
 // When messenger is nil (standalone mode) the registry returns errors at call time.
 func NewAgentRegistry(messenger messaging.Messenger) *NATSAgentRegistry {
 	return &NATSAgentRegistry{Messenger: messenger}
+}
+
+// HubMessenger is the interface for sending tool requests to the hub inbox.
+type HubMessenger interface {
+	Request(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error)
 }
 
 // AgentList is a read-only builtin tool that returns the list of live agents
@@ -170,4 +176,144 @@ func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, 
 		return "", err
 	}
 	return string(data), nil
+}
+
+// AgentStop stops a running agent by name. Manager agents only.
+type AgentStop struct {
+	SelfID    string
+	Messenger HubMessenger
+}
+
+var agentStopSchema = []byte(`{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name of the agent to stop."
+    }
+  },
+  "required": ["name"]
+}`)
+
+func (*AgentStop) Definition() llm.ToolDefinition {
+	return llm.ToolDefinition{
+		Name:        "agent_stop",
+		Description: "Stop a running agent by name. Only available to manager agents. Cannot stop the manager agent itself.",
+		InputSchema: agentStopSchema,
+	}
+}
+
+type agentStopInput struct {
+	Name string `json:"name"`
+}
+
+func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string, error) {
+	if t.Messenger == nil {
+		return "", fmt.Errorf("agent_stop: not connected to hub")
+	}
+	var in agentStopInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("agent_stop: invalid input: %w", err)
+	}
+	if in.Name == "" {
+		return "", fmt.Errorf("agent_stop: name is required")
+	}
+	// Self-protection: cannot stop self
+	if in.Name == t.SelfID {
+		return "", fmt.Errorf("agent_stop: cannot stop manager agent. Operation refused")
+	}
+
+	// Forward to hub inbox
+	payload, _ := json.Marshal(map[string]any{
+		"tool":     "agent_stop",
+		"args":     map[string]any{"name": in.Name},
+		"reply_to": "_INBOX.>",
+	})
+	data, err := t.Messenger.Request(ctx, hubInboxSubject, payload, hubToolTimeout)
+	if err != nil {
+		return "", fmt.Errorf("agent_stop: request to hub: %w", err)
+	}
+
+	var reply struct {
+		OK     bool   `json:"ok"`
+		Output string `json:"output,omitempty"`
+		Error  string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(data, &reply); err != nil {
+		return "", fmt.Errorf("agent_stop: parse hub reply: %w", err)
+	}
+	if !reply.OK {
+		return "", fmt.Errorf("agent_stop: %s", reply.Error)
+	}
+	return reply.Output, nil
+}
+
+// AgentRestart restarts a stopped or running agent by name. Manager agents only.
+type AgentRestart struct {
+	SelfID    string
+	Messenger HubMessenger
+}
+
+var agentRestartSchema = []byte(`{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name of the agent to restart."
+    }
+  },
+  "required": ["name"]
+}`)
+
+func (*AgentRestart) Definition() llm.ToolDefinition {
+	return llm.ToolDefinition{
+		Name:        "agent_restart",
+		Description: "Restart an agent by name. The agent will be stopped and re-spawned. Only available to manager agents. Cannot restart the manager agent itself.",
+		InputSchema: agentRestartSchema,
+	}
+}
+
+type agentRestartInput struct {
+	Name string `json:"name"`
+}
+
+func (t *AgentRestart) Execute(ctx context.Context, input json.RawMessage) (string, error) {
+	if t.Messenger == nil {
+		return "", fmt.Errorf("agent_restart: not connected to hub")
+	}
+	var in agentRestartInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", fmt.Errorf("agent_restart: invalid input: %w", err)
+	}
+	if in.Name == "" {
+		return "", fmt.Errorf("agent_restart: name is required")
+	}
+	// Self-protection: cannot restart self
+	if in.Name == t.SelfID {
+		return "", fmt.Errorf("agent_restart: cannot restart manager agent. Operation refused")
+	}
+
+	// Forward to hub inbox
+	payload, _ := json.Marshal(map[string]any{
+		"tool":     "agent_restart",
+		"args":     map[string]any{"name": in.Name},
+		"reply_to": "_INBOX.>",
+	})
+	data, err := t.Messenger.Request(ctx, hubInboxSubject, payload, hubToolTimeout)
+	if err != nil {
+		return "", fmt.Errorf("agent_restart: request to hub: %w", err)
+	}
+
+	var reply struct {
+		OK     bool   `json:"ok"`
+		Output string `json:"output,omitempty"`
+		Error  string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(data, &reply); err != nil {
+		return "", fmt.Errorf("agent_restart: parse hub reply: %w", err)
+	}
+	if !reply.OK {
+		return "", fmt.Errorf("agent_restart: %s", reply.Error)
+	}
+	return reply.Output, nil
 }
