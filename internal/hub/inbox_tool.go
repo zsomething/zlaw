@@ -9,6 +9,66 @@ import (
 	"github.com/zsomething/zlaw/internal/config"
 )
 
+// HubToolDefinition describes a hub-level built-in tool.
+type HubToolDefinition struct {
+	Name        string
+	Description string
+	Parameters  []HubToolParam
+}
+
+// HubToolParam describes a single parameter for a hub tool.
+type HubToolParam struct {
+	Name        string
+	Type        string
+	Description string
+	Required    bool
+}
+
+// GlobalTools returns the list of all hub-level built-in tools available
+// to manager agents via the hub inbox.
+func GlobalTools() []HubToolDefinition {
+	return []HubToolDefinition{
+		{
+			Name:        "hub_status",
+			Description: "Returns static hub information including name, JetStream status, and routing configuration.",
+			Parameters:  []HubToolParam{},
+		},
+		{
+			Name:        "agent_list",
+			Description: "Lists all registered agents in the hub with their registry entries.",
+			Parameters:  []HubToolParam{},
+		},
+		{
+			Name:        "agent_status",
+			Description: "Returns the current status of a named agent (running state, PID, last heartbeat).",
+			Parameters: []HubToolParam{
+				{Name: "name", Type: "string", Description: "Name of the agent to check", Required: true},
+			},
+		},
+		{
+			Name:        "get_agent",
+			Description: "Returns the full registry entry for a named agent (capabilities, version, config path).",
+			Parameters: []HubToolParam{
+				{Name: "name", Type: "string", Description: "Name of the agent to retrieve", Required: true},
+			},
+		},
+		{
+			Name:        "agent_stop",
+			Description: "Stops a running agent by name.",
+			Parameters: []HubToolParam{
+				{Name: "name", Type: "string", Description: "Name of the agent to stop", Required: true},
+			},
+		},
+		{
+			Name:        "agent_restart",
+			Description: "Restarts a stopped or running agent by name.",
+			Parameters: []HubToolParam{
+				{Name: "name", Type: "string", Description: "Name of the agent to restart", Required: true},
+			},
+		},
+	}
+}
+
 // ToolRequest is the envelope for a tool-call request sent from a manager
 // agent to the hub's NATS inbox subject (zlaw.hub.inbox).
 type ToolRequest struct {
