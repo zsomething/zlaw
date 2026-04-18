@@ -284,6 +284,9 @@ func (al *AuditLogger) JetStream() messaging.JetStreamer {
 func ReadAuditLog(auditPath string, limit int, eventType string) ([]AuditEntry, error) {
 	f, err := os.Open(auditPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("open audit log: %w", err)
 	}
 	defer f.Close()

@@ -13,12 +13,17 @@ import (
 const zlawTOMLTemplate = `[hub]
 name = "main"
 description = "zlaw hub"
+audit_log_path = ".zlaw/audit.log"
 
 # Each agent supervised by this hub.
 # The hub scaffolds agent directories automatically.
 [[agents]]
 name = "manager"
 manager = true
+
+[web]
+# Web dashboard listen address. Requires [web] enabled = true.
+# bind_address = "127.0.0.1:7420"
 
 [nats]
 # Embedded NATS server listen address. Defaults to 127.0.0.1:4222.
