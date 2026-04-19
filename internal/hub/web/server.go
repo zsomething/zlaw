@@ -47,10 +47,16 @@ type State interface {
 
 // AgentInfo merges registry and process state for display.
 type AgentInfo struct {
-	hub.RegistryEntry
-	PID     int    `json:"pid"`
-	Running bool   `json:"running"`
-	LastErr string `json:"last_err,omitempty"`
+	ID            string              `json:"name"`
+	Name          string              `json:"-"` // display name, populated by caller if different
+	Version       string              `json:"version"`
+	Capabilities  []string            `json:"capabilities"`
+	Roles         []string            `json:"roles"`
+	Status        hub.AgentConnStatus `json:"status"`
+	LastHeartbeat time.Time           `json:"last_heartbeat"`
+	PID           int                 `json:"pid"`
+	Running       bool                `json:"running"`
+	LastErr       string              `json:"last_err,omitempty"`
 }
 
 // SessionInfo holds lightweight session metadata for display.
@@ -225,7 +231,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name != "" {
 		for _, a := range s.state.Agents() {
-			if a.Name == name {
+			if a.ID == name {
 				s.writeJSON(w, a)
 				return
 			}
@@ -240,7 +246,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAgentGet(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
 	for _, a := range s.state.Agents() {
-		if a.Name == agentID {
+		if a.ID == agentID {
 			s.writeJSON(w, a)
 			return
 		}
@@ -278,7 +284,7 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "agentID")
 	var caps []string
 	for _, a := range s.state.Agents() {
-		if a.Name == agentID {
+		if a.ID == agentID {
 			caps = a.Capabilities
 			break
 		}
