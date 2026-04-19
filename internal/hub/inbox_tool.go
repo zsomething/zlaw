@@ -154,13 +154,13 @@ func (h *HubInbox) hubStatus() ToolReply {
 	}
 }
 
-// agentStatus returns the status of a named agent.
+// agentStatus returns the status of an agent.
 func (h *HubInbox) agentStatus(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_status", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_status", "param 'id' is required")
 	}
-	status, err := h.supervisor.Status(name)
+	status, err := h.supervisor.Status(id)
 	if err != nil {
 		return errorReply("agent_status", err.Error())
 	}
@@ -171,35 +171,35 @@ func (h *HubInbox) agentStatus(ctx context.Context, args map[string]any) ToolRep
 	}
 }
 
-// agentStop stops a named agent.
+// agentStop stops an agent.
 func (h *HubInbox) agentStop(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_stop", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_stop", "param 'id' is required")
 	}
-	if err := h.supervisor.Stop(name); err != nil {
+	if err := h.supervisor.Stop(id); err != nil {
 		return errorReply("agent_stop", err.Error())
 	}
 	return ToolReply{
 		Tool:   "agent_stop",
 		OK:     true,
-		Output: name + " stopped",
+		Output: id + " stopped",
 	}
 }
 
-// agentRestart restarts a named agent.
+// agentRestart restarts an agent.
 func (h *HubInbox) agentRestart(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_restart", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_restart", "param 'id' is required")
 	}
-	if err := h.supervisor.Restart(name); err != nil {
+	if err := h.supervisor.Restart(id); err != nil {
 		return errorReply("agent_restart", err.Error())
 	}
 	return ToolReply{
 		Tool:   "agent_restart",
 		OK:     true,
-		Output: name + " restarted",
+		Output: id + " restarted",
 	}
 }
 
@@ -213,15 +213,15 @@ func (h *HubInbox) agentList() ToolReply {
 	}
 }
 
-// agentGet returns the registry entry for a named agent.
+// agentGet returns the registry entry for an agent.
 func (h *HubInbox) agentGet(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_get", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_get", "param 'id' is required")
 	}
-	entry, ok := h.registry.Get(name)
+	entry, ok := h.registry.Get(id)
 	if !ok {
-		return errorReply("agent_get", "agent not found: "+name)
+		return errorReply("agent_get", "agent not found: "+id)
 	}
 	return ToolReply{
 		Tool:   "agent_get",

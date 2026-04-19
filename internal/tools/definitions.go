@@ -109,16 +109,16 @@ func Tools() []Definition {
 		}},
 		{Name: "agent_list", Description: "List all agents registered in the hub.", Parameters: []Param{}},
 		{Name: "agent_get", Description: "Get details for a specific agent.", Parameters: []Param{
-			{Name: "name", Type: "string", Description: "Agent name", Required: true},
+			{Name: "id", Type: "string", Description: "Agent ID", Required: true},
 		}},
-		{Name: "agent_status", Description: "Get status of a named agent.", Parameters: []Param{
-			{Name: "name", Type: "string", Description: "Agent name", Required: true},
+		{Name: "agent_status", Description: "Get status of an agent.", Parameters: []Param{
+			{Name: "id", Type: "string", Description: "Agent ID", Required: true},
 		}},
 		{Name: "agent_stop", Description: "Stop a running agent. Cannot stop self.", Parameters: []Param{
-			{Name: "name", Type: "string", Description: "Agent name", Required: true},
+			{Name: "id", Type: "string", Description: "Agent ID", Required: true},
 		}},
 		{Name: "agent_restart", Description: "Restart an agent. Cannot restart self.", Parameters: []Param{
-			{Name: "name", Type: "string", Description: "Agent name", Required: true},
+			{Name: "id", Type: "string", Description: "Agent ID", Required: true},
 		}},
 		{Name: "hub_status", Description: "Get hub information (name, JetStream status).", Parameters: []Param{}},
 	}
