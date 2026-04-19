@@ -156,10 +156,10 @@ func (*AgentGet) Definition() llm.ToolDefinition {
 }
 
 type agentGetInput struct {
-	Name string `json:"name"`
+	ID string `json:"id"`
 }
 
-// Execute looks up name in the hub registry.
+// Execute looks up id in the hub registry.
 func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, error) {
 	if t.Registry == nil {
 		return "", fmt.Errorf("agent_get: not connected to hub")
@@ -168,15 +168,15 @@ func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, 
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("agent_get: invalid input: %w", err)
 	}
-	if in.Name == "" {
-		return "", fmt.Errorf("agent_get: name is required")
+	if in.ID == "" {
+		return "", fmt.Errorf("agent_get: id is required")
 	}
-	entry, err := t.Registry.GetAgent(ctx, in.Name)
+	entry, err := t.Registry.GetAgent(ctx, in.ID)
 	if err != nil {
 		return "", err
 	}
 	if entry == nil {
-		return "", fmt.Errorf("agent_get: agent %q not found in registry", in.Name)
+		return "", fmt.Errorf("agent_get: agent %q not found in registry", in.ID)
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -185,7 +185,7 @@ func (t *AgentGet) Execute(ctx context.Context, input json.RawMessage) (string, 
 	return string(data), nil
 }
 
-// AgentStop stops a running agent by name.
+// AgentStop stops a running agent by ID.
 type AgentStop struct {
 	SelfID    string
 	Messenger HubMessenger
@@ -194,24 +194,24 @@ type AgentStop struct {
 var agentStopSchema = []byte(`{
   "type": "object",
   "properties": {
-    "name": {
+    "id": {
       "type": "string",
-      "description": "The name of the agent to stop."
+      "description": "The ID of the agent to stop."
     }
   },
-  "required": ["name"]
+  "required": ["id"]
 }`)
 
 func (*AgentStop) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "agent_stop",
-		Description: "Stop a running agent by name.",
+		Description: "Stop a running agent by ID.",
 		InputSchema: agentStopSchema,
 	}
 }
 
 type agentStopInput struct {
-	Name string `json:"name"`
+	ID string `json:"id"`
 }
 
 func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string, error) {
@@ -222,18 +222,18 @@ func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string,
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("agent_stop: invalid input: %w", err)
 	}
-	if in.Name == "" {
-		return "", fmt.Errorf("agent_stop: name is required")
+	if in.ID == "" {
+		return "", fmt.Errorf("agent_stop: id is required")
 	}
 	// Self-protection: cannot stop self
-	if in.Name == t.SelfID {
+	if in.ID == t.SelfID {
 		return "", fmt.Errorf("agent_stop: cannot stop self. Operation refused")
 	}
 
 	// Forward to hub inbox
 	payload, _ := json.Marshal(map[string]any{
 		"tool":     "agent_stop",
-		"args":     map[string]any{"name": in.Name},
+		"args":     map[string]any{"id": in.ID},
 		"reply_to": "_INBOX.>",
 	})
 	data, err := t.Messenger.Request(ctx, hubInboxSubject, payload, hubToolTimeout)
@@ -255,7 +255,7 @@ func (t *AgentStop) Execute(ctx context.Context, input json.RawMessage) (string,
 	return reply.Output, nil
 }
 
-// AgentRestart restarts a stopped or running agent by name.
+// AgentRestart restarts a stopped or running agent by ID.
 type AgentRestart struct {
 	SelfID    string
 	Messenger HubMessenger
@@ -264,24 +264,24 @@ type AgentRestart struct {
 var agentRestartSchema = []byte(`{
   "type": "object",
   "properties": {
-    "name": {
+    "id": {
       "type": "string",
-      "description": "The name of the agent to restart."
+      "description": "The ID of the agent to restart."
     }
   },
-  "required": ["name"]
+  "required": ["id"]
 }`)
 
 func (*AgentRestart) Definition() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "agent_restart",
-		Description: "Restart an agent by name. The agent will be stopped and re-spawned.",
+		Description: "Restart an agent by ID. The agent will be stopped and re-spawned.",
 		InputSchema: agentRestartSchema,
 	}
 }
 
 type agentRestartInput struct {
-	Name string `json:"name"`
+	ID string `json:"id"`
 }
 
 func (t *AgentRestart) Execute(ctx context.Context, input json.RawMessage) (string, error) {
@@ -292,18 +292,18 @@ func (t *AgentRestart) Execute(ctx context.Context, input json.RawMessage) (stri
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("agent_restart: invalid input: %w", err)
 	}
-	if in.Name == "" {
-		return "", fmt.Errorf("agent_restart: name is required")
+	if in.ID == "" {
+		return "", fmt.Errorf("agent_restart: id is required")
 	}
 	// Self-protection: cannot restart self
-	if in.Name == t.SelfID {
+	if in.ID == t.SelfID {
 		return "", fmt.Errorf("agent_restart: cannot restart self. Operation refused")
 	}
 
 	// Forward to hub inbox
 	payload, _ := json.Marshal(map[string]any{
 		"tool":     "agent_restart",
-		"args":     map[string]any{"name": in.Name},
+		"args":     map[string]any{"id": in.ID},
 		"reply_to": "_INBOX.>",
 	})
 	data, err := t.Messenger.Request(ctx, hubInboxSubject, payload, hubToolTimeout)
