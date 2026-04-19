@@ -1,21 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent — zlaw</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; background: #f9fafb; color: #111; line-height: 1.5; }
-    a { color: #2563eb; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header { background: #1e293b; color: #e2e8f0; padding: 0 1.5rem; }
-    header nav { display: flex; align-items: center; height: 3rem; gap: 2rem; }
-    header .logo { font-weight: 700; font-size: 1rem; color: #f8fafc; }
-    header nav a { color: #94a3b8; }
-    header nav a:hover { color: #f8fafc; }
-    header nav a.active { color: #f8fafc; font-weight: 600; }
-    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+{% extends "templates/pages/base.html" %}
+
+{% block title %}Agent — zlaw{% endblock %}
+
+{% block styles %}
     .page-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
     .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
     .page-header .back { font-size: 0.85rem; color: #64748b; }
@@ -54,24 +41,12 @@
     .file-icon { margin-right: 0.75rem; color: #64748b; }
     .file-name { flex: 1; font-weight: 500; color: #374151; }
     .file-meta { color: #64748b; font-size: 0.8rem; }
-    .file-meta .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
     .loading { color: #64748b; text-align: center; padding: 2rem; }
     .error { color: #dc2626; text-align: center; padding: 2rem; }
     .no-data { color: #94a3b8; text-align: center; padding: 1rem; }
-    footer { text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.8rem; }
-  </style>
-</head>
-<body>
-  <header>
-    <nav>
-      <span class="logo">zlaw</span>
-      <a href="/">Overview</a>
-      <a href="/tools">Hub Tools</a>
-      <a href="/agents" class="active">Agents</a>
-      <a href="/audit">Audit Log</a>
-    </nav>
-  </header>
-  <main>
+{% endblock %}
+
+{% block content %}
     <div class="page-header">
       <a href="/agents" class="back">← All Agents</a>
       <h1 id="agent-name">Loading...</h1>
@@ -80,11 +55,10 @@
     <div id="agent-detail">
       <p class="loading">Loading agent details...</p>
     </div>
-  </main>
-  <footer>
-    zlaw hub — read-only
-  </footer>
-  <script>
+{% endblock %}
+
+{% block scripts %}
+<script>
     // Get agent ID from URL path: /agents/{agentID}
     const pathParts = window.location.pathname.split('/');
     const agentID = decodeURIComponent(pathParts[3] || '');
@@ -321,5 +295,4 @@
 
     loadAgent();
   </script>
-</body>
-</html>
+{% endblock %}
