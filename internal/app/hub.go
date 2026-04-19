@@ -204,7 +204,14 @@ func (s hubWebState) Agents() []web.AgentInfo {
 	}
 	out := make([]web.AgentInfo, 0, len(entries))
 	for _, entry := range entries {
-		info := web.AgentInfo{RegistryEntry: entry}
+		info := web.AgentInfo{
+			ID:            entry.Name,
+			Version:       entry.Version,
+			Capabilities:  entry.Capabilities,
+			Roles:         entry.Roles,
+			Status:        entry.Status,
+			LastHeartbeat: entry.LastHeartbeat,
+		}
 		// Sort capabilities alphabetically.
 		sort.Strings(info.Capabilities)
 		if st, ok := statusMap[entry.Name]; ok {
