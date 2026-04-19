@@ -63,7 +63,6 @@
     const pathParts = window.location.pathname.split('/');
     const agentID = decodeURIComponent(pathParts[3] || '');
 
-    document.getElementById('agent-name').textContent = agentID;
     document.title = agentID + ' — zlaw';
 
     async function loadAgent() {
@@ -78,6 +77,9 @@
     }
 
     function renderAgent(agent) {
+      // Use id for URL routing, name for display
+      const displayName = agent.name || agent.id;
+      document.getElementById('agent-name').textContent = displayName;
       const statusBadge = agent.Running 
         ? '<span class="badge badge-running">running</span>'
         : agent.Status === 'connected'
@@ -94,7 +96,11 @@
             <div class="stat-grid">
               <div class="stat">
                 <div class="label">ID</div>
-                <div class="value mono">${agent.Name || '—'}</div>
+                <div class="value mono">${agent.id || '—'}</div>
+              </div>
+              <div class="stat">
+                <div class="label">Name</div>
+                <div class="value">${agent.name || '—'}</div>
               </div>
               <div class="stat">
                 <div class="label">Status</div>
