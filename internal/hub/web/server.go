@@ -7,10 +7,11 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/flosch/pongo2/v6"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
 	"github.com/zsomething/zlaw/internal/tools"
@@ -20,7 +21,7 @@ import (
 type Server struct {
 	log   *slog.Logger
 	state State
-	mux   *http.ServeMux
+	r     *chi.Mux
 	addr  string
 }
 
@@ -32,16 +33,16 @@ type State interface {
 	AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error)
 	// Tools returns all built-in tool definitions.
 	Tools() []tools.Definition
-	// Sessions returns a list of sessions for a given agent name.
-	Sessions(agentName string) ([]SessionInfo, error)
+	// Sessions returns a list of sessions for a given agent ID.
+	Sessions(agentID string) ([]SessionInfo, error)
 	// SessionMessages returns all messages for a given agent and session.
-	SessionMessages(agentName, sessionID string) ([]MessageInfo, error)
+	SessionMessages(agentID, sessionID string) ([]MessageInfo, error)
 	// CompiledContext returns the assembled context for a given agent and session.
-	CompiledContext(agentName, sessionID string) (ContextInfo, error)
+	CompiledContext(agentID, sessionID string) (ContextInfo, error)
 	// WorkspaceFiles returns the workspace files for a given agent.
-	WorkspaceFiles(agentName string) ([]FileInfo, error)
+	WorkspaceFiles(agentID string) ([]FileInfo, error)
 	// AgentSkills returns skills for a given agent.
-	AgentSkills(agentName string) ([]SkillInfo, error)
+	AgentSkills(agentID string) ([]SkillInfo, error)
 }
 
 // AgentInfo merges registry and process state for display.
@@ -55,7 +56,7 @@ type AgentInfo struct {
 // SessionInfo holds lightweight session metadata for display.
 type SessionInfo struct {
 	SessionID    string    `json:"session_id"`
-	AgentName    string    `json:"agent_name"`
+	AgentID      string    `json:"agent_id"`
 	Channel      string    `json:"channel"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -66,11 +67,11 @@ type SessionInfo struct {
 
 // MessageInfo represents a single message in a session.
 type MessageInfo struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
-	TokensIn  int       `json:"tokens_in"`
-	TokensOut int       `json:"tokens_out"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp,omitempty"`
+	TokensIn  int    `json:"tokens_in,omitempty"`
+	TokensOut int    `json:"tokens_out,omitempty"`
 }
 
 // ContextInfo holds the compiled context for an agent session.
@@ -106,33 +107,46 @@ func NewServer(addr string, state State, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	mux := http.NewServeMux()
 	srv := &Server{
 		log:   log,
 		state: state,
-		mux:   mux,
 		addr:  addr,
 	}
-
-	mux.Handle("GET /", http.HandlerFunc(srv.handleIndex))
-	mux.Handle("GET /tools", http.HandlerFunc(srv.handleToolsPage))
-	mux.Handle("GET /agents", http.HandlerFunc(srv.handleAgentsPage))
-	mux.Handle("GET /agents/tools", http.HandlerFunc(srv.handleAgentToolsPage))
-	mux.Handle("GET /agents/sessions", http.HandlerFunc(srv.handleAgentSessionsPage))
-	mux.Handle("GET /agents/files", http.HandlerFunc(srv.handleAgentFilesPage))
-	mux.Handle("GET /agents/skills", http.HandlerFunc(srv.handleAgentSkillsPage))
-	mux.Handle("GET /audit", http.HandlerFunc(srv.handleAuditPage))
-	mux.Handle("GET /api/hub", http.HandlerFunc(srv.handleHub))
-	mux.Handle("GET /api/agents", http.HandlerFunc(srv.handleAgents))
-	mux.Handle("GET /api/agents/tools", http.HandlerFunc(srv.handleAgentTools))
-	mux.Handle("GET /api/agents/sessions", http.HandlerFunc(srv.handleAgentSessions))
-	mux.Handle("GET /api/agents/sessions/", http.HandlerFunc(srv.handleSessionDetail))
-	mux.Handle("GET /api/agents/files", http.HandlerFunc(srv.handleAgentFiles))
-	mux.Handle("GET /api/agents/skills", http.HandlerFunc(srv.handleAgentSkills))
-	mux.Handle("GET /api/tools", http.HandlerFunc(srv.handleTools))
-	mux.Handle("GET /api/audit", http.HandlerFunc(srv.handleAudit))
-
+	srv.r = srv.routes()
 	return srv
+}
+
+func (s *Server) routes() *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// HTML pages
+	r.Get("/", s.handleIndex)
+	r.Get("/tools", s.handleToolsPage)
+	r.Get("/agents", s.handleAgentsPage)
+	r.Get("/agents/{agentID}", s.handleAgentDetailPage)
+	r.Get("/audit", s.handleAuditPage)
+
+	// API
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/hub", s.handleHub)
+		r.Get("/agents", s.handleAgents)
+		r.Route("/agents/{agentID}", func(r chi.Router) {
+			r.Get("/", s.handleAgentGet)
+			r.Get("/tools", s.handleAgentTools)
+			r.Get("/sessions", s.handleAgentSessions)
+			r.Get("/sessions/{sessionID}", s.handleSessionDetail)
+			r.Get("/files", s.handleAgentFiles)
+			r.Get("/skills", s.handleAgentSkills)
+		})
+		r.Get("/tools", s.handleTools)
+		r.Get("/audit", s.handleAudit)
+	})
+
+	return r
 }
 
 // Addr returns the server's listen address.
@@ -142,7 +156,7 @@ func (s *Server) Addr() string { return s.addr }
 func (s *Server) Start(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:         s.addr,
-		Handler:      s.mux,
+		Handler:      s.r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -158,7 +172,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the server.
 func (s *Server) Stop(ctx context.Context) error {
-	srv := &http.Server{Addr: s.addr, Handler: s.mux}
+	srv := &http.Server{Addr: s.addr, Handler: s.r}
 	return srv.Shutdown(ctx)
 }
 
@@ -182,6 +196,16 @@ func (s *Server) handleAuditPage(w http.ResponseWriter, r *http.Request) {
 // handleToolsPage serves the hub tools HTML page.
 func (s *Server) handleToolsPage(w http.ResponseWriter, r *http.Request) {
 	s.serveTemplate(w, "templates/pages/tools.html", pongo2.Context{})
+}
+
+// handleAgentsPage serves the agents overview HTML page.
+func (s *Server) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
+	s.serveTemplate(w, "templates/pages/agents.html", pongo2.Context{})
+}
+
+// handleAgentDetailPage serves the agent detail HTML page.
+func (s *Server) handleAgentDetailPage(w http.ResponseWriter, r *http.Request) {
+	s.serveTemplate(w, "templates/pages/agent_detail.html", pongo2.Context{})
 }
 
 // handleHub returns hub identity and NATS status as JSON.
@@ -212,6 +236,18 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, s.state.Agents())
 }
 
+// handleAgentGet returns a single agent by ID.
+func (s *Server) handleAgentGet(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	for _, a := range s.state.Agents() {
+		if a.Name == agentID {
+			s.writeJSON(w, a)
+			return
+		}
+	}
+	http.Error(w, `{"error":"agent not found"}`, http.StatusNotFound)
+}
+
 // handleTools returns all built-in tools as JSON.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	tools := s.state.Tools()
@@ -237,6 +273,91 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, entries)
 }
 
+// handleAgentTools returns tools for a specific agent as JSON.
+func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	var caps []string
+	for _, a := range s.state.Agents() {
+		if a.Name == agentID {
+			caps = a.Capabilities
+			break
+		}
+	}
+	allTools := s.state.Tools()
+	var filtered []tools.Definition
+	for _, t := range allTools {
+		if len(caps) == 0 {
+			filtered = append(filtered, t)
+		} else {
+			for _, c := range caps {
+				if c == t.Name {
+					filtered = append(filtered, t)
+					break
+				}
+			}
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name < filtered[j].Name })
+	s.writeJSON(w, map[string]any{"tools": filtered})
+}
+
+// handleAgentSessions returns sessions for a specific agent as JSON.
+func (s *Server) handleAgentSessions(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	sessions, err := s.state.Sessions(agentID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load sessions"}`, http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, sessions)
+}
+
+// handleSessionDetail returns messages and context for a session.
+func (s *Server) handleSessionDetail(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	sessionID := chi.URLParam(r, "sessionID")
+
+	view := r.URL.Query().Get("view")
+	if view == "context" {
+		ctx, err := s.state.CompiledContext(agentID, sessionID)
+		if err != nil {
+			http.Error(w, `{"error":"failed to load context"}`, http.StatusInternalServerError)
+			return
+		}
+		s.writeJSON(w, ctx)
+		return
+	}
+
+	messages, err := s.state.SessionMessages(agentID, sessionID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load messages"}`, http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, map[string]any{"messages": messages})
+}
+
+// handleAgentFiles returns workspace files for a specific agent as JSON.
+func (s *Server) handleAgentFiles(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	files, err := s.state.WorkspaceFiles(agentID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load files"}`, http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, files)
+}
+
+// handleAgentSkills returns skills for a specific agent as JSON.
+func (s *Server) handleAgentSkills(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentID")
+	skills, err := s.state.AgentSkills(agentID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load skills"}`, http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, skills)
+}
+
 // hubStatus is the JSON response for /api/hub.
 type hubStatus struct {
 	Name         string `json:"name"`
@@ -257,153 +378,4 @@ func (s *Server) writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
-}
-
-// handleAgentsPage serves the agents overview HTML page.
-func (s *Server) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	data := pongo2.Context{
-		"SelectedAgent": agent,
-	}
-	s.serveTemplate(w, "templates/pages/agents.html", data)
-}
-
-// handleAgentToolsPage serves the per-agent tools HTML page.
-func (s *Server) handleAgentToolsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/agent_tools.html", pongo2.Context{})
-}
-
-// handleAgentSessionsPage serves the agent sessions HTML page.
-func (s *Server) handleAgentSessionsPage(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	data := pongo2.Context{
-		"SelectedAgent": agent,
-	}
-	s.serveTemplate(w, "templates/pages/agent_sessions.html", data)
-}
-
-// handleAgentFilesPage serves the agent workspace files HTML page.
-func (s *Server) handleAgentFilesPage(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	data := pongo2.Context{
-		"SelectedAgent": agent,
-	}
-	s.serveTemplate(w, "templates/pages/agent_files.html", data)
-}
-
-// handleAgentSkillsPage serves the agent skills HTML page.
-func (s *Server) handleAgentSkillsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/agent_skills.html", pongo2.Context{})
-}
-
-// handleAgentTools returns tools for a specific agent as JSON.
-func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	if agent == "" {
-		http.Error(w, `{"error":"agent parameter required"}`, http.StatusBadRequest)
-		return
-	}
-	// Get agent capabilities from registry
-	var caps []string
-	for _, a := range s.state.Agents() {
-		if a.Name == agent {
-			caps = a.Capabilities
-			break
-		}
-	}
-	// Filter global tools by agent capabilities
-	allTools := s.state.Tools()
-	var filtered []tools.Definition
-	for _, t := range allTools {
-		if len(caps) == 0 {
-			filtered = append(filtered, t) // no caps = all tools
-		} else {
-			// Check if tool name is in capabilities
-			for _, c := range caps {
-				if c == t.Name || strings.HasPrefix(c, "tool:") {
-					filtered = append(filtered, t)
-					break
-				}
-			}
-		}
-	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name < filtered[j].Name })
-	s.writeJSON(w, map[string]any{"tools": filtered})
-}
-
-// handleAgentSessions returns sessions for a specific agent as JSON.
-func (s *Server) handleAgentSessions(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	if agent == "" {
-		http.Error(w, `{"error":"agent parameter required"}`, http.StatusBadRequest)
-		return
-	}
-	sessions, err := s.state.Sessions(agent)
-	if err != nil {
-		http.Error(w, `{"error":"failed to load sessions"}`, http.StatusInternalServerError)
-		return
-	}
-	s.writeJSON(w, sessions)
-}
-
-// handleSessionDetail returns messages and context for a specific session.
-func (s *Server) handleSessionDetail(w http.ResponseWriter, r *http.Request) {
-	// Extract agent and session from path: /api/agents/sessions/<sessionID>?agent=<agent>
-	path := strings.TrimPrefix(r.URL.Path, "/api/agents/sessions/")
-	parts := strings.SplitN(path, "/", 2)
-	sessionID := parts[0]
-	agent := r.URL.Query().Get("agent")
-
-	if agent == "" || sessionID == "" {
-		http.Error(w, `{"error":"agent and session parameters required"}`, http.StatusBadRequest)
-		return
-	}
-
-	view := r.URL.Query().Get("view")
-	if view == "context" {
-		ctx, err := s.state.CompiledContext(agent, sessionID)
-		if err != nil {
-			http.Error(w, `{"error":"failed to load context"}`, http.StatusInternalServerError)
-			return
-		}
-		s.writeJSON(w, ctx)
-		return
-	}
-
-	messages, err := s.state.SessionMessages(agent, sessionID)
-	if err != nil {
-		http.Error(w, `{"error":"failed to load messages"}`, http.StatusInternalServerError)
-		return
-	}
-	s.writeJSON(w, map[string]any{"messages": messages})
-}
-
-// handleAgentFiles returns workspace files for a specific agent as JSON.
-func (s *Server) handleAgentFiles(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	if agent == "" {
-		http.Error(w, `{"error":"agent parameter required"}`, http.StatusBadRequest)
-		return
-	}
-	files, err := s.state.WorkspaceFiles(agent)
-	if err != nil {
-		http.Error(w, `{"error":"failed to load files"}`, http.StatusInternalServerError)
-		return
-	}
-	s.writeJSON(w, files)
-}
-
-// handleAgentSkills returns skills for a specific agent as JSON.
-func (s *Server) handleAgentSkills(w http.ResponseWriter, r *http.Request) {
-	agent := r.URL.Query().Get("agent")
-	if agent == "" {
-		http.Error(w, `{"error":"agent parameter required"}`, http.StatusBadRequest)
-		return
-	}
-	skills, err := s.state.AgentSkills(agent)
-	if err != nil {
-		http.Error(w, `{"error":"failed to load skills"}`, http.StatusInternalServerError)
-		return
-	}
-	s.writeJSON(w, skills)
 }

@@ -260,7 +260,7 @@ func (s hubWebState) Sessions(agentName string) ([]web.SessionInfo, error) {
 		}
 		sessions = append(sessions, web.SessionInfo{
 			SessionID:    meta.SessionID,
-			AgentName:    meta.AgentName,
+			AgentID:      meta.AgentName,
 			Channel:      meta.Channel,
 			CreatedAt:    meta.CreatedAt,
 			UpdatedAt:    meta.UpdatedAt,
