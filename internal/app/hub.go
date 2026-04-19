@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -16,11 +17,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/nats.go"
 
+	"github.com/zsomething/zlaw/internal/agent"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
 	"github.com/zsomething/zlaw/internal/hub/web"
 	"github.com/zsomething/zlaw/internal/logging"
 	"github.com/zsomething/zlaw/internal/messaging"
+	"github.com/zsomething/zlaw/internal/skills"
 	"github.com/zsomething/zlaw/internal/tools"
 )
 
@@ -222,6 +225,209 @@ func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry
 
 func (s hubWebState) Tools() []tools.Definition {
 	return hub.Tools()
+}
+
+func (s hubWebState) Sessions(agentName string) ([]web.SessionInfo, error) {
+	// Get workspace path for agent
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var sessions []web.SessionInfo
+	store := agent.NewJSONLFileStore(sessionsDir)
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		sessionID := strings.TrimSuffix(e.Name(), ".jsonl")
+		meta, err := store.LoadMeta(sessionID)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, web.SessionInfo{
+			SessionID:    meta.SessionID,
+			AgentName:    meta.AgentName,
+			Channel:      meta.Channel,
+			CreatedAt:    meta.CreatedAt,
+			UpdatedAt:    meta.UpdatedAt,
+			MessageCount: meta.MessageCount,
+			Title:        meta.Title,
+			Active:       meta.UpdatedAt.After(time.Now().Add(-5 * time.Minute)),
+		})
+	}
+	return sessions, nil
+}
+
+func (s hubWebState) SessionMessages(agentName, sessionID string) ([]web.MessageInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	store := agent.NewJSONLFileStore(sessionsDir)
+	msgs, err := store.Load(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []web.MessageInfo
+	for _, m := range msgs {
+		result = append(result, web.MessageInfo{
+			Role:    string(m.Role),
+			Content: m.TextContent(),
+		})
+	}
+	return result, nil
+}
+
+func (s hubWebState) CompiledContext(agentName, sessionID string) (web.ContextInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return web.ContextInfo{}, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	store := agent.NewJSONLFileStore(sessionsDir)
+	msgs, err := store.Load(sessionID)
+	if err != nil {
+		return web.ContextInfo{}, err
+	}
+
+	// Build system prompt from workspace files
+	var systemPrompt strings.Builder
+
+	// Read SOUL.md
+	soulPath := filepath.Join(wsPath, "SOUL.md")
+	if data, err := os.ReadFile(soulPath); err == nil {
+		systemPrompt.WriteString("# SOUL.md\n\n")
+		systemPrompt.Write(data)
+		systemPrompt.WriteString("\n\n")
+	}
+
+	// Read IDENTITY.md
+	identityPath := filepath.Join(wsPath, "IDENTITY.md")
+	if data, err := os.ReadFile(identityPath); err == nil {
+		systemPrompt.WriteString("# IDENTITY.md\n\n")
+		systemPrompt.Write(data)
+		systemPrompt.WriteString("\n\n")
+	}
+
+	// Get tool definitions
+	toolDefs := make([]string, 0)
+	for _, t := range s.Tools() {
+		toolDefs = append(toolDefs, t.Name)
+	}
+
+	return web.ContextInfo{
+		SystemPrompt: systemPrompt.String(),
+		ToolDefs:     toolDefs,
+		RecentMsgs:   len(msgs),
+	}, nil
+}
+
+func (s hubWebState) WorkspaceFiles(agentName string) ([]web.FileInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+
+	return listWorkspaceFiles(wsPath)
+}
+
+func (s hubWebState) AgentSkills(agentName string) ([]web.SkillInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	_ = agentEntry.Workspace // workspace path resolved by skills.Discover via zlawHome
+
+	zlawHome := config.ZlawHome()
+	skills, err := skills.Discover(zlawHome, agentName, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []web.SkillInfo
+	for _, skill := range skills {
+		result = append(result, web.SkillInfo{
+			Name:        skill.Name,
+			Description: skill.Description,
+			Path:        skill.Path,
+			Type:        "file",
+			Enabled:     true,
+		})
+	}
+	return result, nil
+}
+
+// listWorkspaceFiles recursively lists files in dir with metadata.
+func listWorkspaceFiles(dir string) ([]web.FileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var result []web.FileInfo
+	keyFiles := map[string]bool{
+		"SOUL.md":          true,
+		"IDENTITY.md":      true,
+		"agent.toml":       true,
+		"cron.toml":        true,
+		"credentials.toml": true,
+	}
+
+	for _, e := range entries {
+		if e.Name() == "sessions" || e.Name() == "memories" {
+			continue // skip runtime dirs
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		fi := web.FileInfo{
+			Name:     e.Name(),
+			Path:     path,
+			IsDir:    e.IsDir(),
+			Modified: info.ModTime(),
+		}
+		if !e.IsDir() {
+			fi.Size = info.Size()
+			fi.Masked = keyFiles[e.Name()]
+		}
+		result = append(result, fi)
+	}
+	return result, nil
 }
 
 type hubConfigAdapter struct{ cfg config.HubConfig }
