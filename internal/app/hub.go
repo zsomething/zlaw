@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"text/tabwriter"
 	"time"
 
@@ -201,6 +202,8 @@ func (s hubWebState) Agents() []web.AgentInfo {
 	out := make([]web.AgentInfo, 0, len(entries))
 	for _, entry := range entries {
 		info := web.AgentInfo{RegistryEntry: entry}
+		// Sort capabilities alphabetically.
+		sort.Strings(info.Capabilities)
 		if st, ok := statusMap[entry.Name]; ok {
 			info.PID = st.PID
 			info.Running = st.Running
