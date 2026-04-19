@@ -20,6 +20,7 @@ import (
 	"github.com/zsomething/zlaw/internal/hub/web"
 	"github.com/zsomething/zlaw/internal/logging"
 	"github.com/zsomething/zlaw/internal/messaging"
+	"github.com/zsomething/zlaw/internal/tools"
 )
 
 // runHub loads the hub config and starts the hub process. It blocks until ctx is cancelled.
@@ -216,7 +217,7 @@ func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry
 	return hub.ReadAuditLog(s.auditPath, limit, eventType)
 }
 
-func (s hubWebState) Tools() []hub.ToolDefinition {
+func (s hubWebState) Tools() []tools.Definition {
 	return hub.Tools()
 }
 

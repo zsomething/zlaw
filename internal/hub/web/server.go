@@ -12,6 +12,7 @@ import (
 	"github.com/flosch/pongo2/v6"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
+	"github.com/zsomething/zlaw/internal/tools"
 )
 
 // Server is an HTTP server that serves the read-only hub web UI.
@@ -28,8 +29,8 @@ type State interface {
 	NATSAddr() string
 	Agents() []AgentInfo
 	AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error)
-	// Tools returns all hub-level built-in tool definitions.
-	Tools() []hub.ToolDefinition
+	// Tools returns all built-in tool definitions.
+	Tools() []tools.Definition
 }
 
 // AgentInfo merges registry and process state for display.
