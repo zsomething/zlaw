@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Tools — zlaw</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; background: #f9fafb; color: #111; line-height: 1.5; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { background: #1e293b; color: #e2e8f0; padding: 0 1.5rem; }
+    header nav { display: flex; align-items: center; height: 3rem; gap: 2rem; }
+    header .logo { font-weight: 700; font-size: 1rem; color: #f8fafc; }
+    header nav a { color: #94a3b8; }
+    header nav a:hover { color: #f8fafc; }
+    header nav a.active { color: #f8fafc; font-weight: 600; }
+    main { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+    .page-header p { color: #64748b; margin-top: 0.25rem; }
+    .selector { margin-bottom: 1.5rem; }
+    .selector label { font-weight: 600; color: #374151; margin-right: 0.5rem; }
+    .selector select { padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; background: #fff; cursor: pointer; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden; }
+    .tool-header { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; background: #f8fafc; border-bottom: 1px solid transparent; cursor: pointer; }
+    .tool-header:hover { background: #f1f5f9; }
+    .tool-header.open { border-bottom-color: #e5e7eb; }
+    .tool-name { font-weight: 600; font-family: ui-monospace, monospace; color: #2563eb; font-size: 0.9rem; }
+    .tool-body { padding: 1rem; display: none; }
+    .tool-body.open { display: block; }
+    .tool-description { color: #374151; margin-bottom: 1rem; font-size: 0.9rem; }
+    .subsection-title { font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .param { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.625rem 0.875rem; margin-bottom: 0.375rem; }
+    .param:last-child { margin-bottom: 0; }
+    .param-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.125rem; }
+    .param-name { font-family: ui-monospace, monospace; font-weight: 600; color: #1e293b; }
+    .param-type { font-size: 0.7rem; color: #64748b; background: #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; }
+    .param-required { font-size: 0.65rem; color: #dc2626; background: #fee2e2; padding: 0.1rem 0.35rem; border-radius: 4px; }
+    .param-desc { font-size: 0.8rem; color: #64748b; }
+    .no-tools, .no-params { color: #94a3b8; font-style: italic; font-size: 0.8rem; }
+    .toggle-icon { font-size: 1rem; color: #94a3b8; transition: transform 0.2s; }
+    .tool-header.open .toggle-icon { transform: rotate(180deg); }
+    footer { text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <span class="logo">zlaw</span>
+      <a href="/">Overview</a>
+      <a href="/tools">Hub Tools</a>
+      <a href="/agents">Agents</a>
+      <a href="/agents/tools" class="active">Agent Tools</a>
+      <a href="/audit">Audit Log</a>
+    </nav>
+  </header>
+  <main>
+    <div class="page-header">
+      <h1>Agent Tools</h1>
+      <p>Available tools per agent, sorted alphabetically.</p>
+    </div>
+    <div class="selector">
+      <label for="agent-select">Agent:</label>
+      <select id="agent-select">
+        <option value="">— Select agent —</option>
+      </select>
+    </div>
+    <div id="tools-list">
+      <p style="color:#64748b; text-align:center; padding:2rem;">Select an agent to view tools</p>
+    </div>
+  </main>
+  <footer>
+    zlaw hub — read-only
+  </footer>
+  <script>
+    let currentAgent = '';
+    let allAgents = [];
+    let globalTools = [];
+
+    async function loadAgents() {
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) throw new Error('Failed to load agents');
+        const data = await res.json();
+        allAgents = Array.isArray(data) ? data : [data];
+        populateAgentSelect(allAgents);
+      } catch (e) {
+        document.getElementById('tools-list').innerHTML =
+          '<p style="color:#dc2626; text-align:center;">Error loading agents</p>';
+      }
+    }
+
+    async function loadGlobalTools() {
+      try {
+        const res = await fetch('/api/tools');
+        if (!res.ok) throw new Error('Failed to load tools');
+        const data = await res.json();
+        globalTools = data.tools || [];
+      } catch (e) {}
+    }
+
+    function populateAgentSelect(agents) {
+      const select = document.getElementById('agent-select');
+      agents.forEach(agent => {
+        const opt = document.createElement('option');
+        opt.value = agent.Name;
+        opt.textContent = agent.Name;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderTools(tools, agentName) {
+      const container = document.getElementById('tools-list');
+      
+      if (!tools || tools.length === 0) {
+        container.innerHTML = '<p class="no-tools">No tools available for this agent</p>';
+        return;
+      }
+
+      container.innerHTML = tools.map(tool => {
+        let params = '<p class="no-params">No parameters</p>';
+        if (tool.parameters && tool.parameters.length > 0) {
+          params = tool.parameters.map(p => `
+            <div class="param">
+              <div class="param-header">
+                <span class="param-name">${p.name}</span>
+                ${p.type ? '<span class="param-type">' + p.type + '</span>' : ''}
+                ${p.required ? '<span class="param-required">required</span>' : ''}
+              </div>
+              ${p.description ? '<div class="param-desc">' + p.description + '</div>' : ''}
+            </div>
+          `).join('');
+        }
+
+        return `
+        <div class="card">
+          <div class="tool-header" onclick="toggleTool(this)">
+            <span class="tool-name">${tool.name}</span>
+            <span class="toggle-icon">▾</span>
+          </div>
+          <div class="tool-body">
+            <p class="tool-description">${tool.description || '—'}</p>
+            <p class="subsection-title">Parameters</p>
+            ${params}
+          </div>
+        </div>
+        `;
+      }).join('');
+    }
+
+    function toggleTool(header) {
+      header.classList.toggle('open');
+      header.nextElementSibling.classList.toggle('open');
+    }
+
+    document.getElementById('agent-select').addEventListener('change', async function(e) {
+      currentAgent = e.target.value;
+      if (!currentAgent) {
+        document.getElementById('tools-list').innerHTML =
+          '<p style="color:#64748b; text-align:center; padding:2rem;">Select an agent to view tools</p>';
+        return;
+      }
+
+      document.getElementById('tools-list').innerHTML =
+        '<p style="color:#64748b; text-align:center; padding:2rem;">Loading...</p>';
+
+      try {
+        const res = await fetch('/api/agents/tools?agent=' + encodeURIComponent(currentAgent));
+        if (!res.ok) throw new Error('Failed to load tools');
+        const data = await res.json();
+        renderTools(data.tools || [], currentAgent);
+      } catch (e) {
+        // Fall back to global tools if agent-specific endpoint not available
+        renderTools(globalTools, currentAgent);
+      }
+    });
+
+    loadAgents();
+    loadGlobalTools();
+  </script>
+</body>
+</html>
