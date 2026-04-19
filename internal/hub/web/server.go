@@ -185,27 +185,27 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"NATSAddr":       s.state.NATSAddr(),
 		"Agents":         s.state.Agents(),
 	}
-	s.serveTemplate(w, "templates/pages/index.html", data)
+	s.serveTemplate(w, "index.html", data)
 }
 
 // handleAuditPage serves the audit log HTML page.
 func (s *Server) handleAuditPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/audit.html", pongo2.Context{})
+	s.serveTemplate(w, "audit.html", pongo2.Context{})
 }
 
 // handleToolsPage serves the hub tools HTML page.
 func (s *Server) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/tools.html", pongo2.Context{})
+	s.serveTemplate(w, "tools.html", pongo2.Context{})
 }
 
 // handleAgentsPage serves the agents overview HTML page.
 func (s *Server) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/agents.html", pongo2.Context{})
+	s.serveTemplate(w, "agents.html", pongo2.Context{})
 }
 
 // handleAgentDetailPage serves the agent detail HTML page.
 func (s *Server) handleAgentDetailPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "templates/pages/agent_detail.html", pongo2.Context{})
+	s.serveTemplate(w, "agent_detail.html", pongo2.Context{})
 }
 
 // handleHub returns hub identity and NATS status as JSON.
