@@ -216,8 +216,8 @@ func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry
 	return hub.ReadAuditLog(s.auditPath, limit, eventType)
 }
 
-func (s hubWebState) Tools() []hub.HubToolDefinition {
-	return hub.GlobalTools()
+func (s hubWebState) Tools() []hub.ToolDefinition {
+	return hub.Tools()
 }
 
 type hubConfigAdapter struct{ cfg config.HubConfig }

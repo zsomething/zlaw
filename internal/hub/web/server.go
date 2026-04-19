@@ -29,7 +29,7 @@ type State interface {
 	Agents() []AgentInfo
 	AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error)
 	// Tools returns all hub-level built-in tool definitions.
-	Tools() []hub.HubToolDefinition
+	Tools() []hub.ToolDefinition
 }
 
 // AgentInfo merges registry and process state for display.

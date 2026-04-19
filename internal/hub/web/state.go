@@ -12,7 +12,7 @@ type StateFuncs struct {
 	NATSAddrFn     func() string
 	AgentsFn       func() []AgentInfo
 	AuditEntriesFn func(limit int, eventType string) ([]hub.AuditEntry, error)
-	ToolsFn        func() []hub.HubToolDefinition
+	ToolsFn        func() []hub.ToolDefinition
 }
 
 func (s StateFuncs) HubConfig() config.HubConfig { return s.HubConfigFn() }
@@ -21,4 +21,4 @@ func (s StateFuncs) Agents() []AgentInfo         { return s.AgentsFn() }
 func (s StateFuncs) AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error) {
 	return s.AuditEntriesFn(limit, eventType)
 }
-func (s StateFuncs) Tools() []hub.HubToolDefinition { return s.ToolsFn() }
+func (s StateFuncs) Tools() []hub.ToolDefinition { return s.ToolsFn() }
