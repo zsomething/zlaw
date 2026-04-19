@@ -206,6 +206,7 @@ func (s hubWebState) Agents() []web.AgentInfo {
 	for _, entry := range entries {
 		info := web.AgentInfo{
 			ID:            entry.Name,
+			Name:          entry.Name, // populated from agent.toml name field if different
 			Version:       entry.Version,
 			Capabilities:  entry.Capabilities,
 			Roles:         entry.Roles,

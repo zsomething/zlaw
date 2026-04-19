@@ -62,7 +62,7 @@
           {% if Agents %}
             {% for agent in Agents %}
             <tr>
-              <td><a href="/agents/{{ agent.Name|urlencode }}"><strong>{{ agent.Name }}</strong></a></td>
+              <td><a href="/agents/{{ agent.id|urlencode }}"><strong>{{ agent.name }}</strong></a></td>
               <td>
                 {% if agent.Running %}<span class="badge badge-running">running</span>
                 {% elif agent.Status == "connected" %}<span class="badge badge-connected">connected</span>

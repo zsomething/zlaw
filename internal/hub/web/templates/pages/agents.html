@@ -63,7 +63,7 @@
         <div class="card">
           <div class="agent-card">
             <div class="agent-header">
-              <a href="/agents/${encodeURIComponent(agent.Name)}" class="agent-name">${agent.Name || 'Unknown'}</a>
+              <a href="/agents/${encodeURIComponent(agent.id)}" class="agent-name">${agent.name || 'Unknown'}</a>
               ${statusBadge}
             </div>
             <div class="agent-stats">
@@ -80,7 +80,7 @@
                 <div class="value mono">${agent.LastHeartbeat ? new Date(agent.LastHeartbeat).toLocaleString() : '—'}</div>
               </div>
             </div>
-            <a href="/agents/${encodeURIComponent(agent.Name)}" class="view-btn">View Details →</a>
+            <a href="/agents/${encodeURIComponent(agent.id)}" class="view-btn">View Details →</a>
           </div>
         </div>
         `;

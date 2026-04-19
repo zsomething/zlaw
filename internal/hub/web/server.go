@@ -47,8 +47,8 @@ type State interface {
 
 // AgentInfo merges registry and process state for display.
 type AgentInfo struct {
-	ID            string              `json:"name"`
-	Name          string              `json:"-"` // display name, populated by caller if different
+	ID            string              `json:"id"`
+	Name          string              `json:"name"`
 	Version       string              `json:"version"`
 	Capabilities  []string            `json:"capabilities"`
 	Roles         []string            `json:"roles"`
