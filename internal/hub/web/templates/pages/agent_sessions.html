@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Sessions — zlaw</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; background: #f9fafb; color: #111; line-height: 1.5; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { background: #1e293b; color: #e2e8f0; padding: 0 1.5rem; }
+    header nav { display: flex; align-items: center; height: 3rem; gap: 2rem; }
+    header .logo { font-weight: 700; font-size: 1rem; color: #f8fafc; }
+    header nav a { color: #94a3b8; }
+    header nav a:hover { color: #f8fafc; }
+    header nav a.active { color: #f8fafc; font-weight: 600; }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+    .page-header p { color: #64748b; margin-top: 0.25rem; }
+    .selector { margin-bottom: 1.5rem; }
+    .selector label { font-weight: 600; color: #374151; margin-right: 0.5rem; }
+    .selector select { padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; background: #fff; cursor: pointer; }
+    .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; }
+    .tab { padding: 0.75rem 1.25rem; font-weight: 500; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: #374151; }
+    .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
+    .card-header { padding: 1rem 1.25rem; background: #f8fafc; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    .card-header h2 { font-size: 1rem; font-weight: 600; color: #374151; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; cursor: pointer; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
+    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .badge-active { background: #dcfce7; color: #166534; }
+    .badge-inactive { background: #f1f5f9; color: #64748b; }
+    .context-section { margin-bottom: 1.5rem; }
+    .context-section h3 { font-size: 0.9rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem; }
+    .context-block { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
+    .msg-role { font-weight: 600; color: #2563eb; }
+    .msg-role.assistant { color: #7c3aed; }
+    .msg-role.tool { color: #059669; }
+    .msg-content { margin-top: 0.25rem; white-space: pre-wrap; word-break: break-word; }
+    .message { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+    .message:last-child { border-bottom: none; }
+    footer { text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <span class="logo">zlaw</span>
+      <a href="/">Overview</a>
+      <a href="/tools">Hub Tools</a>
+      <a href="/agents">Agents</a>
+      <a href="/agents/tools">Agent Tools</a>
+      <a href="/agents/sessions" class="active">Sessions</a>
+      <a href="/audit">Audit Log</a>
+    </nav>
+  </header>
+  <main>
+    <div class="page-header">
+      <h1>Agent Sessions</h1>
+      <p>Inspect agent sessions and compiled context for debugging.</p>
+    </div>
+    <div class="selector">
+      <label for="agent-select">Agent:</label>
+      <select id="agent-select">
+        <option value="">— Select agent —</option>
+      </select>
+    </div>
+
+    <div id="sessions-view" style="display:none;">
+      <div class="tabs">
+        <div class="tab active" data-tab="sessions">Session List</div>
+        <div class="tab" data-tab="detail">Session Detail</div>
+        <div class="tab" data-tab="context">Compiled Context</div>
+      </div>
+
+      <div id="tab-sessions">
+        <div class="card">
+          <div class="card-header">
+            <h2>Sessions</h2>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Session ID</th>
+                <th>Channel</th>
+                <th>Messages</th>
+                <th>Created</th>
+                <th>Last Activity</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-table">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-detail" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <h2>Session Messages</h2>
+            <span id="session-id-display" class="mono"></span>
+          </div>
+          <div id="messages-list">
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-context" style="display:none;">
+        <div class="context-section">
+          <h3>System Prompt</h3>
+          <div id="context-system" class="context-block"></div>
+        </div>
+        <div class="context-section">
+          <h3>Tool Definitions</h3>
+          <div id="context-tools" class="context-block"></div>
+        </div>
+        <div class="context-section">
+          <h3>Memories</h3>
+          <div id="context-memories" class="context-block"></div>
+        </div>
+        <div class="context-section">
+          <h3>Recent Messages</h3>
+          <div id="context-recent" class="context-block"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    zlaw hub — read-only
+  </footer>
+  <script>
+    let selectedAgent = '';
+    let selectedSession = '';
+    let allAgents = [];
+
+    async function loadAgents() {
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) throw new Error('Failed to load agents');
+        const data = await res.json();
+        allAgents = Array.isArray(data) ? data : [data];
+        populateAgentSelect(allAgents);
+      } catch (e) {}
+    }
+
+    function populateAgentSelect(agents) {
+      const select = document.getElementById('agent-select');
+      agents.forEach(agent => {
+        const opt = document.createElement('option');
+        opt.value = agent.Name;
+        opt.textContent = agent.Name;
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadSessions() {
+      if (!selectedAgent) return;
+      try {
+        const res = await fetch('/api/agents/sessions?agent=' + encodeURIComponent(selectedAgent));
+        if (!res.ok) throw new Error('Failed to load sessions');
+        const data = await res.json();
+        renderSessions(Array.isArray(data) ? data : [data]);
+      } catch (e) {
+        document.getElementById('sessions-table').innerHTML = '<tr><td colspan="6" style="color:#dc2626;">Error loading sessions</td></tr>';
+      }
+    }
+
+    function renderSessions(sessions) {
+      const tbody = document.getElementById('sessions-table');
+      if (!sessions.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#94a3b8; text-align:center;">No sessions found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = sessions.map(s => `
+        <tr onclick="selectSession('${s.session_id}')">
+          <td class="mono">${s.session_id.substring(0, 12)}...</td>
+          <td>${s.channel || '—'}</td>
+          <td>${s.message_count || 0}</td>
+          <td class="mono">${s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</td>
+          <td class="mono">${s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'}</td>
+          <td>${s.active ? '<span class="badge badge-active">active</span>' : '<span class="badge badge-inactive">inactive</span>'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function selectSession(sessionId) {
+      selectedSession = sessionId;
+      document.getElementById('session-id-display').textContent = sessionId;
+      showTab('detail');
+      loadSessionMessages();
+    }
+
+    async function loadSessionMessages() {
+      if (!selectedAgent || !selectedSession) return;
+      try {
+        const res = await fetch('/api/agents/sessions/' + selectedSession + '?agent=' + encodeURIComponent(selectedAgent));
+        if (!res.ok) throw new Error('Failed to load messages');
+        const data = await res.json();
+        renderMessages(data.messages || []);
+      } catch (e) {
+        document.getElementById('messages-list').innerHTML = '<p style="color:#dc2626; padding:1rem;">Error loading messages</p>';
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('messages-list');
+      if (!messages.length) {
+        container.innerHTML = '<p style="color:#94a3b8; padding:1rem;">No messages in this session</p>';
+        return;
+      }
+      container.innerHTML = messages.map(m => `
+        <div class="message">
+          <div class="msg-role ${m.role}">${m.role}</div>
+          <div class="msg-content">${escapeHtml(m.content || '').substring(0, 2000)}${m.content && m.content.length > 2000 ? '...' : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function loadContext() {
+      if (!selectedAgent || !selectedSession) return;
+      try {
+        const res = await fetch('/api/agents/sessions/' + selectedSession + '?agent=' + encodeURIComponent(selectedAgent) + '&view=context');
+        if (!res.ok) throw new Error('Failed to load context');
+        const data = await res.json();
+        document.getElementById('context-system').textContent = data.system_prompt || '(none)';
+        document.getElementById('context-tools').textContent = (data.tool_definitions || []).join('\\n') || '(none)';
+        document.getElementById('context-memories').textContent = (data.memories || []).join('\\n') || '(none)';
+        document.getElementById('context-recent').textContent = data.recent_messages + ' messages in recent history';
+      } catch (e) {
+        document.getElementById('context-system').textContent = 'Error loading context';
+      }
+    }
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+      document.getElementById('tab-sessions').style.display = tabName === 'sessions' ? 'block' : 'none';
+      document.getElementById('tab-detail').style.display = tabName === 'detail' ? 'block' : 'none';
+      document.getElementById('tab-context').style.display = tabName === 'context' ? 'block' : 'none';
+      if (tabName === 'context') loadContext();
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => showTab(tab.dataset.tab));
+    });
+
+    document.getElementById('agent-select').addEventListener('change', async function(e) {
+      selectedAgent = e.target.value;
+      selectedSession = '';
+      if (!selectedAgent) {
+        document.getElementById('sessions-view').style.display = 'none';
+        return;
+      }
+      document.getElementById('sessions-view').style.display = 'block';
+      showTab('sessions');
+      await loadSessions();
+    });
+
+    loadAgents();
+  </script>
+</body>
+</html>
