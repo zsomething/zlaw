@@ -1,304 +1,255 @@
 {% extends "base.html" %}
 
-{% block title %}Agent — zlaw{% endblock %}
-
-{% block styles %}
-    .page-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-    .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
-    .page-header .back { font-size: 0.85rem; color: #64748b; }
-    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
-    .badge-running { background: #dcfce7; color: #166534; }
-    .badge-connected { background: #dcfce7; color: #166534; }
-    .badge-disconnected { background: #fee2e2; color: #991b1b; }
-    .badge-cap { background: #e0f2fe; color: #0c4a6e; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 1.5rem; overflow: hidden; }
-    .card-header { padding: 1rem 1.25rem; background: #f8fafc; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
-    .card-header h2 { font-size: 1rem; font-weight: 600; color: #374151; }
-    .card-body { padding: 1.25rem; }
-    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
-    .stat { background: #f8fafc; border-radius: 6px; padding: 1rem; }
-    .stat .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat .value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; color: #1e293b; }
-    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
-    .section-nav { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 1rem; }
-    .section-tab { padding: 0.75rem 1.25rem; font-weight: 500; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .section-tab:hover { color: #374151; }
-    .section-tab.active { color: #2563eb; border-bottom-color: #2563eb; }
-    .section-content { display: none; }
-    .section-content.active { display: block; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; }
-    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f8fafc; }
-    .tool-item, .skill-item { padding: 0.875rem 1rem; border-bottom: 1px solid #f1f5f9; }
-    .tool-item:last-child, .skill-item:last-child { border-bottom: none; }
-    .tool-name, .skill-name { font-weight: 600; font-family: ui-monospace, monospace; color: #2563eb; }
-    .tool-desc, .skill-desc { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
-    .file-row { display: flex; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
-    .file-row:last-child { border-bottom: none; }
-    .file-row:hover { background: #f8fafc; }
-    .file-icon { margin-right: 0.75rem; color: #64748b; }
-    .file-name { flex: 1; font-weight: 500; color: #374151; }
-    .file-meta { color: #64748b; font-size: 0.8rem; }
-    .loading { color: #64748b; text-align: center; padding: 2rem; }
-    .error { color: #dc2626; text-align: center; padding: 2rem; }
-    .no-data { color: #94a3b8; text-align: center; padding: 1rem; }
-{% endblock %}
+{% block title %}{{ Agent.Name|default:AgentID }} — zlaw{% endblock %}
 
 {% block content %}
-    <div class="page-header">
-      <a href="/agents" class="back">← All Agents</a>
-      <h1 id="agent-name">Loading...</h1>
+<div id="page-content">
+  <!-- Back link and header -->
+  <div class="mb-6">
+    <a href="/agents" class="btn btn-sm btn-ghost mb-4" hx-boost="true" hx-target="#page-content" hx-push-url="true">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+      All Agents
+    </a>
+    
+    <div class="flex justify-between items-center">
+      <h1 class="text-2xl font-bold flex items-center gap-3">
+        <span class="text-2xl">🤖</span>
+        {{ Agent.Name|default:AgentID }}
+        {% if Agent.Running %}
+          <div class="badge badge-success gap-1">
+            <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+            running
+          </div>
+        {% elif Agent.Status == "connected" %}
+          <div class="badge badge-success">connected</div>
+        {% else %}
+          <div class="badge badge-error">{{ Agent.Status|default:"disconnected" }}</div>
+        {% endif %}
+      </h1>
     </div>
+  </div>
 
-    <div id="agent-detail">
-      <p class="loading">Loading agent details...</p>
+  {% if not Agent %}
+  <!-- Agent not found -->
+  <div class="alert alert-error">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    <span>Agent not found: {{ AgentID }}</span>
+  </div>
+  {% else %}
+
+  <!-- Agent Overview Card -->
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-4">Overview</h2>
+      
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">Agent ID</div>
+          <div class="stat-value text-lg font-mono">{{ Agent.ID }}</div>
+        </div>
+        
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">Agent Name</div>
+          <div class="stat-value text-lg font-mono">{{ Agent.Name|default:"—" }}</div>
+        </div>
+        
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">PID</div>
+          <div class="stat-value text-lg font-mono">{% if Agent.PID %}{{ Agent.PID }}{% else %}—{% endif %}</div>
+        </div>
+        
+        <div class="stat bg-base-200 rounded-lg">
+          <div class="stat-title">Version</div>
+          <div class="stat-value text-lg font-mono">{{ Agent.Version|default:"—" }}</div>
+        </div>
+      </div>
+      
+      <div class="mt-4">
+        <div class="text-sm font-semibold opacity-60 mb-2">Status</div>
+        <div class="text-lg">
+          {% if Agent.Running %}
+            <span class="badge badge-success gap-1">
+              <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+              running
+            </span>
+          {% elif Agent.Status == "connected" %}
+            <span class="badge badge-info">connected</span>
+          {% else %}
+            <span class="badge badge-error">{{ Agent.Status|default:"offline" }}</span>
+          {% endif %}
+        </div>
+      </div>
+      
+      {% if Agent.LastHeartbeat %}
+      <div class="mt-3">
+        <div class="text-sm font-semibold opacity-60 mb-1">Last Heartbeat</div>
+        <div class="text-lg font-mono">{{ Agent.LastHeartbeat|date:"Y-m-d H:i:s" }}</div>
+      </div>
+      {% endif %}
+      
+      {% if Agent.Capabilities %}
+      <div class="mt-4">
+        <div class="text-sm font-semibold opacity-60 mb-2">Capabilities</div>
+        <div class="flex flex-wrap gap-2">
+          {% for cap in Agent.Capabilities %}
+          <span class="badge badge-primary badge-outline">{{ cap }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </div>
-{% endblock %}
+  </div>
 
-{% block scripts %}
+  <!-- Tabs -->
+  <div role="tablist" class="tabs tabs-boxed bg-base-200 mb-6">
+    <a role="tab" class="tab tab-active" data-tab="tools">Tools</a>
+    <a role="tab" class="tab" data-tab="sessions">Sessions</a>
+    <a role="tab" class="tab" data-tab="files">Files</a>
+    <a role="tab" class="tab" data-tab="skills">Skills</a>
+  </div>
+
+  <!-- Tab Content -->
+  <div id="tab-content">
+    <!-- Tools Tab -->
+    <div id="panel-tools" role="tabpanel" class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <div class="card-title">Available Tools</div>
+        <div id="tools-content"
+             hx-get="/partials/agent-tools?agent={{ AgentID|urlencode }}" 
+             hx-trigger="load"
+             hx-swap="innerHTML">
+          <div class="text-center py-8">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Sessions Tab (hidden by default) -->
+    <div id="panel-sessions" role="tabpanel" class="card bg-base-100 shadow-sm hidden">
+      <div class="card-body">
+        <div class="card-title">Sessions</div>
+        <div id="sessions-content"
+             hx-get="/partials/agent-sessions?agent={{ AgentID|urlencode }}" 
+             hx-trigger="load"
+             hx-swap="innerHTML">
+          <div class="text-center py-8">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Files Tab -->
+    <div id="panel-files" role="tabpanel" class="card bg-base-100 shadow-sm hidden">
+      <div class="card-body">
+        <div class="card-title">Workspace Files</div>
+        <div id="files-loading" class="text-center py-8">
+          <span class="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+        <div id="files-content" class="hidden"></div>
+      </div>
+    </div>
+    
+    <!-- Skills Tab -->
+    <div id="panel-skills" role="tabpanel" class="card bg-base-100 shadow-sm hidden">
+      <div class="card-body">
+        <div class="card-title">Skills</div>
+        <div id="skills-loading" class="text-center py-8">
+          <span class="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+        <div id="skills-content" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+{% block page_scripts %}
 <script>
-    // Get agent ID from URL path: /agents/{agentID}
-    const pathParts = window.location.pathname.split('/');
-    const agentID = decodeURIComponent(pathParts[3] || '');
-
-    document.title = agentID + ' — zlaw';
-
-    async function loadAgent() {
-      try {
-        const res = await fetch('/api/agents/' + encodeURIComponent(agentID));
-        if (!res.ok) throw new Error('Agent not found');
-        const data = await res.json();
-        renderAgent(data);
-      } catch (e) {
-        document.getElementById('agent-detail').innerHTML = '<p class="error">Error loading agent: ' + e.message + '</p>';
-      }
-    }
-
-    function renderAgent(agent) {
-      // Use id for URL routing, name for display
-      const displayName = agent.name || agent.id;
-      document.getElementById('agent-name').textContent = displayName;
-      const statusBadge = agent.Running 
-        ? '<span class="badge badge-running">running</span>'
-        : agent.Status === 'connected'
-          ? '<span class="badge badge-connected">connected</span>'
-          : '<span class="badge badge-disconnected">' + (agent.Status || 'unknown') + '</span>';
-
-      const capabilities = (agent.Capabilities || []).map(c => 
-        '<span class="badge badge-cap">' + c + '</span>'
-      ).join(' ');
-
-      document.getElementById('agent-detail').innerHTML = `
-        <div class="card">
-          <div class="card-body">
-            <div class="stat-grid">
-              <div class="stat">
-                <div class="label">ID</div>
-                <div class="value mono">${agent.id || '—'}</div>
-              </div>
-              <div class="stat">
-                <div class="label">Name</div>
-                <div class="value">${agent.name || '—'}</div>
-              </div>
-              <div class="stat">
-                <div class="label">Status</div>
-                <div class="value">${statusBadge}</div>
-              </div>
-              <div class="stat">
-                <div class="label">PID</div>
-                <div class="value mono">${agent.PID || '—'}</div>
-              </div>
-              <div class="stat">
-                <div class="label">Version</div>
-                <div class="value mono">${agent.Version || '—'}</div>
-              </div>
-              <div class="stat">
-                <div class="label">Last Heartbeat</div>
-                <div class="value mono">${agent.LastHeartbeat ? new Date(agent.LastHeartbeat).toLocaleString() : '—'}</div>
-              </div>
-            </div>
-            ${capabilities ? '<div style="margin-top:1rem;"><div class="label" style="font-size:0.75rem;color:#64748b;text-transform:uppercase;margin-bottom:0.5rem;">Capabilities</div>' + capabilities + '</div>' : ''}
-          </div>
-        </div>
-
-        <div class="section-nav">
-          <div class="section-tab active" data-section="tools">Tools</div>
-          <div class="section-tab" data-section="sessions">Sessions</div>
-          <div class="section-tab" data-section="files">Files</div>
-          <div class="section-tab" data-section="skills">Skills</div>
-        </div>
-
-        <div id="section-tools" class="section-content active">
-          <div class="card">
-            <div class="card-header"><h2>Available Tools</h2></div>
-            <div id="tools-list"><p class="loading">Loading...</p></div>
-          </div>
-        </div>
-
-        <div id="section-sessions" class="section-content">
-          <div class="card">
-            <div class="card-header"><h2>Sessions</h2></div>
-            <div id="sessions-list"><p class="loading">Loading...</p></div>
-          </div>
-        </div>
-
-        <div id="section-files" class="section-content">
-          <div class="card">
-            <div class="card-header"><h2>Workspace Files</h2></div>
-            <div id="files-list"><p class="loading">Loading...</p></div>
-          </div>
-        </div>
-
-        <div id="section-skills" class="section-content">
-          <div class="card">
-            <div class="card-header"><h2>Skills</h2></div>
-            <div id="skills-list"><p class="loading">Loading...</p></div>
-          </div>
-        </div>
-      `;
-
-      // Tab switching
-      document.querySelectorAll('.section-tab').forEach(tab => {
-        tab.addEventListener('click', () => showSection(tab.dataset.section));
+  // Tab switching
+  const tabs = document.querySelectorAll('[role="tab"]');
+  const panels = document.querySelectorAll('[role="tabpanel"]');
+  const agentID = '{{ AgentID }}';
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('tab-active'));
+      tab.classList.add('tab-active');
+      
+      const target = tab.dataset.tab;
+      panels.forEach(p => {
+        if (p.id === 'panel-' + target) {
+          p.classList.remove('hidden');
+        } else {
+          p.classList.add('hidden');
+        }
       });
-
-      // Load section data
-      loadTools();
-      loadSessions();
-      loadFiles();
-      loadSkills();
-    }
-
-    function showSection(section) {
-      document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
-      document.querySelector('[data-section="' + section + '"]').classList.add('active');
-      document.querySelectorAll('.section-content').forEach(c => c.classList.remove('active'));
-      document.getElementById('section-' + section).classList.add('active');
-    }
-
-    async function loadTools() {
-      try {
-        const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/tools');
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        renderTools(data.tools || []);
-      } catch (e) {
-        document.getElementById('tools-list').innerHTML = '<p class="error">Failed to load tools</p>';
+      
+      if (target === 'files') {
+        loadFiles();
+      } else if (target === 'skills') {
+        loadSkills();
       }
-    }
-
-    function renderTools(tools) {
-      const container = document.getElementById('tools-list');
-      if (!tools.length) {
-        container.innerHTML = '<p class="no-data">No tools available</p>';
-        return;
-      }
-      container.innerHTML = tools.map(t => `
-        <div class="tool-item">
-          <div class="tool-name">${t.name}</div>
-          <div class="tool-desc">${t.description || '—'}</div>
-        </div>
-      `).join('');
-    }
-
-    async function loadSessions() {
-      try {
-        const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/sessions');
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        renderSessions(Array.isArray(data) ? data : [data]);
-      } catch (e) {
-        document.getElementById('sessions-list').innerHTML = '<p class="error">Failed to load sessions</p>';
-      }
-    }
-
-    function renderSessions(sessions) {
-      const container = document.getElementById('sessions-list');
-      if (!sessions.length) {
-        container.innerHTML = '<p class="no-data">No sessions found</p>';
-        return;
-      }
-      container.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>Session ID</th>
-              <th>Channel</th>
-              <th>Messages</th>
-              <th>Created</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sessions.map(s => `
-              <tr>
-                <td class="mono">${s.session_id.substring(0, 12)}...</td>
-                <td>${s.channel || '—'}</td>
-                <td>${s.message_count || 0}</td>
-                <td class="mono">${s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</td>
-                <td>${s.active ? '<span class="badge badge-connected">active</span>' : '<span class="badge badge-disconnected">inactive</span>'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-    }
-
-    async function loadFiles() {
-      try {
-        const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/files');
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        renderFiles(Array.isArray(data) ? data : [data]);
-      } catch (e) {
-        document.getElementById('files-list').innerHTML = '<p class="error">Failed to load files</p>';
-      }
-    }
-
-    function renderFiles(files) {
-      const container = document.getElementById('files-list');
+    });
+  });
+  
+  async function loadFiles() {
+    const loading = document.getElementById('files-loading');
+    const content = document.getElementById('files-content');
+    
+    try {
+      const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/files');
+      const files = await res.json();
+      
       if (!files.length) {
-        container.innerHTML = '<p class="no-data">No files found</p>';
-        return;
+        content.innerHTML = '<div class="text-center py-8 text-base-content/50"><div class="text-4xl mb-2">📁</div>No files found</div>';
+      } else {
+        content.innerHTML = '<div class="space-y-1">' + files.map(f => 
+          '<div class="flex items-center gap-3 p-2 hover:bg-base-200 rounded">' +
+          '<span>' + (f.is_dir ? '📁' : '📄') + '</span>' +
+          '<span class="font-medium">' + f.name + '</span>' +
+          '<span class="text-sm opacity-50 ml-auto">' + (f.modified ? new Date(f.modified).toLocaleString() : '') + '</span>' +
+          (f.masked ? '<span class="badge badge-sm badge-ghost">masked</span>' : '') +
+          '</div>'
+        ).join('') + '</div>';
       }
-      container.innerHTML = files.map(f => `
-        <div class="file-row">
-          <span class="file-icon">${f.is_dir ? '📁' : '📄'}</span>
-          <span class="file-name">${f.name}${f.masked ? ' [masked]' : ''}</span>
-          <div class="file-meta">
-            <span class="mono">${f.modified ? new Date(f.modified).toLocaleString() : '—'}</span>
-          </div>
-        </div>
-      `).join('');
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+    } catch (e) {
+      content.innerHTML = '<div class="alert alert-error">Failed to load files</div>';
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
     }
-
-    async function loadSkills() {
-      try {
-        const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/skills');
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        renderSkills(Array.isArray(data) ? data : [data]);
-      } catch (e) {
-        document.getElementById('skills-list').innerHTML = '<p class="error">Failed to load skills</p>';
-      }
-    }
-
-    function renderSkills(skills) {
-      const container = document.getElementById('skills-list');
+  }
+  
+  async function loadSkills() {
+    const loading = document.getElementById('skills-loading');
+    const content = document.getElementById('skills-content');
+    
+    try {
+      const res = await fetch('/api/agents/' + encodeURIComponent(agentID) + '/skills');
+      const skills = await res.json();
+      
       if (!skills.length) {
-        container.innerHTML = '<p class="no-data">No skills found</p>';
-        return;
+        content.innerHTML = '<div class="text-center py-8 text-base-content/50"><div class="text-4xl mb-2">📚</div>No skills found</div>';
+      } else {
+        content.innerHTML = '<div class="grid gap-3">' + skills.map(s => 
+          '<div class="p-3 bg-base-200 rounded-lg">' +
+          '<div class="font-semibold">' + s.name + '</div>' +
+          '<div class="text-sm opacity-70">' + (s.description || 'No description') + '</div>' +
+          '</div>'
+        ).join('') + '</div>';
       }
-      container.innerHTML = skills.map(s => `
-        <div class="skill-item">
-          <div class="skill-name">${s.name}</div>
-          <div class="skill-desc">${s.description || '—'}</div>
-        </div>
-      `).join('');
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+    } catch (e) {
+      content.innerHTML = '<div class="alert alert-error">Failed to load skills</div>';
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
     }
-
-    loadAgent();
-  </script>
+  }
+</script>
+{% endblock %}
 {% endblock %}

@@ -2,87 +2,118 @@
 
 {% block title %}Audit Log — zlaw{% endblock %}
 
-{% block styles %}
-    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: #374151; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
-    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f8fafc; }
-    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
-    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
-{% endblock %}
-
 {% block content %}
-    <section class="card">
-      <h2>Recent Audit Entries</h2>
-      <div style="margin-bottom:1rem; display:flex; gap:0.75rem; align-items:center;">
-        <label style="font-size:0.85rem; color:#64748b;">Filter by type:</label>
-        <select id="type-filter" style="padding:0.3rem 0.5rem; border:1px solid #e5e7eb; border-radius:4px; font-size:0.85rem;">
-          <option value="">all</option>
-          <option value="delegation.sent">delegation.sent</option>
-          <option value="delegation.reply">delegation.reply</option>
-          <option value="agent.register">agent.register</option>
-          <option value="agent.disconnect">agent.disconnect</option>
-          <option value="hub.management">hub.management</option>
-          <option value="error">error</option>
-        </select>
-        <label style="font-size:0.85rem; color:#64748b;">Limit:</label>
-        <input id="limit-input" type="number" value="100" min="10" max="1000" style="width:5rem; padding:0.3rem 0.5rem; border:1px solid #e5e7eb; border-radius:4px; font-size:0.85rem;">
-        <button onclick="loadAudit()" style="padding:0.3rem 0.75rem; background:#2563eb; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.85rem;">Refresh</button>
+<div id="page-content">
+  <div class="flex flex-col gap-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Audit Log</h1>
+    </div>
+    
+    <!-- Filters (htmx v2 - form triggers on change) -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body py-4">
+        <form class="flex flex-wrap gap-4 items-center"
+              hx-get="/partials/audit" 
+              hx-trigger="submit"
+              hx-target="#audit-table-body"
+              hx-swap="innerHTML">
+          
+          <div class="form-control w-full max-w-xs">
+            <label class="label py-1">
+              <span class="label-text">Event Type</span>
+            </label>
+            <select name="type" class="select select-bordered select-sm w-full max-w-xs"
+                    hx-include="closest form">
+              <option value="">all types</option>
+              <option value="delegation.sent">delegation.sent</option>
+              <option value="delegation.reply">delegation.reply</option>
+              <option value="agent.register">agent.register</option>
+              <option value="agent.disconnect">agent.disconnect</option>
+              <option value="hub.management">hub.management</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          
+          <div class="form-control w-full max-w-xs">
+            <label class="label py-1">
+              <span class="label-text">Limit</span>
+            </label>
+            <input type="number" name="limit" value="{{ Limit|default:100 }}" min="10" max="1000" 
+                   class="input input-bordered input-sm w-24"
+                   hx-include="closest form" />
+          </div>
+          
+          <div class="form-control mt-auto">
+            <button type="submit" class="btn btn-sm btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+              Filter
+            </button>
+          </div>
+          
+          <div class="form-control mt-auto">
+            <button type="button" class="btn btn-sm btn-ghost" 
+                    hx-get="/partials/audit"
+                    hx-vals='{"type": "", "limit": "100"}'
+                    hx-target="#audit-table-body"
+                    hx-swap="innerHTML">
+              Reset
+            </button>
+          </div>
+        </form>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Type</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Tool</th>
-            <th>Error</th>
-            <th>Duration</th>
-          </tr>
-        </thead>
-        <tbody id="audit-body">
-          <tr><td colspan="7" style="color:#94a3b8; text-align:center;">Loading…</td></tr>
-        </tbody>
-      </table>
-    </section>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    async function loadAudit() {
-      const type = document.getElementById('type-filter').value;
-      const limit = document.getElementById('limit-input').value || 100;
-      const url = '/api/audit?limit=' + encodeURIComponent(limit) + (type ? '&type=' + encodeURIComponent(type) : '');
-      const tbody = document.getElementById('audit-body');
-      tbody.innerHTML = '<tr><td colspan="7" style="color:#94a3b8; text-align:center;">Loading…</td></tr>';
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('fetch failed');
-        const entries = await res.json();
-        if (!entries.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#94a3b8; text-align:center;">No entries</td></tr>'; return; }
-        tbody.innerHTML = entries.map(e => {
-          const ts = e.ts ? new Date(e.ts).toLocaleString() : '—';
-          const dur = e.duration_ms ? e.duration_ms + 'ms' : '—';
-          const badgeStyle = e.type === 'error' || e.error ? 'background:#fee2e2; color:#991b1b;' : 'background:#f0f9ff; color:#0c4a6e;';
-          return '<tr>' +
-            '<td class="mono">' + esc(ts) + '</td>' +
-            '<td><span class="badge" style="' + badgeStyle + '">' + esc(e.type || '—') + '</span></td>' +
-            '<td class="mono">' + esc(e.from || '—') + '</td>' +
-            '<td class="mono">' + esc(e.to || '—') + '</td>' +
-            '<td class="mono">' + esc(e.tool || '—') + '</td>' +
-            '<td style="color:#dc2626;">' + esc(e.error || '—') + '</td>' +
-            '<td class="mono">' + dur + '</td></tr>';
-        }).join('');
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:#dc2626; text-align:center;">Failed to load audit log</td></tr>';
-      }
-    }
-    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    loadAudit();
-    setInterval(loadAudit, 10000);
-  </script>
+    </div>
+    
+    <!-- Audit table -->
+    <div class="card bg-base-100 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Type</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Tool</th>
+              <th>Error</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody id="audit-table-body">
+            {% if Entries %}
+              {% for entry in Entries %}
+              <tr class="hover">
+                <td class="text-xs font-mono whitespace-nowrap">{{ entry.ts|date:"2006-01-02 15:04:05" }}</td>
+                <td>
+                  {% if entry.type == "error" or entry.error %}
+                    <div class="badge badge-error gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      {{ entry.type }}
+                    </div>
+                  {% else %}
+                    <div class="badge badge-info badge-outline">{{ entry.type }}</div>
+                  {% endif %}
+                </td>
+                <td class="font-mono text-sm">{{ entry.from|default:"—" }}</td>
+                <td class="font-mono text-sm">{{ entry.to|default:"—" }}</td>
+                <td class="font-mono text-sm">{{ entry.tool|default:"—" }}</td>
+                <td class="text-error text-sm max-w-xs truncate" title="{{ entry.error }}">{{ entry.error|default:"—" }}</td>
+                <td class="font-mono text-sm">{% if entry.duration_ms %}{{ entry.duration_ms }}ms{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center py-12">
+                  <div class="text-5xl mb-3">📋</div>
+                  <p class="text-lg opacity-60">No audit entries</p>
+                  <p class="text-sm opacity-40 mt-1">Events will appear here as they occur</p>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

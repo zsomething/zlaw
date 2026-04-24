@@ -35,7 +35,7 @@ auth-list: build
 
 ## vibe-pi: run pi with env from agent.dev
 vibe-pi:
-	@set -a && . ./agent.env && set +a && pi
+	@set -a && . ./agent.env && set +a && omp
 
 ## hooks: install git hooks from .githooks/
 hooks:

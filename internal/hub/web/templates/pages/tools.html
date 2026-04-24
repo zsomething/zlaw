@@ -2,100 +2,89 @@
 
 {% block title %}Hub Tools — zlaw{% endblock %}
 
-{% block styles %}
-    .page-header { margin-bottom: 1.5rem; }
-    .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
-    .page-header p { color: #64748b; margin-top: 0.25rem; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden; }
-    .tool-header { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; background: #f8fafc; border-bottom: 1px solid transparent; cursor: pointer; }
-    .tool-header:hover { background: #f1f5f9; }
-    .tool-header.open { border-bottom-color: #e5e7eb; }
-    .tool-name { font-weight: 600; font-family: ui-monospace, monospace; color: #2563eb; font-size: 0.9rem; }
-    .tool-body { padding: 1rem; display: none; }
-    .tool-body.open { display: block; }
-    .tool-description { color: #374151; margin-bottom: 1rem; font-size: 0.9rem; }
-    .subsection-title { font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
-    .param { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.625rem 0.875rem; margin-bottom: 0.375rem; }
-    .param:last-child { margin-bottom: 0; }
-    .param-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.125rem; }
-    .param-name { font-family: ui-monospace, monospace; font-weight: 600; color: #1e293b; }
-    .param-type { font-size: 0.7rem; color: #64748b; background: #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; }
-    .param-required { font-size: 0.65rem; color: #dc2626; background: #fee2e2; padding: 0.1rem 0.35rem; border-radius: 4px; }
-    .param-desc { font-size: 0.8rem; color: #64748b; }
-    .no-params { color: #94a3b8; font-style: italic; font-size: 0.8rem; }
-    .toggle-icon { font-size: 1rem; color: #94a3b8; transition: transform 0.2s; }
-    .tool-header.open .toggle-icon { transform: rotate(180deg); }
-{% endblock %}
-
 {% block content %}
-    <div class="page-header">
-      <h1>Hub Tools</h1>
-      <p>Built-in tools available in this hub.</p>
-    </div>
-    <div id="tools-list">
-      <p style="color:#64748b; text-align:center; padding:2rem;">Loading...</p>
-    </div>
-{% endblock %}
+<div id="page-content">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">Hub Tools</h1>
+    <p class="opacity-60 mt-1">Built-in tools available to agents</p>
+  </div>
 
-{% block scripts %}
-<script>
-    async function loadTools() {
-      try {
-        const res = await fetch('/api/tools');
-        if (!res.ok) throw new Error('Failed to load tools');
-        const data = await res.json();
-        renderTools(data);
-      } catch (e) {
-        document.getElementById('tools-list').innerHTML =
-          '<p style="color:#dc2626; text-align:center;">Error loading tools</p>';
-      }
-    }
-
-    function renderTools(data) {
-      const container = document.getElementById('tools-list');
-      const tools = data.tools || [];
-      
-      if (!tools.length) {
-        container.innerHTML = '<p style="color:#94a3b8; text-align:center;">No tools available</p>';
-        return;
-      }
-
-      container.innerHTML = tools.map(tool => {
-        let params = '<p class="no-params">No parameters</p>';
-        if (tool.parameters && tool.parameters.length > 0) {
-          params = tool.parameters.map(p => `
-            <div class="param">
-              <div class="param-header">
-                <span class="param-name">${p.name}</span>
-                ${p.type ? '<span class="param-type">' + p.type + '</span>' : ''}
-                ${p.required ? '<span class="param-required">required</span>' : ''}
+  <div class="grid gap-4 md:grid-cols-2">
+    {% if tools %}
+      {% for tool in tools %}
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+          <div class="flex justify-between items-start">
+            <h2 class="card-title font-mono text-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              {{ tool.Name }}
+            </h2>
+          </div>
+          
+          <p class="text-sm opacity-70 mt-2">{{ tool.Description }}</p>
+          
+          {% if tool.Parameters %}
+          <div class="mt-4">
+            <details class="collapse collapse-arrow bg-base-200">
+              <summary class="collapse-title text-sm font-semibold px-2 py-1">
+                Parameters ({{ tool.Parameters|length }})
+              </summary>
+              <div class="collapse-content">
+                <table class="table table-sm table-zebra">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Required</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for param in tool.Parameters %}
+                    <tr>
+                      <td class="font-mono text-sm">{{ param.name }}</td>
+                      <td><span class="badge badge-sm badge-ghost">{{ param.type|default:"—" }}</span></td>
+                      <td class="text-sm">{{ param.description|default:"—" }}</td>
+                      <td>
+                        {% if param.required %}
+                          <span class="badge badge-sm badge-error">required</span>
+                        {% else %}
+                          <span class="badge badge-sm badge-ghost">optional</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
-              ${p.description ? '<div class="param-desc">' + p.description + '</div>' : ''}
-            </div>
-          `).join('');
-        }
-
-        return `
-        <div class="card">
-          <div class="tool-header" onclick="toggleTool(this)">
-            <span class="tool-name">${tool.name}</span>
-            <span class="toggle-icon">▾</span>
+            </details>
           </div>
-          <div class="tool-body">
-            <p class="tool-description">${tool.description || '—'}</p>
-            <p class="subsection-title">Parameters</p>
-            ${params}
-          </div>
+          {% endif %}
         </div>
-        `;
-      }).join('');
-    }
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="col-span-full text-center py-12">
+        <div class="text-5xl mb-3">🔧</div>
+        <p class="text-lg opacity-60">No tools available</p>
+      </div>
+    {% endif %}
+  </div>
 
-    function toggleTool(header) {
-      header.classList.toggle('open');
-      header.nextElementSibling.classList.toggle('open');
-    }
-
-    loadTools();
-  </script>
+  <!-- Summary stats -->
+  <div class="card bg-base-100 shadow-sm mt-6">
+    <div class="card-body">
+      <div class="flex items-center gap-4">
+        <div class="stat py-2">
+          <div class="stat-value text-primary">{{ tools|length }}</div>
+          <div class="stat-title">Total Tools</div>
+        </div>
+        <div class="divider divider-horizontal mx-0"></div>
+        <div class="text-sm opacity-60">
+          Tools are defined in the agent configuration and granted based on agent capabilities.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
