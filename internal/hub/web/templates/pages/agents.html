@@ -2,91 +2,107 @@
 
 {% block title %}Agents — zlaw{% endblock %}
 
-{% block styles %}
-    .page-header { margin-bottom: 1.5rem; }
-    .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
-    .agent-card { padding: 1.25rem; }
-    .agent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
-    .agent-name { font-weight: 600; font-size: 1.1rem; }
-    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
-    .badge-running { background: #dcfce7; color: #166534; }
-    .badge-connected { background: #dcfce7; color: #166534; }
-    .badge-disconnected { background: #fee2e2; color: #991b1b; }
-    .agent-stats { display: flex; gap: 2rem; flex-wrap: wrap; }
-    .agent-stat .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-    .agent-stat .value { font-weight: 500; color: #374151; }
-    .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
-    .view-btn { margin-top: 0.75rem; display: inline-block; padding: 0.5rem 1rem; background: #2563eb; color: #fff; border-radius: 6px; font-size: 0.85rem; font-weight: 500; }
-    .no-agents { color: #94a3b8; text-align: center; padding: 2rem; }
-{% endblock %}
-
 {% block content %}
-    <div class="page-header">
-      <h1>Agents</h1>
+<div id="page-content">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold">Agents</h1>
+    <div class="flex items-center gap-2">
+      <!-- Manual refresh button with htmx -->
+      <button class="btn btn-sm btn-ghost" 
+              hx-get="/partials/agents"
+              hx-target="#agents-container"
+              hx-swap="innerHTML swap:100ms">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Refresh
+      </button>
     </div>
-    <div id="agents-list">
-      <p style="color:#64748b; text-align:center; padding:2rem;">Loading...</p>
-    </div>
-{% endblock %}
+  </div>
 
-{% block scripts %}
-<script>
-    async function loadAgents() {
-      try {
-        const res = await fetch('/api/agents');
-        if (!res.ok) throw new Error('Failed to load agents');
-        const data = await res.json();
-        renderAgents(Array.isArray(data) ? data : [data]);
-      } catch (e) {
-        document.getElementById('agents-list').innerHTML =
-          '<p style="color:#dc2626; text-align:center;">Error loading agents</p>';
-      }
-    }
-
-    function renderAgents(agents) {
-      const container = document.getElementById('agents-list');
-      
-      if (!agents.length) {
-        container.innerHTML = '<p class="no-agents">No agents registered</p>';
-        return;
-      }
-
-      container.innerHTML = agents.map(agent => {
-        const statusBadge = agent.Running 
-          ? '<span class="badge badge-running">running</span>'
-          : agent.Status === 'connected'
-            ? '<span class="badge badge-connected">connected</span>'
-            : '<span class="badge badge-disconnected">' + (agent.Status || 'unknown') + '</span>';
-
-        return `
-        <div class="card">
-          <div class="agent-card">
-            <div class="agent-header">
-              <a href="/agents/${encodeURIComponent(agent.id)}" class="agent-name">${agent.name || 'Unknown'}</a>
-              ${statusBadge}
+  <!-- Agents grid -->
+  <div id="agents-container">
+    {% if agents %}
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% for agent in agents %}
+        <div class="card bg-base-100 shadow hover:shadow-lg transition-shadow">
+          <div class="card-body">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="card-title text-lg">
+                  <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="hover:link link-primary">
+                    {{ agent.Name|default:agent.ID }}
+                  </a>
+                </h3>
+                <div class="text-xs opacity-50 font-mono mt-1">ID: {{ agent.ID }}</div>
+              </div>
+              {% if agent.Running %}
+                <div class="badge badge-success gap-1">
+                  <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+                  running
+                </div>
+              {% elif agent.Status == "connected" %}
+                <div class="badge badge-info gap-1">
+                  <span class="w-2 h-2 bg-info-content rounded-full animate-pulse"></span>
+                  connected
+                </div>
+              {% elif agent.Status == "disconnected" %}
+                <div class="badge badge-ghost">offline</div>
+              {% else %}
+                <div class="badge badge-warning">{{ agent.Status|default:"unknown" }}</div>
+              {% endif %}
             </div>
-            <div class="agent-stats">
-              <div class="agent-stat">
-                <div class="label">PID</div>
-                <div class="value mono">${agent.PID || '—'}</div>
+            
+            <div class="mt-3 space-y-2 text-sm">
+              {% if agent.PID %}
+              <div class="flex justify-between">
+                <span class="opacity-60">PID</span>
+                <code class="text-xs">{{ agent.PID }}</code>
               </div>
-              <div class="agent-stat">
-                <div class="label">Version</div>
-                <div class="value mono">${agent.Version || '—'}</div>
+              {% endif %}
+              
+              {% if agent.Version %}
+              <div class="flex justify-between">
+                <span class="opacity-60">Version</span>
+                <code class="text-xs">{{ agent.Version }}</code>
               </div>
-              <div class="agent-stat">
-                <div class="label">Last Heartbeat</div>
-                <div class="value mono">${agent.LastHeartbeat ? new Date(agent.LastHeartbeat).toLocaleString() : '—'}</div>
+              {% endif %}
+              
+              {% if agent.LastHeartbeat %}
+              <div class="flex justify-between">
+                <span class="opacity-60">Last seen</span>
+                <span class="text-xs">{{ agent.LastHeartbeat|date:"H:i:s" }}</span>
+              </div>
+              {% endif %}
+            </div>
+            
+            {% if agent.Capabilities %}
+            <div class="mt-3">
+              <div class="text-xs opacity-60 mb-1">Capabilities</div>
+              <div class="flex flex-wrap gap-1">
+                {% for cap in agent.Capabilities %}
+                <span class="badge badge-sm badge-outline">{{ cap }}</span>
+                {% endfor %}
               </div>
             </div>
-            <a href="/agents/${encodeURIComponent(agent.id)}" class="view-btn">View Details →</a>
+            {% endif %}
+            
+            <div class="card-actions justify-end mt-4">
+              <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="btn btn-sm btn-primary">
+                View Details
+              </a>
+            </div>
           </div>
         </div>
-        `;
-      }).join('');
-    }
-
-    loadAgents();
-  </script>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-center py-12">
+        <div class="text-6xl mb-4">🤖</div>
+        <p class="text-lg opacity-60">No agents registered</p>
+        <p class="text-sm opacity-40 mt-1">Agents will appear here when they connect to the hub</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

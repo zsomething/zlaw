@@ -1,0 +1,56 @@
+<!-- Agent cards partial for SSE swap (htmx v2 SSE extension) -->
+{% if agents %}
+  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    {% for agent in agents %}
+    <div class="card bg-base-200 hover:bg-base-300 transition-colors">
+      <div class="card-body p-4">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="font-semibold">
+              <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="hover:link link-primary">
+                {{ agent.Name|default:agent.ID }}
+              </a>
+            </h3>
+            <div class="text-xs opacity-50 font-mono mt-1">ID: {{ agent.ID }}</div>
+          </div>
+          {% if agent.Running %}
+            <div class="badge badge-success gap-1">
+              <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+              running
+            </div>
+          {% elif agent.Status == "connected" %}
+            <div class="badge badge-info gap-1">
+              <span class="w-2 h-2 bg-info-content rounded-full animate-pulse"></span>
+              connected
+            </div>
+          {% elif agent.Status == "disconnected" %}
+            <div class="badge badge-ghost">offline</div>
+          {% else %}
+            <div class="badge badge-warning">{{ agent.Status|default:"unknown" }}</div>
+          {% endif %}
+        </div>
+        <div class="mt-2 text-sm space-y-1">
+          {% if agent.PID %}
+          <div class="flex justify-between">
+            <span class="opacity-60">PID</span>
+            <code class="text-xs">{{ agent.PID }}</code>
+          </div>
+          {% endif %}
+          {% if agent.LastHeartbeat %}
+          <div class="flex justify-between">
+            <span class="opacity-60">Last seen</span>
+            <span class="text-xs">{{ agent.LastHeartbeat|date:"H:i:s" }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="col-span-full text-center py-12">
+    <div class="text-5xl mb-3">🤖</div>
+    <p class="text-lg opacity-60">No agents configured</p>
+    <p class="text-sm opacity-40 mt-1">Add agents to zlaw.toml to see them here</p>
+  </div>
+{% endif %}

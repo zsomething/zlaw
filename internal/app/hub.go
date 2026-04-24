@@ -196,26 +196,73 @@ type hubWebState struct {
 func (s hubWebState) HubConfig() config.HubConfig { return s.cfg }
 func (s hubWebState) NATSAddr() string            { return s.natsAddr }
 func (s hubWebState) Agents() []web.AgentInfo {
-	entries := s.reg.List()
+	// Start with configured agents from config
+	configured := make(map[string]bool)
+	for _, a := range s.cfg.Agents {
+		configured[a.Name] = true
+	}
+
+	// Get running agent statuses from supervisor
 	statuses := s.sup.Statuses()
 	statusMap := make(map[string]hub.AgentStatus, len(statuses))
 	for _, st := range statuses {
 		statusMap[st.Name] = st
 	}
-	out := make([]web.AgentInfo, 0, len(entries))
-	for _, entry := range entries {
+
+	// Get connected agents from registry
+	regEntries := s.reg.List()
+	regMap := make(map[string]hub.RegistryEntry, len(regEntries))
+	for _, e := range regEntries {
+		regMap[e.Name] = e
+	}
+
+	// First, add all configured agents
+	out := make([]web.AgentInfo, 0, len(s.cfg.Agents)+len(regEntries))
+	for _, entry := range s.cfg.Agents {
 		info := web.AgentInfo{
-			ID:            entry.Name,
-			Name:          entry.Name, // populated from agent.toml name field if different
-			Version:       entry.Version,
-			Capabilities:  entry.Capabilities,
-			Roles:         entry.Roles,
-			Status:        entry.Status,
-			LastHeartbeat: entry.LastHeartbeat,
+			ID:   entry.Name,
+			Name: entry.Name,
 		}
-		// Sort capabilities alphabetically.
-		sort.Strings(info.Capabilities)
+
+		// Add registry info if connected
+		if regEntry, ok := regMap[entry.Name]; ok {
+			info.Version = regEntry.Version
+			info.Capabilities = regEntry.Capabilities
+			info.Roles = regEntry.Roles
+			info.Status = regEntry.Status
+			info.LastHeartbeat = regEntry.LastHeartbeat
+		}
+
+		// Add supervisor status
 		if st, ok := statusMap[entry.Name]; ok {
+			info.PID = st.PID
+			info.Running = st.Running
+			if st.LastErr != nil {
+				info.LastErr = st.LastErr.Error()
+			}
+		}
+
+		// Sort capabilities alphabetically
+		sort.Strings(info.Capabilities)
+		out = append(out, info)
+	}
+
+	// Add connected agents not in config (dynamic/remote agents)
+	for name, regEntry := range regMap {
+		if configured[name] {
+			continue // already added
+		}
+		info := web.AgentInfo{
+			ID:            regEntry.Name,
+			Name:          regEntry.Name,
+			Version:       regEntry.Version,
+			Capabilities:  regEntry.Capabilities,
+			Roles:         regEntry.Roles,
+			Status:        regEntry.Status,
+			LastHeartbeat: regEntry.LastHeartbeat,
+		}
+		sort.Strings(info.Capabilities)
+		if st, ok := statusMap[regEntry.Name]; ok {
 			info.PID = st.PID
 			info.Running = st.Running
 			if st.LastErr != nil {
@@ -224,6 +271,7 @@ func (s hubWebState) Agents() []web.AgentInfo {
 		}
 		out = append(out, info)
 	}
+
 	return out
 }
 

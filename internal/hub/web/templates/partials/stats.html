@@ -1,0 +1,44 @@
+<!-- Hub stats partial for htmx swap -->
+<div class="stats stats-vertical lg:stats-horizontal shadow">
+  <div class="stat">
+    <div class="stat-title">Hub Name</div>
+    <div class="stat-value text-primary text-lg">{{ HubName|default:"—" }}</div>
+    <div class="stat-desc">{{ HubDescription|default:"No description" }}</div>
+  </div>
+  
+  <div class="stat">
+    <div class="stat-title">NATS Address</div>
+    <div class="stat-value text-secondary text-lg font-mono">{{ NATSAddr|default:"—" }}</div>
+    <div class="stat-desc">Message broker</div>
+  </div>
+  
+  <div class="stat">
+    <div class="stat-title">Registered Agents</div>
+    <div class="stat-value text-accent text-lg">{{ AgentCount|default:0 }}</div>
+    <div class="stat-desc">
+      <span class="text-success">{% if RunningCount %}{{ RunningCount }}{% else %}0{% endif %} running</span>
+      • <span class="text-info">{% if ConnectedCount %}{{ ConnectedCount }}{% else %}0{% endif %} connected</span>
+    </div>
+  </div>
+  
+  {% if NATSConnected %}
+  <div class="stat">
+    <div class="stat-title">NATS Status</div>
+    <div class="stat-value">
+      <div class="badge badge-success gap-2">
+        <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+        Connected
+      </div>
+    </div>
+    <div class="stat-desc">Broker online</div>
+  </div>
+  {% else %}
+  <div class="stat">
+    <div class="stat-title">NATS Status</div>
+    <div class="stat-value">
+      <div class="badge badge-error">Disconnected</div>
+    </div>
+    <div class="stat-desc">Broker offline</div>
+  </div>
+  {% endif %}
+</div>

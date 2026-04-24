@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -136,6 +137,17 @@ func (s *Server) routes() *chi.Mux {
 	r.Get("/agents/{agentID}", s.handleAgentDetailPage)
 	r.Get("/audit", s.handleAuditPage)
 
+	// HTMX partials
+	r.Get("/partials/agents", s.handlePartialAgents)
+	r.Get("/partials/agent_cards", s.handlePartialAgentCards)
+	r.Get("/partials/audit", s.handlePartialAudit)
+	r.Get("/partials/agent-tools", s.handlePartialAgentTools)
+	r.Get("/partials/agent-sessions", s.handlePartialAgentSessions)
+
+	// SSE events (for real-time updates)
+	r.Get("/events/audit", s.handleAuditSSE)
+	r.Get("/events/agents", s.handleAgentsSSE)
+
 	// API
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/hub", s.handleHub)
@@ -186,32 +198,100 @@ func (s *Server) Stop(ctx context.Context) error {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	cfg := s.state.HubConfig()
 	data := pongo2.Context{
+		"request_path":   "/",
 		"HubName":        cfg.Hub.Name,
 		"HubDescription": cfg.Hub.Description,
 		"NATSAddr":       s.state.NATSAddr(),
-		"Agents":         s.state.Agents(),
+		"agents":         s.state.Agents(),
+	}
+
+	// Return partial for htmx navigation
+	if isHTMXRequest(r) {
+		s.servePartial(w, "page_content.html", data)
+		return
 	}
 	s.serveTemplate(w, "index.html", data)
 }
 
 // handleAuditPage serves the audit log HTML page.
 func (s *Server) handleAuditPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "audit.html", pongo2.Context{})
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	eventType := r.URL.Query().Get("type")
+	entries, _ := s.state.AuditEntries(limit, eventType)
+	data := pongo2.Context{
+		"request_path": "/audit",
+		"Entries":      entries,
+		"Limit":        limit,
+		"EventType":    eventType,
+	}
+
+	// Return partial for htmx navigation
+	if isHTMXRequest(r) {
+		s.servePartial(w, "audit_content.html", data)
+		return
+	}
+	s.serveTemplate(w, "audit.html", data)
 }
 
 // handleToolsPage serves the hub tools HTML page.
 func (s *Server) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "tools.html", pongo2.Context{})
+	tools := s.state.Tools()
+	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
+	data := pongo2.Context{
+		"request_path": "/tools",
+		"tools":        tools,
+	}
+
+	// Return partial for htmx navigation
+	if isHTMXRequest(r) {
+		s.servePartial(w, "tools_content.html", data)
+		return
+	}
+	s.serveTemplate(w, "tools.html", data)
 }
 
 // handleAgentsPage serves the agents overview HTML page.
 func (s *Server) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "agents.html", pongo2.Context{})
+	data := pongo2.Context{
+		"request_path": "/agents",
+		"agents":       s.state.Agents(),
+	}
+
+	// Return partial for htmx navigation
+	if isHTMXRequest(r) {
+		s.servePartial(w, "agents_content.html", data)
+		return
+	}
+	s.serveTemplate(w, "agents.html", data)
 }
 
 // handleAgentDetailPage serves the agent detail HTML page.
 func (s *Server) handleAgentDetailPage(w http.ResponseWriter, r *http.Request) {
-	s.serveTemplate(w, "agent_detail.html", pongo2.Context{})
+	agentID := chi.URLParam(r, "agentID")
+	var agent *AgentInfo
+	for _, a := range s.state.Agents() {
+		if a.ID == agentID {
+			agent = &a
+			break
+		}
+	}
+	data := pongo2.Context{
+		"request_path": "/agents/" + agentID,
+		"AgentID":      agentID,
+		"Agent":        agent,
+	}
+
+	// Return partial for htmx navigation
+	if isHTMXRequest(r) {
+		s.servePartial(w, "agent_detail_content.html", data)
+		return
+	}
+	s.serveTemplate(w, "agent_detail.html", data)
 }
 
 // handleHub returns hub identity and NATS status as JSON.
@@ -376,6 +456,172 @@ func (s *Server) serveTemplate(w http.ResponseWriter, t string, data pongo2.Cont
 	if err := executeTemplate(w, t, data); err != nil {
 		s.log.Warn("web: template error", "template", t, "err", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
+// servePartial serves a partial template for htmx requests.
+func (s *Server) servePartial(w http.ResponseWriter, t string, data pongo2.Context) {
+	if err := executeTemplate(w, "partials/"+t, data); err != nil {
+		s.log.Warn("web: partial error", "partial", t, "err", err)
+		http.Error(w, "partial error", http.StatusInternalServerError)
+	}
+}
+
+// isHTMXRequest returns true if the request is an htmx request.
+func isHTMXRequest(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
+}
+
+// handlePartialAgents returns agents partial for htmx.
+func (s *Server) handlePartialAgents(w http.ResponseWriter, r *http.Request) {
+	data := pongo2.Context{"agents": s.state.Agents()}
+	s.servePartial(w, "agent_cards.html", data)
+}
+
+// handlePartialAgentCards returns agent cards partial for htmx.
+func (s *Server) handlePartialAgentCards(w http.ResponseWriter, r *http.Request) {
+	data := pongo2.Context{"agents": s.state.Agents()}
+	s.servePartial(w, "agent_cards.html", data)
+}
+
+// handlePartialAudit returns audit rows partial for htmx.
+func (s *Server) handlePartialAudit(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	eventType := r.URL.Query().Get("type")
+	entries, _ := s.state.AuditEntries(limit, eventType)
+	data := pongo2.Context{"Entries": entries}
+	s.servePartial(w, "audit_rows.html", data)
+}
+
+// handlePartialAgentTools returns agent tools partial for htmx.
+func (s *Server) handlePartialAgentTools(w http.ResponseWriter, r *http.Request) {
+	agentID := r.URL.Query().Get("agent")
+	var caps []string
+	for _, a := range s.state.Agents() {
+		if a.ID == agentID {
+			caps = a.Capabilities
+			break
+		}
+	}
+	allTools := s.state.Tools()
+	var filtered []tools.Definition
+	for _, t := range allTools {
+		if len(caps) == 0 {
+			filtered = append(filtered, t)
+		} else {
+			for _, c := range caps {
+				if c == t.Name {
+					filtered = append(filtered, t)
+					break
+				}
+			}
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name < filtered[j].Name })
+	data := pongo2.Context{"Tools": filtered}
+	s.servePartial(w, "tool_list.html", data)
+}
+
+// handlePartialAgentSessions returns agent sessions partial for htmx.
+func (s *Server) handlePartialAgentSessions(w http.ResponseWriter, r *http.Request) {
+	agentID := r.URL.Query().Get("agent")
+	sessions, _ := s.state.Sessions(agentID)
+	data := pongo2.Context{"Sessions": sessions}
+	s.servePartial(w, "session_list.html", data)
+}
+
+// handleAuditSSE streams audit rows via SSE.
+// Returns HTML partials for direct DOM swap by htmx SSE extension.
+func (s *Server) handleAuditSSE(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial entries as HTML
+	entries, err := s.state.AuditEntries(20, "")
+	if err == nil && len(entries) > 0 {
+		html, err := renderPartialToString("partials/audit_rows_sse.html", pongo2.Context{"Entries": entries})
+		if err == nil {
+			fmt.Fprintf(w, "event: audit_entries\ndata: %s\n\n", html)
+			flusher.Flush()
+		}
+	}
+
+	// Send heartbeat every 30s to keep connection alive
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+// handleAgentsSSE streams agent cards via SSE.
+// Returns HTML partials for direct DOM swap by htmx SSE extension.
+func (s *Server) handleAgentsSSE(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial state
+	agents := s.state.Agents()
+	html, err := renderPartialToString("partials/agent_cards_sse.html", pongo2.Context{"agents": agents})
+	if err == nil {
+		fmt.Fprintf(w, "event: agents\ndata: %s\n\n", html)
+		flusher.Flush()
+	}
+
+	// Ticker for status updates (every 5 seconds)
+	statusTicker := time.NewTicker(5 * time.Second)
+	heartbeatTicker := time.NewTicker(30 * time.Second)
+	defer statusTicker.Stop()
+	defer heartbeatTicker.Stop()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-statusTicker.C:
+			// Fetch current agent state and send update
+			agents := s.state.Agents()
+			html, err := renderPartialToString("partials/agent_cards_sse.html", pongo2.Context{"agents": agents})
+			if err == nil {
+				fmt.Fprintf(w, "event: agents\ndata: %s\n\n", html)
+				flusher.Flush()
+			}
+		case <-heartbeatTicker.C:
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
 	}
 }
 
