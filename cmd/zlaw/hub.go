@@ -31,13 +31,8 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	cfg, err := config.LoadHubConfig(configPath)
-	if err != nil {
-		return err
-	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	webAddr := resolveWebAddr(cfg)
-	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
+	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor)
 }
 
 // ── hub run ─────────────────────────────────────────────────────────────────
@@ -55,13 +50,8 @@ func (c *HubRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	cfg, err := config.LoadHubConfig(configPath)
-	if err != nil {
-		return err
-	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	webAddr := resolveWebAddr(cfg)
-	return app.RunHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
+	return app.RunHub(ctx, configPath, c.NatsURL, logger, noColor)
 }
 
 // ── hub stop ─────────────────────────────────────────────────────────────────
@@ -88,13 +78,8 @@ func (c *HubRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	cfg, err := config.LoadHubConfig(configPath)
-	if err != nil {
-		return err
-	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	webAddr := resolveWebAddr(cfg)
-	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
+	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor)
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
@@ -107,15 +92,3 @@ func (c *HubStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return app.HubStatus(ctx, c.JSON)
 }
 
-// ── helpers ─────────────────────────────────────────────────────────────────
-
-// resolveWebAddr returns the web UI bind address from config, or "" if not enabled.
-func resolveWebAddr(cfg config.HubConfig) string {
-	if !cfg.Web.Enabled {
-		return ""
-	}
-	if cfg.Web.BindAddress != "" {
-		return cfg.Web.BindAddress
-	}
-	return "127.0.0.1:7420"
-}

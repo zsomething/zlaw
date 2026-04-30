@@ -90,12 +90,12 @@
 | ✅ | #292 hub control socket server & NATS inbox handler | done | feat/hub-control-socket |
 | ⬜ | #293 remove manager concept from hub and ACL | planned | Remove manager flag; simplify ACL; lifecycle tools CLI-only |
 | ✅ | #254 zlaw agent CLI: full agent management | **P2** | control socket wired; list/status/stop/restart done |
-| ⬜ | #255 internal/hub: audit logger — append-only NATS subscriber | planned | P4 |
+| ✅ | #255 internal/hub: audit logger — append-only NATS subscriber | done | 048906d — AuditLogger (344 lines), wired in app/hub.go |
 | ⬜ | #294 update delegation envelope with source agent and session context | planned | source_agent, session_context fields; sub-agent starts fresh session |
 | ⬜ | #256 identity: NKeys keypair generation + hub verification | planned | P4 |
 | ⬜ | #257 identity: A2A message signing and verification | planned | P4 |
 | ⬜ | #289 interactive CLI/TUI for hub and agent configuration & authentication | future | Bubble Tea TUI for init/auth/agent setup wizard |
-| ⬜ | #290 hub web UI dashboard | future | read-only web dashboard (hub status, agent list, logs) |
+| ⬜ | #290 hub web UI dashboard | partial | ec86ad7–3849394 — server+21 templates done, htmx+DaisyUI+pongo2; known bugs pending polish |
 | ⬜ | #258 isolation: homedir | deferred | P5 |
 | ⬜ | #259 isolation: OS user | deferred | P5 |
 | ⬜ | #260 isolation: Docker container | deferred | P5 |
