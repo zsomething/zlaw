@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk ls *)",
+      "Bash(rtk wc *)",
+      "Bash(rtk go *)",
+      "Bash(rtk grep *)",
+      "Bash(go mod *)",
+      "Bash(rtk git *)",
+      "Bash(awk '{print $2}')",
+      "Bash(fizzy card *)",
+      "Bash(fizzy user *)",
+      "Bash(fizzy comment *)",
+      "Bash(gofmt *)",
+      "Bash(rtk golangci-lint *)"
+    ]
+  }
+}

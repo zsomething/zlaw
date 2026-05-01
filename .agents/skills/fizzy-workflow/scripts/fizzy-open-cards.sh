@@ -1,8 +1,8 @@
 #!/bin/bash
-# fizzy-context.sh - Get board context needed for card workflows
-# Usage: fizzy-context.sh <board_id>
+# fizzy-open-cards.sh - List open cards on a board
+# Usage: fizzy-open-cards.sh <board_id>
 
-BOARD_ID="${1:?Usage: fizzy-context.sh <board_id>}"
+BOARD_ID="${1:?Usage: fizzy-open-cards.sh <board_id>}"
 
 # Use fizzy's built-in --jq flag (unreleased); fall back to external jq
 fizzy_jq() {
@@ -20,12 +20,4 @@ fizzy_jq() {
     fi
 }
 
-echo "=== Fizzy Context for board: $BOARD_ID ==="
-echo
-
-echo "Columns:"
-fizzy_jq '[.data[] | {id, name}]' column list --board "$BOARD_ID"
-echo
-
-echo "Git remote:"
-git remote get-url origin 2>/dev/null || echo "  (not in a git repository)"
+fizzy_jq '[.data[] | {number, title, assignees: [.assignees[].name]}]' card list --board "$BOARD_ID" --all
