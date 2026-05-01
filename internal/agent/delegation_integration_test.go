@@ -24,7 +24,8 @@ func TestIntegration_AgentDelegation(t *testing.T) {
 	workerClient := agent.NewHubClient(
 		"worker", "v1",
 		[]string{"write", "critique"},
-		nil,
+		nil, // roles
+		nil, // authProfiles
 		bus,
 		workerRunner,
 		func() string { return "You are Fuery, a copywriter." },
@@ -35,7 +36,8 @@ func TestIntegration_AgentDelegation(t *testing.T) {
 	managerClient := agent.NewHubClient(
 		"manager", "v1",
 		[]string{"delegate"},
-		nil,
+		nil, // roles
+		nil, // authProfiles
 		bus,
 		nil, // manager doesn't need a runner for this test
 		nil,
@@ -106,7 +108,8 @@ func TestIntegration_AgentNotFound(t *testing.T) {
 	managerClient := agent.NewHubClient(
 		"manager", "v1",
 		[]string{"delegate"},
-		nil,
+		nil, // roles
+		nil, // authProfiles
 		bus,
 		managerRunner,
 		nil,

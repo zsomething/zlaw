@@ -38,6 +38,7 @@ type RegistryEntry struct {
 	Version       string          `json:"version"`
 	Capabilities  []string        `json:"capabilities"`
 	Roles         []string        `json:"roles"`
+	AuthProfiles  []string        `json:"auth_profiles"`
 	Status        AgentConnStatus `json:"status"`
 	LastHeartbeat time.Time       `json:"last_heartbeat"`
 }
@@ -166,6 +167,7 @@ func (r *Registry) handleRegistration(data []byte) {
 	entry.Version = msg.Version
 	entry.Capabilities = msg.Capabilities
 	entry.Roles = msg.Roles
+	entry.AuthProfiles = msg.AuthProfiles
 	entry.Status = AgentConnected
 	entry.LastHeartbeat = time.Now()
 }

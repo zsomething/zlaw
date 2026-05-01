@@ -44,6 +44,7 @@ type Supervisor struct {
 	logger          *slog.Logger
 	messenger       messaging.Messenger // for publishing agent logs to NATS
 	noColor         bool
+	registry        *Registry // for runtime auth profile lookup
 
 	mu     sync.Mutex
 	agents map[string]*managedAgent
@@ -102,7 +103,8 @@ func (m *managedAgent) status() AgentStatus {
 // credentialsPath is the path to credentials.toml used for credential injection;
 // pass "" to use the default path from the auth package.
 // agentTokens maps agent name to its NATS token; pass nil to skip token injection.
-func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger) *Supervisor {
+// registry is used for runtime auth profile lookup from agent registration; pass nil to skip.
+func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, registry *Registry) *Supervisor {
 	if agentTokens == nil {
 		agentTokens = make(AgentTokens)
 	}
@@ -114,12 +116,13 @@ func NewSupervisor(cfg config.HubConfig, natsURL, selfBin, credentialsPath strin
 		agentTokens:     agentTokens,
 		logger:          logger,
 		noColor:         DefaultNoColor(),
+		registry:        registry,
 		agents:          make(map[string]*managedAgent),
 	}
 }
 
 // NewSupervisorWithOptions creates a Supervisor with explicit options.
-func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool) *Supervisor {
+func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool, registry *Registry) *Supervisor {
 	if agentTokens == nil {
 		agentTokens = make(AgentTokens)
 	}
@@ -131,12 +134,13 @@ func NewSupervisorWithOptions(cfg config.HubConfig, natsURL, selfBin, credential
 		agentTokens:     agentTokens,
 		logger:          logger,
 		noColor:         noColor,
+		registry:        registry,
 		agents:          make(map[string]*managedAgent),
 	}
 }
 
 // NewSupervisorWithMessenger creates a Supervisor with a messenger for log publishing.
-func NewSupervisorWithMessenger(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool, messenger messaging.Messenger) *Supervisor {
+func NewSupervisorWithMessenger(cfg config.HubConfig, natsURL, selfBin, credentialsPath string, agentTokens AgentTokens, logger *slog.Logger, noColor bool, messenger messaging.Messenger, registry *Registry) *Supervisor {
 	if agentTokens == nil {
 		agentTokens = make(AgentTokens)
 	}
@@ -149,6 +153,7 @@ func NewSupervisorWithMessenger(cfg config.HubConfig, natsURL, selfBin, credenti
 		logger:          logger,
 		messenger:       messenger,
 		noColor:         noColor,
+		registry:        registry,
 		agents:          make(map[string]*managedAgent),
 	}
 }
@@ -418,9 +423,17 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	// Inject credentials from the global credentials.toml.
 	// Hub reads from $ZLAW_HOME/credentials.toml and writes filtered profiles
 	// to $ZLAW_HOME/run/credentials/<id>.toml for injection.
-	if len(entry.AuthProfiles) > 0 {
+	// Auth profiles are sourced from AgentEntry (zlaw.toml) with registry fallback.
+	profiles := entry.AuthProfiles
+	if len(profiles) == 0 && s.registry != nil {
+		if regEntry, ok := s.registry.Get(entry.ID); ok {
+			profiles = regEntry.AuthProfiles
+		}
+	}
+
+	if len(profiles) > 0 {
 		runtimeCredsPath := filepath.Join(config.ZlawHome(), "run", "credentials", entry.ID+".toml")
-		if err := injectCredentialsFromGlobal(entry.AuthProfiles, runtimeCredsPath); err != nil {
+		if err := injectCredentialsFromGlobal(profiles, runtimeCredsPath); err != nil {
 			return nil, fmt.Errorf("credential injection for agent %q: %w", entry.ID, err)
 		}
 		env = SetEnv(env, "ZLAW_CREDENTIALS_FILE", runtimeCredsPath)

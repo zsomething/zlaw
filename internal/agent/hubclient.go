@@ -37,6 +37,7 @@ type hubRegistration struct {
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
+	AuthProfiles []string `json:"auth_profiles"`
 }
 
 // HubClient manages the agent's connection to the hub over NATS:
@@ -48,6 +49,7 @@ type HubClient struct {
 	version      string
 	capabilities []string
 	roles        []string
+	authProfiles []string
 	messenger    messaging.Messenger
 	runner       HubTaskRunner
 	sysPromptFn  func() string
@@ -60,6 +62,7 @@ func NewHubClient(
 	id, version string,
 	capabilities []string,
 	roles []string,
+	authProfiles []string,
 	messenger messaging.Messenger,
 	runner HubTaskRunner,
 	sysPromptFn func() string,
@@ -73,6 +76,7 @@ func NewHubClient(
 		version:      version,
 		capabilities: capabilities,
 		roles:        roles,
+		authProfiles: authProfiles,
 		messenger:    messenger,
 		runner:       runner,
 		sysPromptFn:  sysPromptFn,
@@ -190,6 +194,7 @@ func (h *HubClient) publishRegistration(ctx context.Context) error {
 		Version:      h.version,
 		Capabilities: h.capabilities,
 		Roles:        h.roles,
+		AuthProfiles: h.authProfiles,
 	}
 	data, err := json.Marshal(reg)
 	if err != nil {

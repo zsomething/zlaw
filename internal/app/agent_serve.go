@@ -223,6 +223,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 			version.Version,
 			caps,
 			cfg.Agent.Roles,
+			cfg.Agent.AuthProfiles,
 			nm,
 			cronRunner{ag: ag, sysPromptFn: sysPromptFn},
 			sysPromptFn,
