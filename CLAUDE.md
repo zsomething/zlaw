@@ -101,8 +101,8 @@ zlaw/
 
 Active work: hub bootstrap CLI + hub core.
 
-Next tasks (from PLANNING.md):
-- `zlaw hub init` — generate `zlaw.toml`, `credentials.toml`, default manager agent scaffold
+Next tasks (from `docs/plans/PLANNING.md`):
+- `zlaw ctl` subcommand — operational commands for hub-connected agent management
 - `zlaw agent auth set/list/remove` — manage per-agent credentials in `agents/<id>/credentials.toml`
 - `zlaw hub start` — start hub, embed NATS, spawn agents
 - `zlaw hub status` — hub health + per-agent status
@@ -110,11 +110,15 @@ Next tasks (from PLANNING.md):
 - Hub binary `serve` — NATS embed, agent supervisor, registry, identity verify, audit log
 - Manager agent — gets hub-management tools, delegates to peers via NATS
 
-See PLANNING.md for full checklist.
+See `docs/plans/PLANNING.md` for full checklist. See `docs/ARCHITECTURE_PRINCIPLES.md` for separation of concerns rules.
 
 ---
 
 ## References
 
 - `ARCHITECTURE.md` — full system design, topology diagram, security model
-- `PLANNING.md` — prioritized feature checklist, design decisions table, directory layout
+- `docs/ARCHITECTURE_PRINCIPLES.md` — architectural principles and hard rules (agent isolation, hub boundaries, ctl role)
+- `docs/plans/` — implementation plans for agent-oriented features:
+  - `PLANNING.md` — prioritized feature checklist
+  - `AGENT_PORTABILITY.md` — agent directory consolidation design
+  - `CTL_PLAN.md` — ctl subcommand implementation
