@@ -15,7 +15,6 @@ type HubCmd struct {
 	Stop    HubStopCmd    `cmd:"" help:"stop a running hub"`
 	Restart HubRestartCmd `cmd:"" help:"restart the hub (stop then start)"`
 	Status  HubStatusCmd  `cmd:"" help:"show hub status"`
-	Auth    HubAuthCmd    `cmd:"" help:"manage per-agent credentials"`
 }
 
 // ── hub start ─────────────────────────────────────────────────────────────────
@@ -32,10 +31,13 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	if c.NoColor || hub.DefaultNoColor() {
-		return app.StartHub(ctx, configPath, c.NatsURL, logger, true)
+	cfg, err := config.LoadHubConfig(configPath)
+	if err != nil {
+		return err
 	}
-	return app.StartHub(ctx, configPath, c.NatsURL, logger, false)
+	noColor := c.NoColor || hub.DefaultNoColor()
+	webAddr := resolveWebAddr(cfg)
+	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
 }
 
 // ── hub run ─────────────────────────────────────────────────────────────────
@@ -53,10 +55,13 @@ func (c *HubRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if configPath == "" {
 		configPath = config.DefaultHubConfigPath()
 	}
-	if c.NoColor || hub.DefaultNoColor() {
-		return app.RunHub(ctx, configPath, c.NatsURL, logger, true)
+	cfg, err := config.LoadHubConfig(configPath)
+	if err != nil {
+		return err
 	}
-	return app.RunHub(ctx, configPath, c.NatsURL, logger, false)
+	noColor := c.NoColor || hub.DefaultNoColor()
+	webAddr := resolveWebAddr(cfg)
+	return app.RunHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
 }
 
 // ── hub stop ─────────────────────────────────────────────────────────────────
@@ -79,7 +84,17 @@ func (c *HubRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	if err := app.StopHub(); err != nil {
 		return err
 	}
-	return app.StartHub(ctx, c.Config, c.NatsURL, logger, c.NoColor || hub.DefaultNoColor())
+	configPath := c.Config
+	if configPath == "" {
+		configPath = config.DefaultHubConfigPath()
+	}
+	cfg, err := config.LoadHubConfig(configPath)
+	if err != nil {
+		return err
+	}
+	noColor := c.NoColor || hub.DefaultNoColor()
+	webAddr := resolveWebAddr(cfg)
+	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor, webAddr)
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
@@ -90,4 +105,17 @@ type HubStatusCmd struct {
 
 func (c *HubStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return app.HubStatus(ctx, c.JSON)
+}
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+// resolveWebAddr returns the web UI bind address from config, or "" if not enabled.
+func resolveWebAddr(cfg config.HubConfig) string {
+	if !cfg.Web.Enabled {
+		return ""
+	}
+	if cfg.Web.BindAddress != "" {
+		return cfg.Web.BindAddress
+	}
+	return "127.0.0.1:7420"
 }

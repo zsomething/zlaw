@@ -9,21 +9,21 @@ import (
 	"github.com/zsomething/zlaw/internal/credentials"
 )
 
-type HubAuthCmd struct {
-	Set    HubAuthSetCmd    `cmd:"" help:"set a credential value for a profile"`
-	List   HubAuthListCmd   `cmd:"" help:"list credential profiles for an agent"`
-	Remove HubAuthRemoveCmd `cmd:"" help:"remove a credential profile"`
+type AgentAuthCmd struct {
+	Set    AgentAuthSetCmd    `cmd:"" help:"set a credential value for a profile"`
+	List   AgentAuthListCmd   `cmd:"" help:"list credential profiles"`
+	Remove AgentAuthRemoveCmd `cmd:"" help:"remove a credential profile"`
 }
 
 // ── hub auth set ───────────────────────────────────────────────────────────────
 
-type HubAuthSetCmd struct {
+type AgentAuthSetCmd struct {
 	Agent   string `required:"" help:"agent name"`
 	Profile string `required:"" help:"profile name (e.g., anthropic, telegram, fizzy)"`
 	Key     string `required:"" help:"credential value or secret key"`
 }
 
-func (c *HubAuthSetCmd) Run() error {
+func (c *AgentAuthSetCmd) Run() error {
 	agentDir := resolveAgentDir(c.Agent)
 	credsPath := agentDir + "/credentials.toml"
 
@@ -65,11 +65,11 @@ func (c *HubAuthSetCmd) Run() error {
 
 // ── hub auth list ─────────────────────────────────────────────────────────────
 
-type HubAuthListCmd struct {
+type AgentAuthListCmd struct {
 	Agent string `required:"" help:"agent name"`
 }
 
-func (c *HubAuthListCmd) Run() error {
+func (c *AgentAuthListCmd) Run() error {
 	agentDir := resolveAgentDir(c.Agent)
 	credsPath := agentDir + "/credentials.toml"
 
@@ -103,12 +103,12 @@ func (c *HubAuthListCmd) Run() error {
 
 // ── hub auth remove ───────────────────────────────────────────────────────────
 
-type HubAuthRemoveCmd struct {
+type AgentAuthRemoveCmd struct {
 	Agent   string `required:"" help:"agent name"`
 	Profile string `required:"" help:"profile name to remove"`
 }
 
-func (c *HubAuthRemoveCmd) Run() error {
+func (c *AgentAuthRemoveCmd) Run() error {
 	agentDir := resolveAgentDir(c.Agent)
 	credsPath := agentDir + "/credentials.toml"
 

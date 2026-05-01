@@ -7,9 +7,15 @@ import (
 	"strings"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/tools"
 )
 
-// ToolRequest is the envelope for a tool-call request sent from a manager
+// Tools returns the list of all built-in tool definitions.
+func Tools() []tools.Definition {
+	return tools.Tools()
+}
+
+// ToolRequest is the envelope for a tool-call request sent from an
 // agent to the hub's NATS inbox subject (zlaw.hub.inbox).
 type ToolRequest struct {
 	// Tool is the name of the tool to invoke.
@@ -41,7 +47,7 @@ type ToolHandler interface {
 	HandleTool(ctx context.Context, req ToolRequest) ToolReply
 }
 
-// HubInbox processes incoming tool-call requests from the manager agent via
+// HubInbox processes incoming tool-call requests from agents via
 // the NATS zlaw.hub.inbox subject. It dispatches each request to the
 // appropriate ToolHandler method and publishes the reply to the specified
 // reply-to subject.
@@ -119,8 +125,8 @@ func (h *HubInbox) HandleToolRequest(ctx context.Context, req ToolRequest) ToolR
 		return h.agentRestart(ctx, req.Args)
 	case "agent_list":
 		return h.agentList()
-	case "get_agent":
-		return h.getAgent(ctx, req.Args)
+	case "agent_get":
+		return h.agentGet(ctx, req.Args)
 	default:
 		return ToolReply{
 			Tool:  req.Tool,
@@ -148,13 +154,13 @@ func (h *HubInbox) hubStatus() ToolReply {
 	}
 }
 
-// agentStatus returns the status of a named agent.
+// agentStatus returns the status of an agent.
 func (h *HubInbox) agentStatus(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_status", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_status", "param 'id' is required")
 	}
-	status, err := h.supervisor.Status(name)
+	status, err := h.supervisor.Status(id)
 	if err != nil {
 		return errorReply("agent_status", err.Error())
 	}
@@ -165,35 +171,35 @@ func (h *HubInbox) agentStatus(ctx context.Context, args map[string]any) ToolRep
 	}
 }
 
-// agentStop stops a named agent.
+// agentStop stops an agent.
 func (h *HubInbox) agentStop(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_stop", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_stop", "param 'id' is required")
 	}
-	if err := h.supervisor.Stop(name); err != nil {
+	if err := h.supervisor.Stop(id); err != nil {
 		return errorReply("agent_stop", err.Error())
 	}
 	return ToolReply{
 		Tool:   "agent_stop",
 		OK:     true,
-		Output: name + " stopped",
+		Output: id + " stopped",
 	}
 }
 
-// agentRestart restarts a named agent.
+// agentRestart restarts an agent.
 func (h *HubInbox) agentRestart(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("agent_restart", "param 'name' is required")
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_restart", "param 'id' is required")
 	}
-	if err := h.supervisor.Restart(name); err != nil {
+	if err := h.supervisor.Restart(id); err != nil {
 		return errorReply("agent_restart", err.Error())
 	}
 	return ToolReply{
 		Tool:   "agent_restart",
 		OK:     true,
-		Output: name + " restarted",
+		Output: id + " restarted",
 	}
 }
 
@@ -207,18 +213,18 @@ func (h *HubInbox) agentList() ToolReply {
 	}
 }
 
-// getAgent returns the registry entry for a named agent.
-func (h *HubInbox) getAgent(ctx context.Context, args map[string]any) ToolReply {
-	name := stringArg(args, "name")
-	if name == "" {
-		return errorReply("get_agent", "param 'name' is required")
+// agentGet returns the registry entry for an agent.
+func (h *HubInbox) agentGet(ctx context.Context, args map[string]any) ToolReply {
+	id := stringArg(args, "id")
+	if id == "" {
+		return errorReply("agent_get", "param 'id' is required")
 	}
-	entry, ok := h.registry.Get(name)
+	entry, ok := h.registry.Get(id)
 	if !ok {
-		return errorReply("get_agent", "agent not found: "+name)
+		return errorReply("agent_get", "agent not found: "+id)
 	}
 	return ToolReply{
-		Tool:   "get_agent",
+		Tool:   "agent_get",
 		OK:     true,
 		Output: marshalJSON(entry),
 	}

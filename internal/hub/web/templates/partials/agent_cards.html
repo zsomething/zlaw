@@ -1,0 +1,82 @@
+<!-- Agent cards partial for htmx swap -->
+{% if agents %}
+  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    {% for agent in agents %}
+    <div class="card bg-base-100 shadow hover:shadow-lg transition-shadow">
+      <div class="card-body">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="card-title text-lg">
+              <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="hover:link link-primary">
+                {{ agent.Name|default:agent.ID }}
+              </a>
+            </h3>
+            <div class="text-xs opacity-50 font-mono mt-1">ID: {{ agent.ID }}</div>
+          </div>
+          {% if agent.Running %}
+            <div class="badge badge-success gap-1">
+              <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+              running
+            </div>
+          {% elif agent.Status == "connected" %}
+            <div class="badge badge-info gap-1">
+              <span class="w-2 h-2 bg-info-content rounded-full animate-pulse"></span>
+              connected
+            </div>
+          {% elif agent.Status == "disconnected" %}
+            <div class="badge badge-ghost">offline</div>
+          {% else %}
+            <div class="badge badge-warning">{{ agent.Status|default:"unknown" }}</div>
+          {% endif %}
+        </div>
+        
+        <div class="mt-3 space-y-2 text-sm">
+          {% if agent.PID %}
+          <div class="flex justify-between">
+            <span class="opacity-60">PID</span>
+            <code class="text-xs">{{ agent.PID }}</code>
+          </div>
+          {% endif %}
+          
+          {% if agent.Version %}
+          <div class="flex justify-between">
+            <span class="opacity-60">Version</span>
+            <code class="text-xs">{{ agent.Version }}</code>
+          </div>
+          {% endif %}
+          
+          {% if agent.LastHeartbeat %}
+          <div class="flex justify-between">
+            <span class="opacity-60">Last seen</span>
+            <span class="text-xs">{{ agent.LastHeartbeat|date:"H:i:s" }}</span>
+          </div>
+          {% endif %}
+        </div>
+        
+        {% if agent.Capabilities %}
+        <div class="mt-3">
+          <div class="text-xs opacity-60 mb-1">Capabilities</div>
+          <div class="flex flex-wrap gap-1">
+            {% for cap in agent.Capabilities %}
+            <span class="badge badge-sm badge-outline">{{ cap }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        
+        <div class="card-actions justify-end mt-4">
+          <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="btn btn-sm btn-primary">
+            View Details
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="text-center py-12">
+    <div class="text-6xl mb-4">🤖</div>
+    <p class="text-lg opacity-60">No agents registered</p>
+    <p class="text-sm opacity-40 mt-1">Agents will appear here when they connect to the hub</p>
+  </div>
+{% endif %}

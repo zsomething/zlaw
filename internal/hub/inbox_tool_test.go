@@ -75,7 +75,7 @@ func TestHubInbox(t *testing.T) {
 	t.Run("agent_status", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
 			Tool: "agent_status",
-			Args: map[string]any{"name": "alice"},
+			Args: map[string]any{"id": "alice"},
 		})
 		if !reply.OK {
 			t.Fatalf("agent_status not ok: %s", reply.Error)
@@ -92,7 +92,7 @@ func TestHubInbox(t *testing.T) {
 		}
 	})
 
-	t.Run("agent_status missing name", func(t *testing.T) {
+	t.Run("agent_status missing id", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
 			Tool: "agent_status",
 			Args: map[string]any{},
@@ -105,7 +105,7 @@ func TestHubInbox(t *testing.T) {
 	t.Run("agent_stop", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
 			Tool: "agent_stop",
-			Args: map[string]any{"name": "alice"},
+			Args: map[string]any{"id": "alice"},
 		})
 		if !reply.OK {
 			t.Fatalf("agent_stop not ok: %s", reply.Error)
@@ -115,7 +115,7 @@ func TestHubInbox(t *testing.T) {
 	t.Run("agent_restart", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
 			Tool: "agent_restart",
-			Args: map[string]any{"name": "bob"},
+			Args: map[string]any{"id": "bob"},
 		})
 		if !reply.OK {
 			t.Fatalf("agent_restart not ok: %s", reply.Error)
@@ -136,13 +136,13 @@ func TestHubInbox(t *testing.T) {
 		}
 	})
 
-	t.Run("get_agent", func(t *testing.T) {
+	t.Run("agent_get", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
-			Tool: "get_agent",
-			Args: map[string]any{"name": "alice"},
+			Tool: "agent_get",
+			Args: map[string]any{"id": "alice"},
 		})
 		if !reply.OK {
-			t.Fatalf("get_agent not ok: %s", reply.Error)
+			t.Fatalf("agent_get not ok: %s", reply.Error)
 		}
 		var result RegistryEntry
 		if err := json.Unmarshal([]byte(reply.Output), &result); err != nil {
@@ -153,10 +153,10 @@ func TestHubInbox(t *testing.T) {
 		}
 	})
 
-	t.Run("get_agent not found", func(t *testing.T) {
+	t.Run("agent_get not found", func(t *testing.T) {
 		reply := hi.HandleToolRequest(ctx, ToolRequest{
-			Tool: "get_agent",
-			Args: map[string]any{"name": "nonexistent"},
+			Tool: "agent_get",
+			Args: map[string]any{"id": "nonexistent"},
 		})
 		if reply.OK {
 			t.Fatal("expected not ok for nonexistent agent")

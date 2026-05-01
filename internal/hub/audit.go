@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -114,7 +115,6 @@ func NewAuditLogger(auditPath string, conn messaging.Messenger, logger *slog.Log
 // DefaultAuditSubjects are the NATS subjects the audit logger subscribes to.
 var DefaultAuditSubjects = []string{
 	"zlaw.registry",      // agent registration/heartbeats
-	"agent.>",            // all agent inbox messages (delegations)
 	"zlaw.hub.inbox",     // hub management API calls
 	"zlaw.registry.list", // registry query responses
 }
@@ -149,31 +149,57 @@ func (al *AuditLogger) buildEntry(subject, direction string, data []byte) AuditE
 		Payload:   string(data),
 	}
 
-	// Try to extract envelope fields for contextual audit data.
-	// We use a concrete struct to avoid repeated interface type assertions.
-	var env struct {
-		From      string `json:"from"`
-		To        string `json:"to"`
-		SessionID string `json:"session_id"`
-		TraceID   string `json:"trace_id"`
-	}
-	if json.Unmarshal(data, &env) == nil {
-		entry.From = env.From
-		entry.To = env.To
-		entry.SessionID = env.SessionID
-		entry.TraceID = env.TraceID
-	}
-
-	// Infer event type from subject pattern.
+	// Try to extract envelope fields based on subject.
 	switch subject {
 	case "zlaw.registry":
+		// Registry messages: {"name":"...","version":"...","capabilities":[...]}
+		var reg struct {
+			Name         string   `json:"name"`
+			Version      string   `json:"version"`
+			Capabilities []string `json:"capabilities"`
+		}
+		if json.Unmarshal(data, &reg) == nil {
+			entry.From = reg.Name
+			entry.Extra = map[string]any{"version": reg.Version, "capabilities": reg.Capabilities}
+		}
 		entry.Type = AuditEventRegister
+
+	case "zlaw.hub.inbox":
+		// Hub management: delegation envelope or raw.
+		var env struct {
+			From      string `json:"from"`
+			To        string `json:"to"`
+			SessionID string `json:"session_id"`
+			TraceID   string `json:"trace_id"`
+			Type      string `json:"type"`
+		}
+		if json.Unmarshal(data, &env) == nil {
+			entry.From = env.From
+			entry.To = env.To
+			entry.SessionID = env.SessionID
+			entry.TraceID = env.TraceID
+		}
+		entry.Type = AuditEventMgmt
+
 	case "zlaw.registry.list":
-		// This is a reply to an outbound request — mark as out.
 		entry.Direction = "out"
+		entry.Type = AuditEventMgmt
+
 	default:
-		// agent.<name>.inbox — delegation.
-		entry.Type = AuditEventTaskSent
+		// Fallback: try generic envelope.
+		var env struct {
+			From      string `json:"from"`
+			To        string `json:"to"`
+			SessionID string `json:"session_id"`
+			TraceID   string `json:"trace_id"`
+		}
+		if json.Unmarshal(data, &env) == nil {
+			entry.From = env.From
+			entry.To = env.To
+			entry.SessionID = env.SessionID
+			entry.TraceID = env.TraceID
+			entry.Type = AuditEventTaskSent
+		}
 	}
 
 	return entry
@@ -237,6 +263,15 @@ func (al *AuditLogger) SetSubjects(subjects []string) {
 	}
 }
 
+// ReadEntries reads the last limit audit entries from the log file,
+// optionally filtered by event type.
+func (al *AuditLogger) ReadEntries(limit int, eventType string) ([]AuditEntry, error) {
+	if al == nil || al.path == "" {
+		return nil, nil
+	}
+	return ReadAuditLog(al.path, limit, eventType)
+}
+
 // Messenger implements messaging.Messenger for embedding in a chain.
 // AuditLogger embeds a real Messenger (the NATS connection) and forwards
 // Publish calls to it so it can be placed in a middleware chain.
@@ -267,4 +302,43 @@ func (al *AuditLogger) JetStream() messaging.JetStreamer {
 		return nil
 	}
 	return al.conn.JetStream()
+}
+
+// ReadAuditLog reads the last limit entries from auditPath,
+// optionally filtered by eventType. Entries are returned newest-last.
+func ReadAuditLog(auditPath string, limit int, eventType string) ([]AuditEntry, error) {
+	f, err := os.Open(auditPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open audit log: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var entries []AuditEntry
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var entry AuditEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue // skip malformed lines
+		}
+		if eventType != "" && string(entry.Type) != eventType {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan audit log: %w", err)
+	}
+
+	// Trim to last limit entries.
+	if len(entries) > limit {
+		entries = entries[len(entries)-limit:]
+	}
+	return entries, nil
 }
