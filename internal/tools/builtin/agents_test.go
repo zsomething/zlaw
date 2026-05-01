@@ -24,7 +24,7 @@ func (m *mockAgentRegistry) GetAgent(ctx context.Context, name string) (*hub.Reg
 		return nil, m.err
 	}
 	for i := range m.entries {
-		if m.entries[i].Name == name {
+		if m.entries[i].ID == name {
 			return &m.entries[i], nil
 		}
 	}
@@ -34,8 +34,8 @@ func (m *mockAgentRegistry) GetAgent(ctx context.Context, name string) (*hub.Reg
 func TestAgentList_Execute(t *testing.T) {
 	mock := &mockAgentRegistry{
 		entries: []hub.RegistryEntry{
-			{Name: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
-			{Name: "assistant", Version: "2.0", Roles: []string{"general"}},
+			{ID: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
+			{ID: "assistant", Version: "2.0", Roles: []string{"general"}},
 		},
 	}
 	tool := &AgentList{Registry: mock}
@@ -73,7 +73,7 @@ func TestAgentList_ExecuteError(t *testing.T) {
 func TestAgentGet_Execute(t *testing.T) {
 	mock := &mockAgentRegistry{
 		entries: []hub.RegistryEntry{
-			{Name: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
+			{ID: "coding", Version: "1.0", Capabilities: []string{"bash"}, Roles: []string{"coding"}},
 		},
 	}
 	tool := &AgentGet{Registry: mock}
@@ -86,8 +86,8 @@ func TestAgentGet_Execute(t *testing.T) {
 	if err := json.Unmarshal([]byte(result), &entry); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if entry.Name != "coding" {
-		t.Errorf("name = %q, want coding", entry.Name)
+	if entry.ID != "coding" {
+		t.Errorf("name = %q, want coding", entry.ID)
 	}
 	if entry.Version != "1.0" {
 		t.Errorf("version = %q, want 1.0", entry.Version)

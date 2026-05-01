@@ -52,11 +52,11 @@ type = "cli"
 	if cfg.Agent.ID != "test-agent" {
 		t.Errorf("agent.id = %q, want %q", cfg.Agent.ID, "test-agent")
 	}
-	if cfg.Agent.Name != "Test Agent" {
-		t.Errorf("agent.name = %q, want %q", cfg.Agent.Name, "Test Agent")
+	if cfg.Agent.DisplayName != "Test Agent" {
+		t.Errorf("agent.display_name = %q, want %q", cfg.Agent.DisplayName, "Test Agent")
 	}
-	if cfg.Agent.DisplayName() != "Test Agent" {
-		t.Errorf("DisplayName() = %q, want %q", cfg.Agent.DisplayName(), "Test Agent")
+	if cfg.Agent.GetDisplayName() != "Test Agent" {
+		t.Errorf("GetDisplayName() = %q, want %q", cfg.Agent.GetDisplayName(), "Test Agent")
 	}
 	if cfg.LLM.Backend != "anthropic" {
 		t.Errorf("llm.backend = %q, want %q", cfg.LLM.Backend, "anthropic")
@@ -230,14 +230,14 @@ func TestAgentMeta_DisplayName(t *testing.T) {
 		meta config.AgentMeta
 		want string
 	}{
-		{config.AgentMeta{ID: "manager", Name: "Rin"}, "Rin"},
-		{config.AgentMeta{ID: "manager", Name: ""}, "manager"},
-		{config.AgentMeta{ID: "", Name: ""}, ""},
+		{config.AgentMeta{ID: "manager", DisplayName: "Rin"}, "Rin"},
+		{config.AgentMeta{ID: "manager", DisplayName: ""}, "manager"},
+		{config.AgentMeta{ID: "", DisplayName: ""}, ""},
 	}
 	for _, tc := range tests {
-		got := tc.meta.DisplayName()
+		got := tc.meta.GetDisplayName()
 		if got != tc.want {
-			t.Errorf("DisplayName() for {ID:%q Name:%q} = %q, want %q", tc.meta.ID, tc.meta.Name, got, tc.want)
+			t.Errorf("GetDisplayName() for {ID:%q DisplayName:%q} = %q, want %q", tc.meta.ID, tc.meta.DisplayName, got, tc.want)
 		}
 	}
 }

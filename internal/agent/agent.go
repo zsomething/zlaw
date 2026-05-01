@@ -36,7 +36,7 @@ type Result struct {
 
 // Agent runs the ReAct loop for a single agent instance.
 type Agent struct {
-	name            string
+	id              string
 	client          llm.Client
 	tools           ToolExecutor
 	history         *History
@@ -49,9 +49,10 @@ type Agent struct {
 }
 
 // New creates an Agent. All parameters are required.
-func New(name string, client llm.Client, tools ToolExecutor, history *History, logger *slog.Logger) *Agent {
+// id is the stable agent identifier.
+func New(id string, client llm.Client, tools ToolExecutor, history *History, logger *slog.Logger) *Agent {
 	return &Agent{
-		name:    name,
+		id:      id,
 		client:  client,
 		tools:   tools,
 		history: history,
@@ -116,7 +117,7 @@ func (a *Agent) RunStream(ctx context.Context, sessionID, input, systemPrompt st
 
 func (a *Agent) run(ctx context.Context, sessionID, input, systemPrompt string, handler llm.StreamHandler) (Result, error) {
 	ctx = context.WithValue(ctx, ctxkey.SessionID, sessionID)
-	log := a.logger.With("agent", a.name, "session_id", sessionID)
+	log := a.logger.With("agent", a.id, "session_id", sessionID)
 
 	log.Debug("turn started", "input_len", len(input), "system_prompt_len", len(systemPrompt))
 	log.Debug("system prompt", "system_prompt", systemPrompt)

@@ -9,11 +9,6 @@ import (
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
-// registrationMsg mirrors the payload agents publish to zlaw.registry.
-type registrationMsg struct {
-	Name string `json:"name"`
-}
-
 // RegistryCache subscribes to zlaw.registry and maintains a local set of known
 // agent IDs. It is used by the agent_delegate tool to validate target agents
 // before attempting to send a TaskEnvelope.
@@ -39,14 +34,18 @@ func NewRegistryCache(logger *slog.Logger) *RegistryCache {
 // registrations. It returns when ctx is cancelled.
 func (rc *RegistryCache) Start(ctx context.Context, m messaging.Messenger) error {
 	sub, err := m.Subscribe(ctx, registrySubject, func(data []byte) {
-		var msg registrationMsg
-		if err := json.Unmarshal(data, &msg); err != nil || msg.Name == "" {
+		var msg struct {
+			ID           string   `json:"id"`
+			Version      string   `json:"version"`
+			Capabilities []string `json:"capabilities"`
+		}
+		if err := json.Unmarshal(data, &msg); err != nil || msg.ID == "" {
 			return
 		}
 		rc.mu.Lock()
-		rc.agents[msg.Name] = true
+		rc.agents[msg.ID] = true
 		rc.mu.Unlock()
-		rc.logger.Debug("registry cache: agent seen", "agent", msg.Name)
+		rc.logger.Debug("registry cache: agent seen", "agent", msg.ID)
 	})
 	if err != nil {
 		return err

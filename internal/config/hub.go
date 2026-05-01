@@ -12,9 +12,9 @@ import (
 // AgentEntryEditor is the subset of HubConfig needed by the hub CLI and control socket
 // for agent lifecycle operations.
 type AgentEntryEditor interface {
-	RemoveAgent(name string) error
+	RemoveAgent(id string) error
 	AddAgent(entry AgentEntry) error
-	FindAgent(name string) (AgentEntry, bool)
+	FindAgent(id string) (AgentEntry, bool)
 }
 
 // HubConfig holds the top-level configuration for a zlaw-hub instance.
@@ -47,11 +47,12 @@ const (
 // AgentEntry describes a single agent supervised by the hub.
 // Hub knows only what it needs to manage the process lifecycle.
 type AgentEntry struct {
-	// Name is the logical agent name.
-	Name string `toml:"name"`
+	// ID is the stable machine-readable agent identifier.
+	// Backward compat: existing zlaw.toml entries with "name" key are ignored.
+	ID string `toml:"id"`
 	// Dir is the absolute path to the agent's self-contained root (ZLAW_AGENT_HOME).
 	// Contains agent.toml, credentials.toml, SOUL.md, sessions/, memories/, workspace/.
-	// When empty, defaults to $ZLAW_HOME/agents/<name>.
+	// When empty, defaults to $ZLAW_HOME/agents/<id>.
 	Dir string `toml:"dir"`
 	// Binary is the path to the agent executable.
 	// When empty, defaults to the hub's own executable (zlaw agent serve).
@@ -92,9 +93,9 @@ func LoadHubConfig(path string) (HubConfig, error) {
 	return cfg, nil
 }
 
-// RemoveAgent removes the agent entry with the given name from zlaw.toml.
+// RemoveAgent removes the agent entry with the given ID from zlaw.toml.
 // It writes the updated config back to disk atomically.
-func (c HubConfig) RemoveAgent(name string) error {
+func (c HubConfig) RemoveAgent(id string) error {
 	path := DefaultHubConfigPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -114,7 +115,7 @@ func (c HubConfig) RemoveAgent(name string) error {
 
 	updated := make([]map[string]any, 0, len(agents))
 	for _, entry := range agents {
-		if entry["name"] != name {
+		if entry["id"] != id {
 			updated = append(updated, entry)
 		}
 	}
@@ -142,7 +143,7 @@ func (c HubConfig) AddAgent(entry AgentEntry) error {
 		raw["agents"] = agents
 	}
 
-	newEntry := map[string]any{"name": entry.Name}
+	newEntry := map[string]any{"id": entry.ID}
 	if entry.Dir != "" {
 		newEntry["dir"] = entry.Dir
 	}
@@ -161,10 +162,10 @@ func (c HubConfig) AddAgent(entry AgentEntry) error {
 	return writeHubConfig(path, raw)
 }
 
-// FindAgent returns the AgentEntry for name if present.
-func (c HubConfig) FindAgent(name string) (AgentEntry, bool) {
+// FindAgent returns the AgentEntry for id if present.
+func (c HubConfig) FindAgent(id string) (AgentEntry, bool) {
 	for _, a := range c.Agents {
-		if a.Name == name {
+		if a.ID == id {
 			return a, true
 		}
 	}
@@ -182,8 +183,8 @@ func writeHubConfig(path string, raw map[string]any) error {
 	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
 
-// SetAgentDisabled updates the disabled flag for agent name in zlaw.toml.
-func (c HubConfig) SetAgentDisabled(name string, disabled bool) error {
+// SetAgentDisabled updates the disabled flag for agent ID in zlaw.toml.
+func (c HubConfig) SetAgentDisabled(id string, disabled bool) error {
 	path := DefaultHubConfigPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -202,7 +203,7 @@ func (c HubConfig) SetAgentDisabled(name string, disabled bool) error {
 
 	found := false
 	for _, entry := range agents {
-		if entry["name"] == name {
+		if entry["id"] == id {
 			if disabled {
 				entry["disabled"] = true
 			} else {
@@ -213,7 +214,7 @@ func (c HubConfig) SetAgentDisabled(name string, disabled bool) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("agent %q not found in %s", name, path)
+		return fmt.Errorf("agent %q not found in %s", id, path)
 	}
 	raw["agents"] = agents
 

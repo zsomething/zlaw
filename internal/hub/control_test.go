@@ -39,7 +39,7 @@ func (m *mockControlSupervisor) Restart(name string) error {
 	return nil
 }
 func (m *mockControlSupervisor) Spawn(_ context.Context, entry config.AgentEntry) error {
-	m.SpawnedNames = append(m.SpawnedNames, entry.Name)
+	m.SpawnedNames = append(m.SpawnedNames, entry.ID)
 	return nil
 }
 func (m *mockControlSupervisor) Remove(name string) error {
@@ -86,27 +86,27 @@ func TestControlSocket(t *testing.T) {
 	if err := os.WriteFile(zlawTOML, []byte(`[hub]
 name = "test"
 [[agents]]
-name = "alice"
+	id = "alice"
 [[agents]]
-name = "bob"
+	id = "bob"
 `), 0o600); err != nil {
 		t.Fatalf("write zlaw.toml: %v", err)
 	}
 
 	sup := &mockControlSupervisor{
 		statuses: []AgentStatus{
-			{Name: "alice", Running: true, PID: 1234},
-			{Name: "bob", Running: false, PID: 0},
+			{ID: "alice", Running: true, PID: 1234},
+			{ID: "bob", Running: false, PID: 0},
 		},
 		status: map[string]AgentStatus{
-			"alice": {Name: "alice", Running: true, PID: 1234},
-			"bob":   {Name: "bob", Running: false, PID: 0},
+			"alice": {ID: "alice", Running: true, PID: 1234},
+			"bob":   {ID: "bob", Running: false, PID: 0},
 		},
 	}
 	reg := &mockControlRegistry{
 		entries: map[string]RegistryEntry{
-			"alice": {Name: "alice", Status: AgentConnected, LastHeartbeat: time.Now()},
-			"bob":   {Name: "bob", Status: AgentDisconnected, LastHeartbeat: time.Now().Add(-time.Minute)},
+			"alice": {ID: "alice", Status: AgentConnected, LastHeartbeat: time.Now()},
+			"bob":   {ID: "bob", Status: AgentDisconnected, LastHeartbeat: time.Now().Add(-time.Minute)},
 		},
 	}
 
@@ -207,7 +207,7 @@ name = "bob"
 	})
 
 	t.Run("agent.status", func(t *testing.T) {
-		req := map[string]any{"method": "agent.status", "params": map[string]any{"name": "alice"}}
+		req := map[string]any{"method": "agent.status", "params": map[string]any{"id": "alice"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -231,8 +231,8 @@ name = "bob"
 		if err := json.Unmarshal(resp.Result, &result); err != nil {
 			t.Fatalf("decode result: %v", err)
 		}
-		if result.Name != "alice" {
-			t.Errorf("Name = %q, want %q", result.Name, "alice")
+		if result.ID != "alice" {
+			t.Errorf("Name = %q, want %q", result.ID, "alice")
 		}
 		if !result.Running {
 			t.Error("Running = false, want true")
@@ -260,7 +260,7 @@ name = "bob"
 	})
 
 	t.Run("agent.disable", func(t *testing.T) {
-		req := map[string]any{"method": "agent.disable", "params": map[string]any{"name": "alice"}}
+		req := map[string]any{"method": "agent.disable", "params": map[string]any{"id": "alice"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -288,7 +288,7 @@ name = "bob"
 	t.Run("agent.enable", func(t *testing.T) {
 		// agent.enable clears the disabled flag in zlaw.toml for the named agent.
 		// "bob" is registered in the test zlaw.toml, so this should succeed.
-		req := map[string]any{"method": "agent.enable", "params": map[string]any{"name": "bob"}}
+		req := map[string]any{"method": "agent.enable", "params": map[string]any{"id": "bob"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -312,7 +312,7 @@ name = "bob"
 
 	t.Run("agent.stop", func(t *testing.T) {
 		sup.StoppedNames = nil // reset from agent.disable
-		req := map[string]any{"method": "agent.stop", "params": map[string]any{"name": "carol"}}
+		req := map[string]any{"method": "agent.stop", "params": map[string]any{"id": "carol"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -339,7 +339,7 @@ name = "bob"
 
 	t.Run("agent.restart", func(t *testing.T) {
 		sup.RestartedNames = nil // reset from previous subtests
-		req := map[string]any{"method": "agent.restart", "params": map[string]any{"name": "alice"}}
+		req := map[string]any{"method": "agent.restart", "params": map[string]any{"id": "alice"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -365,7 +365,7 @@ name = "bob"
 	})
 
 	t.Run("agent.remove", func(t *testing.T) {
-		req := map[string]any{"method": "agent.remove", "params": map[string]any{"name": "bob"}}
+		req := map[string]any{"method": "agent.remove", "params": map[string]any{"id": "bob"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 		conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck

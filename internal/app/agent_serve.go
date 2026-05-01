@@ -55,7 +55,6 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 
 	// id is resolved after Load(); update the onChange callback to include agentID.
 	var id string
-	var displayName string
 	if cfg.Agent.ID != "" {
 		id = cfg.Agent.ID
 	} else {
@@ -63,10 +62,6 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	}
 	if id == "" {
 		id = "default"
-	}
-	displayName = cfg.Agent.Name
-	if displayName == "" {
-		displayName = id
 	}
 	loader.SetOnChange(func(_ config.AgentConfig, p config.Personality) {
 		s := agent.BuildSystemPrompt(nil, p, id)
@@ -79,7 +74,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	})
 
 	// Self-identity sticky block for multi-agent self-awareness.
-	selfIdentityBlock := agent.BuildSelfIdentitySticky(displayName, id, cfg.Agent.Roles)
+	selfIdentityBlock := agent.BuildSelfIdentitySticky(id, cfg.Agent.Roles)
 	stickyBlocks = append(stickyBlocks, selfIdentityBlock)
 	logger.Info("sticky block enabled", "name", selfIdentityBlock.Name, "agent", id)
 

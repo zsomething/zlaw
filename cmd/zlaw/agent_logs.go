@@ -18,7 +18,7 @@ import (
 
 // AgentLogsCmd streams agent logs from the hub.
 type AgentLogsCmd struct {
-	Agent    string        `short:"a" help:"agent name to filter logs (default: all agents)"`
+	Agent    string        `short:"a" help:"agent id to filter logs (default: all agents)"`
 	Level    string        `help:"minimum log level (debug/info/warn/error)"`
 	Since    time.Duration `help:"show logs from the last N seconds (default: all)"`
 	Follow   bool          `short:"f" help:"follow logs continuously (default: true)"`
@@ -239,7 +239,7 @@ func formatAttr(v any) string {
 }
 
 func (c *AgentLogsCmd) SetFlags(fs *flag.FlagSet) {
-	fs.StringVar(&c.Agent, "agent", "", "agent name to filter")
+	fs.StringVar(&c.Agent, "agent", "", "agent id to filter")
 	fs.StringVar(&c.Level, "level", "", "minimum log level")
 	fs.DurationVar(&c.Since, "since", 0, "show logs from the last N seconds")
 	fs.BoolVar(&c.Follow, "follow", true, "follow logs continuously")

@@ -55,7 +55,7 @@ func TestBuildCredentialEnv_WritesActiveFile(t *testing.T) {
 
 	t.Setenv("ZLAW_HOME", tmp)
 
-	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "coding"})
+	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{ID: "coding"})
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestBuildCredentialEnv_MissingProfile(t *testing.T) {
 
 	t.Setenv("ZLAW_HOME", tmp)
 
-	_, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "coding"})
+	_, err := hub.BuildCredentialEnv(config.AgentEntry{ID: "coding"})
 	if err == nil {
 		t.Fatal("expected error for missing profile, got nil")
 	}
@@ -129,7 +129,7 @@ func TestBuildCredentialEnv_NoAuthProfile(t *testing.T) {
 
 	t.Setenv("ZLAW_HOME", tmp)
 
-	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "noauth"})
+	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{ID: "noauth"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestBuildCredentialEnv_MissingAgentTOML(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("ZLAW_HOME", tmp)
 
-	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "ghost"})
+	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{ID: "ghost"})
 	if err != nil {
 		t.Fatalf("missing agent.toml should be a no-op, got err: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestBuildCredentialEnv_ExplicitDir(t *testing.T) {
 
 	runDir := filepath.Join(tmp, "run")
 	activeCredsPath := filepath.Join(runDir, "credentials", "coding.toml")
-	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{Name: "coding", Dir: agentDir})
+	envVars, err := hub.BuildCredentialEnv(config.AgentEntry{ID: "coding", Dir: agentDir})
 	if err != nil {
 		t.Fatalf("BuildCredentialEnv: %v", err)
 	}

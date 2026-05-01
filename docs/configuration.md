@@ -1,6 +1,6 @@
 # Configuration reference
 
-Each agent is a directory under `$ZLAW_HOME/agents/<name>/` containing three files:
+Each agent is a directory under `/agents/<id>/` containing three files:
 
 | File | Purpose |
 |------|---------|
@@ -11,7 +11,7 @@ Each agent is a directory under `$ZLAW_HOME/agents/<name>/` containing three fil
 Bootstrap a new agent directory with:
 
 ```sh
-zlaw-agent init --name <name>
+zlaw-agent init --name <id>
 ```
 
 ---
@@ -179,10 +179,10 @@ All paths derive from `$ZLAW_HOME` (defaults to `$PWD`):
 
 | Path | Contents |
 |------|---------|
-| `$ZLAW_HOME/agents/<name>/` | Agent config files |
-| `$ZLAW_HOME/sessions/<name>/` | Durable session history (JSONL) |
-| `$ZLAW_HOME/memories/<name>/` | Long-term memory files (Markdown) |
-| `$ZLAW_HOME/memories/<name>/.index/` | Vector index cache (regenerable) |
+| `/agents/<id>/` | Agent config files |
+| `/sessions/<id>/` | Durable session history (JSONL) |
+| `/memories/<id>/` | Long-term memory files (Markdown) |
+| `/memories/<id>/.index/` | Vector index cache (regenerable) |
 | `$ZLAW_HOME/credentials.toml` | Auth profiles |
 
 ---
