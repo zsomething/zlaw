@@ -110,8 +110,8 @@ type CtlCreateCmd struct {
 `ctl get agents` table (default):
 ```
 NAME       CONN         HEARTBEAT     ROLES
-manager    connected    14:23:01      [manager]
-worker     disconnected —             [worker]
+alice     connected    14:23:01      [coder]
+bob       disconnected —             []
 ```
 
 `ctl get agent <id>`:

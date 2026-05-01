@@ -88,9 +88,8 @@ Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity 
 
 ### P0 — Hub CLI & Bootstrap
 
-- [ ] **`zlaw-hub init`** — generate `$ZLAW_HOME/zlaw.toml` skeleton, `credentials.toml` (0600), and default manager agent scaffold under `agents/manager/`
-- [ ] **`zlaw-hub init`** — generate `$ZLAW_HOME/zlaw.toml` skeleton and default manager agent scaffold under `agents/`
-- [ ] **`zlaw-hub start`** — start hub process, embed NATS, spawn registered agents
+- [x] **`zlaw init`** — generate `$ZLAW_HOME/` layout, scaffold first agent under `agents/`
+- [x] **`zlaw hub start`** — start hub process, embed NATS, spawn registered agents
 - [ ] **`zlaw-hub status`** — hub health + per-agent status summary
 - [ ] **`zlaw-hub agent list/logs/restart/stop/remove`** — operational management subcommands
 
@@ -127,7 +126,7 @@ All lifecycle tools are CLI-only (via ctl). Agents communicate peer-to-peer over
 
 - [ ] **Agent keypairs (NKeys)** — generated at `zlaw-hub init` per agent; stored in agent dir; hub verifies identity on NATS connect
 - [ ] **Message signing** — A2A envelopes signed by sender; hub verifies signature before routing via NATS ACL
-- [ ] **Manager self-protection** — hub rejects hub-management requests targeting the manager agent for destructive operations
+- [ ] **Agent self-protection** — hub rejects lifecycle requests (stop/delete) from the target agent itself
 - [ ] **Audit logger** — append-only structured log; hub subscribes to all NATS subjects; every message, tool call, and delegation logged with trace ID
 
 ### P5 — Execution Isolation
@@ -162,8 +161,8 @@ All lifecycle tools are CLI-only (via ctl). Agents communicate peer-to-peer over
 | Language | Go | Performance, concurrency, single binary distribution |
 | Message bus | NATS (embedded in hub) | Pub/sub native, works across Docker/OS users; embedded means zero user-facing ops |
 | Messenger abstraction | `NATSMessenger` only in production; `ChanMessenger` for tests | No throwaway SocketMessenger; NATS embedded = no ops cost; test double uses in-memory channels |
-| Hub role | Broker + process manager (not task orchestrator) | Hub manages processes; task routing lives in the manager agent |
-| A2A routing | Always via hub NATS (subject ACL enforced at broker) | Centralized audit, ACL without hub business logic, composable middleware |
+| Hub role | Broker + process manager (not task orchestrator) | Hub manages processes; task routing is peer-to-peer via NATS |
+| A2A routing | Peer-to-peer over NATS (subject ACL enforced at broker) | Any agent can delegate to any other agent; hub provides routing + ACL only |
 | Plugin system | Binary plugins over gRPC/IPC | Isolation, language agnostic, versioned contract |
 | Config format | TOML | Human-friendly, Go ecosystem standard |
 | Secrets | Env-var injection | No plaintext in config, works with any secrets manager |
