@@ -25,7 +25,7 @@ const (
 
 // AgentStatus describes the current state of a supervised agent.
 type AgentStatus struct {
-	Name    string
+	ID      string
 	Running bool
 	PID     int
 	LastErr error
@@ -87,7 +87,7 @@ func (m *managedAgent) status() AgentStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return AgentStatus{
-		Name:    m.entry.Name,
+		ID:      m.entry.ID,
 		Running: m.running,
 		PID:     m.pid,
 		LastErr: m.lastErr,
@@ -163,7 +163,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 			stopCh: make(chan struct{}),
 		}
 		s.mu.Lock()
-		s.agents[entry.Name] = ma
+		s.agents[entry.ID] = ma
 		s.mu.Unlock()
 
 		go s.monitor(ctx, ma)
@@ -175,26 +175,26 @@ func (s *Supervisor) Start(ctx context.Context) error {
 // an agent with the same name is already supervised.
 func (s *Supervisor) Spawn(ctx context.Context, entry config.AgentEntry) error {
 	s.mu.Lock()
-	if _, exists := s.agents[entry.Name]; exists {
+	if _, exists := s.agents[entry.ID]; exists {
 		s.mu.Unlock()
-		return fmt.Errorf("supervisor: agent %q is already supervised", entry.Name)
+		return fmt.Errorf("supervisor: agent %q is already supervised", entry.ID)
 	}
 	ma := &managedAgent{
 		entry:  entry,
 		stopCh: make(chan struct{}),
 	}
-	s.agents[entry.Name] = ma
+	s.agents[entry.ID] = ma
 	s.mu.Unlock()
 
 	go s.monitor(ctx, ma)
 	return nil
 }
 
-// Stop signals the named agent to stop and does not restart it.
-func (s *Supervisor) Stop(name string) error {
-	ma := s.get(name)
+// Stop signals the agent to stop and does not restart it.
+func (s *Supervisor) Stop(agentID string) error {
+	ma := s.get(agentID)
 	if ma == nil {
-		return fmt.Errorf("supervisor: agent %q not found", name)
+		return fmt.Errorf("supervisor: agent %q not found", agentID)
 	}
 	ma.stopOnce.Do(func() { close(ma.stopCh) })
 	return s.kill(ma)
@@ -235,10 +235,10 @@ func (s *Supervisor) Remove(name string) error {
 }
 
 // Status returns the current state of the named agent.
-func (s *Supervisor) Status(name string) (AgentStatus, error) {
-	ma := s.get(name)
+func (s *Supervisor) Status(agentID string) (AgentStatus, error) {
+	ma := s.get(agentID)
 	if ma == nil {
-		return AgentStatus{}, fmt.Errorf("supervisor: agent %q not found", name)
+		return AgentStatus{}, fmt.Errorf("supervisor: agent %q not found", agentID)
 	}
 	return ma.status(), nil
 }
@@ -253,8 +253,8 @@ func (s *Supervisor) Statuses() []AgentStatus {
 	s.mu.Unlock()
 
 	out := make([]AgentStatus, 0, len(names))
-	for _, n := range names {
-		if st, err := s.Status(n); err == nil {
+	for _, id := range names {
+		if st, err := s.Status(id); err == nil {
 			out = append(out, st)
 		}
 	}
@@ -281,7 +281,7 @@ func (s *Supervisor) kill(ma *managedAgent) error {
 	if err := cmd.Process.Signal(os.Interrupt); err != nil {
 		// Process may have already exited.
 		if !errors.Is(err, os.ErrProcessDone) {
-			return fmt.Errorf("signal agent %s: %w", ma.entry.Name, err)
+			return fmt.Errorf("signal agent %s: %w", ma.entry.ID, err)
 		}
 	}
 	return nil
@@ -303,7 +303,7 @@ func (s *Supervisor) monitor(ctx context.Context, ma *managedAgent) {
 		if attempt > 0 {
 			delay := BackoffDelay(attempt)
 			s.logger.Info("supervisor: waiting before restart",
-				"agent", ma.entry.Name,
+				"agent", ma.entry.ID,
 				"attempt", attempt,
 				"delay", delay,
 			)
@@ -319,14 +319,14 @@ func (s *Supervisor) monitor(ctx context.Context, ma *managedAgent) {
 		cmd, err := s.buildCmd(ma.entry)
 		if err != nil {
 			s.logger.Error("supervisor: build command failed",
-				"agent", ma.entry.Name, "err", err)
+				"agent", ma.entry.ID, "err", err)
 			ma.setStopped(err)
 			return
 		}
 
 		if err := cmd.Start(); err != nil {
 			s.logger.Error("supervisor: start failed",
-				"agent", ma.entry.Name, "err", err)
+				"agent", ma.entry.ID, "err", err)
 			ma.setStopped(err)
 			attempt++
 			if !s.shouldRestart(ma.entry, err) {
@@ -337,7 +337,7 @@ func (s *Supervisor) monitor(ctx context.Context, ma *managedAgent) {
 
 		ma.setRunning(cmd)
 		s.logger.Info("supervisor: agent started",
-			"agent", ma.entry.Name,
+			"agent", ma.entry.ID,
 			"pid", cmd.Process.Pid,
 			"attempt", attempt,
 		)
@@ -347,12 +347,12 @@ func (s *Supervisor) monitor(ctx context.Context, ma *managedAgent) {
 
 		if exitErr != nil {
 			s.logger.Warn("supervisor: agent exited with error",
-				"agent", ma.entry.Name,
+				"agent", ma.entry.ID,
 				"err", exitErr,
 			)
 		} else {
 			s.logger.Info("supervisor: agent exited cleanly",
-				"agent", ma.entry.Name,
+				"agent", ma.entry.ID,
 			)
 		}
 
@@ -370,7 +370,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 		bin = s.selfBin
 	}
 	if bin == "" {
-		return nil, fmt.Errorf("no binary configured for agent %q and selfBin is empty", entry.Name)
+		return nil, fmt.Errorf("no binary configured for agent %q and selfBin is empty", entry.ID)
 	}
 
 	agentDir := resolveAgentDir(entry)
@@ -384,7 +384,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	var args []string
 	if entry.Binary == "" {
 		// Using hub binary: run as sub-command "agent serve"
-		args = []string{"agent", "serve", "--agent", entry.Name}
+		args = []string{"agent", "serve", "--agent", entry.ID}
 	} else {
 		// Custom binary: pass agent name via env, no sub-command assumed.
 		args = nil
@@ -396,7 +396,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	// ZLAW_LOG_FORMAT=json makes the agent output structured JSON that we relay
 	// with PrettyHandler. This allows unified log formatting at the hub.
 	env := os.Environ()
-	env = SetEnv(env, "ZLAW_AGENT", entry.Name)
+	env = SetEnv(env, "ZLAW_AGENT", entry.ID)
 	env = SetEnv(env, "ZLAW_NATS_URL", s.natsURL)
 	env = SetEnv(env, "ZLAW_LOG_FORMAT", "json")
 	env = SetEnv(env, "ZLAW_NO_COLOR", "1") // colors applied by hub's PrettyHandler
@@ -404,13 +404,13 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 
 	// Pipe agent stdout/stderr through JSON log reader for unified pretty output.
 	// If messenger is set, logs are also published to NATS for 'zlaw agent logs' clients.
-	label := fmt.Sprintf("[agent:%s]", entry.Name)
-	color := AgentColor(entry.Name)
+	label := fmt.Sprintf("[agent:%s]", entry.ID)
+	color := AgentColor(entry.ID)
 	stdoutWriter := newAgentLogWriter(label, color, s.noColor)
 	stderrWriter := newAgentLogWriter(label, color, s.noColor)
 	if s.messenger != nil {
-		stdoutWriter = stdoutWriter.withMessenger(s.messenger, entry.Name)
-		stderrWriter = stderrWriter.withMessenger(s.messenger, entry.Name)
+		stdoutWriter = stdoutWriter.withMessenger(s.messenger, entry.ID)
+		stderrWriter = stderrWriter.withMessenger(s.messenger, entry.ID)
 	}
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderrWriter
@@ -420,7 +420,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	// via this injected env var at runtime.
 	credEnv, err := BuildCredentialEnv(entry)
 	if err != nil {
-		return nil, fmt.Errorf("credential injection for agent %q: %w", entry.Name, err)
+		return nil, fmt.Errorf("credential injection for agent %q: %w", entry.ID, err)
 	}
 	for _, kv := range credEnv {
 		idx := len(kv)
@@ -434,7 +434,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	}
 
 	// Inject the NATS token for this agent so NATSMessenger can authenticate.
-	if token, ok := s.agentTokens[entry.Name]; ok && token != "" {
+	if token, ok := s.agentTokens[entry.ID]; ok && token != "" {
 		env = SetEnv(env, "ZLAW_NATS_CREDS", token)
 	}
 

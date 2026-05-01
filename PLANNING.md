@@ -105,10 +105,10 @@ Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity 
 
 ### P2 — Agent ↔ Hub Integration
 
-- [ ] **NATS client in zlaw-agent** — agent connects to hub NATS on start; publishes heartbeat to `zlaw.registry`; subscribes to `agent.<name>.inbox`
+- [ ] **NATS client in zlaw-agent** — agent connects to hub NATS on start; publishes heartbeat to `zlaw.registry`; subscribes to `agent.<id>.inbox`
 - [ ] **Capability advertisement** — agent publishes its tool manifest to `zlaw.registry` on connect; hub stores in registry
 - [ ] **A2A message envelope** — structured delegation format: `{from, to, task, context, reply_to, session_id, trace_id}`
-- [ ] **`agent_delegate` tool** — builtin that publishes task envelope to `agent.<name>.inbox`; hub NATS ACL enforces publish permissions at transport layer; hub audit subscriber logs all traffic
+- [ ] **`agent_delegate` tool** — builtin that publishes task envelope to `agent.<id>.inbox`; hub NATS ACL enforces publish permissions at transport layer; hub audit subscriber logs all traffic
 - [ ] **NATS ACL enforcement** — per-agent publish/subscribe permissions configured by hub at NATS server level; manager gets broad publish ACL, specialists get narrow (reply-only by default)
 - [ ] **`zlaw.hub.inbox` handler** — hub listens for hub-management requests (agent_create, agent_list, agent_configure, agent_stop, agent_restart) and executes them
 
@@ -116,12 +116,12 @@ Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity 
 
 Manager agent is a regular agent with `manager: true` in `agent.toml`. Hub grants it the hub-management tool set and enforces self-protection.
 
-- [ ] **`agent_create(name, role, description)`** — scaffold `agents/<name>/` dir + files, register in hub, spawn process
+- [ ] **`agent_create(id, role, description)`** — scaffold `agents/<id>/` dir + files, register in hub, spawn process
 - [ ] **`agent_list()`** — list all registered agents, status, capabilities
-- [ ] **`agent_configure(name, key, value)`** — write to agent's `runtime.toml`, triggers hot-reload
-- [ ] **`agent_stop(name)` / `agent_restart(name)`** — process lifecycle control
-- [ ] **`agent_remove(name)`** — deregister and stop; hub rejects if target == self
-- [ ] **`agent_delegate(name, task, context)`** — publish task envelope; available to all agents, ACL controls reach
+- [ ] **`agent_configure(id, key, value)`** — write to agent's `runtime.toml`, triggers hot-reload
+- [ ] **`agent_stop(id)` / `agent_restart(id)`** — process lifecycle control
+- [ ] **`agent_remove(id)`** — deregister and stop; hub rejects if target == self
+- [ ] **`agent_delegate(id, task, context)`** — publish task envelope; available to all agents, ACL controls reach
 
 ### P4 — Identity & Security
 

@@ -100,7 +100,7 @@ func TestSupervisor_SpawnAndStop(t *testing.T) {
 	cfg := config.HubConfig{
 		Agents: []config.AgentEntry{
 			{
-				Name:          "test-agent",
+				ID:            "test-agent",
 				Binary:        sleepBin,
 				RestartPolicy: config.RestartNever,
 			},
@@ -148,7 +148,7 @@ func TestSupervisor_RestartOnFailure(t *testing.T) {
 	cfg := config.HubConfig{
 		Agents: []config.AgentEntry{
 			{
-				Name:          "failing-agent",
+				ID:            "failing-agent",
 				Binary:        falseBin,
 				RestartPolicy: config.RestartOnFailure,
 			},
@@ -245,7 +245,7 @@ func TestSupervisor_SpawnDynamic(t *testing.T) {
 	}
 
 	entry := config.AgentEntry{
-		Name:          "dynamic",
+		ID:            "dynamic",
 		Binary:        falseBin,
 		RestartPolicy: config.RestartNever,
 	}
@@ -257,8 +257,8 @@ func TestSupervisor_SpawnDynamic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if st.Name != "dynamic" {
-		t.Errorf("Name = %q, want %q", st.Name, "dynamic")
+	if st.ID != "dynamic" {
+		t.Errorf("ID = %q, want %q", st.ID, "dynamic")
 	}
 }
 
@@ -271,7 +271,7 @@ func TestSupervisor_SpawnDuplicate(t *testing.T) {
 
 	cfg := config.HubConfig{
 		Agents: []config.AgentEntry{
-			{Name: "dup", Binary: falseBin, RestartPolicy: config.RestartNever},
+			{ID: "dup", Binary: falseBin, RestartPolicy: config.RestartNever},
 		},
 	}
 	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
@@ -283,7 +283,7 @@ func TestSupervisor_SpawnDuplicate(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	err = sup.Spawn(ctx, config.AgentEntry{Name: "dup", Binary: falseBin})
+	err = sup.Spawn(ctx, config.AgentEntry{ID: "dup", Binary: falseBin})
 	if err == nil {
 		t.Error("expected error for duplicate spawn, got nil")
 	}
@@ -298,7 +298,7 @@ func TestSupervisor_RestartRunning(t *testing.T) {
 
 	cfg := config.HubConfig{
 		Agents: []config.AgentEntry{
-			{Name: "sleeper", Binary: sleepBin, RestartPolicy: config.RestartNever},
+			{ID: "sleeper", Binary: sleepBin, RestartPolicy: config.RestartNever},
 		},
 	}
 	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())
@@ -333,7 +333,7 @@ func TestSupervisor_Remove(t *testing.T) {
 
 	cfg := config.HubConfig{
 		Agents: []config.AgentEntry{
-			{Name: "to-remove", Binary: falseBin, RestartPolicy: config.RestartAlways},
+			{ID: "to-remove", Binary: falseBin, RestartPolicy: config.RestartAlways},
 		},
 	}
 	sup := hub.NewSupervisor(cfg, "nats://127.0.0.1:4222", "", "", nil, slog.Default())

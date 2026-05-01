@@ -17,9 +17,9 @@ type AgentCmd struct {
 	Auth   AgentAuthCmd   `cmd:"" help:"manage agent credentials"`
 }
 
-// AgentFlags are embedded by commands that need to resolve an agent directory.
+// AgentFlags holds shared flags for agent-related commands.
 type AgentFlags struct {
-	Agent     string `short:"a" env:"ZLAW_AGENT"     help:"agent name; resolves to $ZLAW_HOME/agents/<name>"`
+	Agent     string `short:"a" env:"ZLAW_AGENT"     help:"agent id; resolves to $ZLAW_HOME/agents/<id>"`
 	AgentDir  string `          env:"ZLAW_AGENT_DIR" help:"explicit path to agent directory (overrides --agent)"`
 	Workspace string `          env:"ZLAW_WORKSPACE" help:"path to agent workspace (SOUL.md, IDENTITY.md); defaults to $ZLAW_HOME/workspaces/<name>"`
 }

@@ -50,11 +50,7 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 	})
 
 	// Self-identity sticky block for multi-agent self-awareness.
-	displayName := cfg.Agent.Name
-	if displayName == "" {
-		displayName = cfg.Agent.ID
-	}
-	selfIdentityBlock := agent.BuildSelfIdentitySticky(displayName, cfg.Agent.ID, cfg.Agent.Roles)
+	selfIdentityBlock := agent.BuildSelfIdentitySticky(cfg.Agent.ID, cfg.Agent.Roles)
 	stickyBlocks = append(stickyBlocks, selfIdentityBlock)
 	logger.Info("sticky block enabled", "name", selfIdentityBlock.Name, "agent", cfg.Agent.ID)
 

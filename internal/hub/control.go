@@ -17,11 +17,11 @@ import (
 // ControlSupervisor is the subset of Supervisor needed by ControlSocket.
 type ControlSupervisor interface {
 	Statuses() []AgentStatus
-	Status(name string) (AgentStatus, error)
-	Stop(name string) error
-	Restart(name string) error
+	Status(id string) (AgentStatus, error)
+	Stop(id string) error
+	Restart(id string) error
 	Spawn(ctx context.Context, entry config.AgentEntry) error
-	Remove(name string) error
+	Remove(id string) error
 }
 
 // ControlSocket provides a JSON-RPC-like interface over a Unix domain socket.
@@ -31,11 +31,11 @@ type ControlSupervisor interface {
 //
 //	{"method": "hub.status"}                    → HubStatusResponse
 //	{"method": "agent.list"}                    → AgentListResponse
-//	{"method": "agent.status", "params": {"name": "foo"}} → AgentStatusResponse
-//	{"method": "agent.configure", "params": {"name": "foo", "key": "llm.model", "value": "claude-opus-4"}}
-//	{"method": "agent.stop", "params": {"name": "foo"}}
-//	{"method": "agent.restart", "params": {"name": "foo"}}
-//	{"method": "agent.remove", "params": {"name": "foo"}}
+//	{"method": "agent.status", "params": {"id": "foo"}} → AgentStatusResponse
+//	{"method": "agent.configure", "params": {"id": "foo", "key": "llm.model", "value": "claude-opus-4"}}
+//	{"method": "agent.stop", "params": {"id": "foo"}}
+//	{"method": "agent.restart", "params": {"id": "foo"}}
+//	{"method": "agent.remove", "params": {"id": "foo"}}
 //
 // Response format:
 //
@@ -219,7 +219,7 @@ type ControlResponseError struct {
 
 // AgentInfo combines supervisor process state with registry heartbeat state.
 type AgentInfo struct {
-	Name          string   `json:"name"`
+	ID            string   `json:"id"`
 	Running       bool     `json:"running"`
 	PID           int      `json:"pid"`
 	LastErr       string   `json:"last_err,omitempty"`
@@ -253,7 +253,7 @@ func (cs *ControlSocket) hubStatus() (json.RawMessage, error) {
 	agents := make([]AgentInfo, 0, len(statuses))
 	for _, s := range statuses {
 		info := AgentInfo{
-			Name:    s.Name,
+			ID:      s.ID,
 			Running: s.Running,
 			PID:     s.PID,
 		}
@@ -261,7 +261,7 @@ func (cs *ControlSocket) hubStatus() (json.RawMessage, error) {
 			info.LastErr = s.LastErr.Error()
 		}
 		// Enrich with registry heartbeat info.
-		if entry, ok := cs.registry.Get(s.Name); ok {
+		if entry, ok := cs.registry.Get(s.ID); ok {
 			info.ConnStatus = string(entry.Status)
 			info.LastHeartbeat = entry.LastHeartbeat.Format(time.RFC3339)
 			info.Capabilities = entry.Capabilities
@@ -305,30 +305,30 @@ func (cs *ControlSocket) agentList() (json.RawMessage, error) {
 // agentStatus returns the status of a named agent.
 func (cs *ControlSocket) agentStatus(params json.RawMessage) (json.RawMessage, error) {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return nil, fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return nil, fmt.Errorf("param 'id' is required")
 	}
 
-	status, err := cs.supervisor.Status(p.Name)
+	status, err := cs.supervisor.Status(p.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build enhanced AgentInfo with registry heartbeat info.
 	info := AgentInfo{
-		Name:    status.Name,
+		ID:      status.ID,
 		Running: status.Running,
 		PID:     status.PID,
 	}
 	if status.LastErr != nil {
 		info.LastErr = status.LastErr.Error()
 	}
-	if entry, ok := cs.registry.Get(p.Name); ok {
+	if entry, ok := cs.registry.Get(p.ID); ok {
 		info.ConnStatus = string(entry.Status)
 		info.LastHeartbeat = entry.LastHeartbeat.Format(time.RFC3339)
 		info.Capabilities = entry.Capabilities
@@ -342,36 +342,36 @@ func (cs *ControlSocket) agentStatus(params json.RawMessage) (json.RawMessage, e
 // The dir must already exist (created by ctl). Hub only registers and spawns.
 func (cs *ControlSocket) agentCreate(ctx context.Context, params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
-		Dir  string `json:"dir"`
+		ID  string `json:"id"`
+		Dir string `json:"dir"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
-	return cs.mgmtHandler.AgentCreate(ctx, p.Name, p.Dir)
+	return cs.mgmtHandler.AgentCreate(ctx, p.ID, p.Dir)
 }
 
 // agentDisable stops an agent and marks it disabled so the hub does not respawn it.
 func (cs *ControlSocket) agentDisable(params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
 
 	// Stop the agent.
-	if err := cs.supervisor.Stop(p.Name); err != nil {
-		cs.logger.Warn("control: stop before disable failed", "name", p.Name, "err", err)
+	if err := cs.supervisor.Stop(p.ID); err != nil {
+		cs.logger.Warn("control: stop before disable failed", "id", p.ID, "err", err)
 	}
 
-	if err := cs.cfg.SetAgentDisabled(p.Name, true); err != nil {
+	if err := cs.cfg.SetAgentDisabled(p.ID, true); err != nil {
 		return fmt.Errorf("agent.disable: write disabled flag: %w", err)
 	}
 	return nil
@@ -380,15 +380,15 @@ func (cs *ControlSocket) agentDisable(params json.RawMessage) error {
 // agentEnable clears the disabled flag so the hub can spawn the agent again.
 func (cs *ControlSocket) agentEnable(params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
-	if err := cs.cfg.SetAgentDisabled(p.Name, false); err != nil {
+	if err := cs.cfg.SetAgentDisabled(p.ID, false); err != nil {
 		return fmt.Errorf("agent.enable: write disabled flag: %w", err)
 	}
 	return nil
@@ -397,18 +397,18 @@ func (cs *ControlSocket) agentEnable(params json.RawMessage) error {
 // agentConfigure updates a runtime field for a named agent.
 func (cs *ControlSocket) agentConfigure(ctx context.Context, params json.RawMessage) error {
 	var p struct {
-		Name  string `json:"name"`
+		ID    string `json:"id"`
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" || p.Key == "" || p.Value == "" {
-		return fmt.Errorf("params 'name', 'key', 'value' are required")
+	if p.ID == "" || p.Key == "" || p.Value == "" {
+		return fmt.Errorf("params 'id', 'key', 'value' are required")
 	}
 
-	agentDir := filepath.Join(config.ZlawHome(), "agents", p.Name)
+	agentDir := filepath.Join(config.ZlawHome(), "agents", p.ID)
 	if err := config.WriteRuntimeFieldToDir(agentDir, p.Key, p.Value); err != nil {
 		return fmt.Errorf("agent.configure: %w", err)
 	}
@@ -418,51 +418,51 @@ func (cs *ControlSocket) agentConfigure(ctx context.Context, params json.RawMess
 // agentStop stops a named agent.
 func (cs *ControlSocket) agentStop(params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
-	return cs.supervisor.Stop(p.Name)
+	return cs.supervisor.Stop(p.ID)
 }
 
 // agentRestart restarts a named agent.
 func (cs *ControlSocket) agentRestart(params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
-	return cs.supervisor.Restart(p.Name)
+	return cs.supervisor.Restart(p.ID)
 }
 
 // agentRemove stops and deregisters a named agent.
 func (cs *ControlSocket) agentRemove(params json.RawMessage) error {
 	var p struct {
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
 	}
-	if p.Name == "" {
-		return fmt.Errorf("param 'name' is required")
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
 	}
 
 	// Remove from supervisor (stops agent + removes from map so no respawn).
-	if err := cs.supervisor.Remove(p.Name); err != nil {
-		cs.logger.Warn("control: supervisor.Remove failed", "name", p.Name, "err", err)
+	if err := cs.supervisor.Remove(p.ID); err != nil {
+		cs.logger.Warn("control: supervisor.Remove failed", "id", p.ID, "err", err)
 	}
-	cs.registry.Deregister(p.Name)
+	cs.registry.Deregister(p.ID)
 
 	// Remove from zlaw.toml.
-	if err := cs.cfg.RemoveAgent(p.Name); err != nil {
+	if err := cs.cfg.RemoveAgent(p.ID); err != nil {
 		return fmt.Errorf("agent.remove: update zlaw.toml: %w", err)
 	}
 	return nil

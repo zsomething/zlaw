@@ -182,14 +182,14 @@ func (h *ManagementHandler) AgentCreate(ctx context.Context, name, dir string) e
 // opAgentCreate validates the agent dir, registers the entry, and spawns the agent.
 // File scaffolding is ctl's responsibility; hub only registers and spawns.
 func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string]any) error {
-	name, ok := stringParam(params, "name")
-	if !ok || name == "" {
-		return fmt.Errorf("agent.create: param 'name' is required")
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.create: param 'id' is required")
 	}
 
 	dir, _ := stringParam(params, "dir")
 	if dir == "" {
-		dir = filepath.Join(h.zlawHome, "agents", name)
+		dir = filepath.Join(h.zlawHome, "agents", agentID)
 	}
 
 	if _, err := os.Stat(dir); err != nil {
@@ -197,7 +197,7 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 	}
 
 	entry := config.AgentEntry{
-		Name:          name,
+		ID:            agentID,
 		Dir:           dir,
 		RestartPolicy: config.RestartOnFailure,
 	}
@@ -212,15 +212,15 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 		return fmt.Errorf("agent.create: spawn: %w", err)
 	}
 
-	h.logger.Info("hub inbox: agent registered and spawned", "name", name, "dir", dir)
+	h.logger.Info("hub inbox: agent registered and spawned", "agent", agentID, "dir", dir)
 	return nil
 }
 
 // opAgentConfigure writes a key/value pair to the agent's runtime.toml.
 func (h *ManagementHandler) opAgentConfigure(params map[string]any) error {
-	name, ok := stringParam(params, "name")
-	if !ok || name == "" {
-		return fmt.Errorf("agent.configure: param 'name' is required")
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.configure: param 'id' is required")
 	}
 	key, ok := stringParam(params, "key")
 	if !ok || key == "" {
@@ -231,47 +231,47 @@ func (h *ManagementHandler) opAgentConfigure(params map[string]any) error {
 		return fmt.Errorf("agent.configure: param 'value' is required")
 	}
 
-	agentDir := filepath.Join(h.zlawHome, "agents", name)
+	agentDir := filepath.Join(h.zlawHome, "agents", agentID)
 	if err := config.WriteRuntimeFieldToDir(agentDir, key, value); err != nil {
 		return fmt.Errorf("agent.configure: %w", err)
 	}
 
-	h.logger.Info("hub inbox: agent configured", "name", name, "key", key)
+	h.logger.Info("hub inbox: agent configured", "agent", agentID, "key", key)
 	return nil
 }
 
 // opAgentStop stops the named agent without restarting it.
 func (h *ManagementHandler) opAgentStop(params map[string]any) error {
-	name, ok := stringParam(params, "name")
-	if !ok || name == "" {
-		return fmt.Errorf("agent.stop: param 'name' is required")
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.stop: param 'id' is required")
 	}
-	return h.supervisor.Stop(name)
+	return h.supervisor.Stop(agentID)
 }
 
 // opAgentRestart restarts the named agent.
 func (h *ManagementHandler) opAgentRestart(params map[string]any) error {
-	name, ok := stringParam(params, "name")
-	if !ok || name == "" {
-		return fmt.Errorf("agent.restart: param 'name' is required")
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.restart: param 'id' is required")
 	}
-	return h.supervisor.Restart(name)
+	return h.supervisor.Restart(agentID)
 }
 
 // opAgentRemove stops the agent and removes it from the registry.
 // No special protection for any agent — hub management is CLI-only (#273).
 func (h *ManagementHandler) opAgentRemove(params map[string]any) error {
-	name, ok := stringParam(params, "name")
-	if !ok || name == "" {
-		return fmt.Errorf("agent.remove: param 'name' is required")
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.remove: param 'id' is required")
 	}
 
-	if err := h.supervisor.Stop(name); err != nil {
+	if err := h.supervisor.Stop(agentID); err != nil {
 		// Log but don't fail if the agent wasn't running.
-		h.logger.Warn("hub inbox: stop before remove failed", "name", name, "err", err)
+		h.logger.Warn("hub inbox: stop before remove failed", "agent", agentID, "err", err)
 	}
-	h.registry.Deregister(name)
-	h.logger.Info("hub inbox: agent removed", "name", name)
+	h.registry.Deregister(agentID)
+	h.logger.Info("hub inbox: agent removed", "agent", agentID)
 	return nil
 }
 
