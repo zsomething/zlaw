@@ -132,7 +132,7 @@ Hub sets `ZLAW_AGENT_HOME` when spawning the agent process. For remote/container
 | `internal/app/hub_daemon.go` | Accept `--run-dir` flag; pass run dir explicitly instead of deriving from `ZlawHome()` |
 | `cmd/zlaw/hub.go` (or hub CLI) | When starting hub, pass `--config $ZLAW_HOME/zlaw.toml --run-dir $ZLAW_HOME/run` |
 
-### ctl subcommand (new — see CTL_PLAN.md)
+### ctl subcommand (new — see ctl_plan.md)
 
 `ctl create agent <id>` owns all scaffolding:
 1. Create `$ZLAW_HOME/agents/<id>/` (or custom path)

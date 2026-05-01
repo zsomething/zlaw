@@ -90,9 +90,12 @@ type AgentMeta struct {
 	DisplayName string `toml:"name"`
 	Description string `toml:"description"`
 	// Roles are the functional specializations of this agent.
-	// Used by hub registry and manager routing for peer discovery.
+	// Used by hub registry and peer discovery.
 	// Example: roles = ["calendar", "scheduling"]
 	Roles []string `toml:"roles"`
+	// AuthProfiles are the credential profile names required by this agent.
+	// Used by hub at spawn time to inject credentials without reading agent.toml.
+	AuthProfiles []string `toml:"auth_profiles"`
 }
 
 // GetDisplayName returns the human-readable display name. When Name is empty it
@@ -472,7 +475,31 @@ func loadTOML(path string) (AgentConfig, error) {
 	if _, err := toml.Decode(expanded, &cfg); err != nil {
 		return AgentConfig{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	syncAuthProfiles(&cfg)
 	return cfg, nil
+}
+
+// syncAuthProfiles derives AuthProfiles from LLM + Memory + Adapter configs
+// and populates AgentMeta.AuthProfiles. This ensures hub gets auth profile
+// names at registration without reading agent.toml directly.
+func syncAuthProfiles(cfg *AgentConfig) {
+	seen := make(map[string]struct{})
+	var profiles []string
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if _, ok := seen[p]; !ok {
+			seen[p] = struct{}{}
+			profiles = append(profiles, p)
+		}
+	}
+	add(cfg.LLM.AuthProfile)
+	add(cfg.Memory.Embedder.AuthProfile)
+	for _, adapter := range cfg.Adapter {
+		add(adapter.AuthProfile)
+	}
+	cfg.Agent.AuthProfiles = profiles
 }
 
 // loadPersonality reads SOUL.md and IDENTITY.md; missing files are silently

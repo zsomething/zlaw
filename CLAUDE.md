@@ -1,6 +1,6 @@
 # CLAUDE.md — Project Context for Claude Code
 
-Full context for project. Read ARCHITECTURE.md and PLANNING.md for detail. File summarize essentials + conventions.
+Full context for project. Read key docs and plans for detail.
 
 ---
 
@@ -16,26 +16,23 @@ Primary use: personal assistant (Telegram). Coding assistance nice-to-have.
 
 **Phase 1: Complete. Phase 2: In Progress.**
 
-Phase 1 (standalone agent) done — agent loop, tools, adapters, memory, cron, Telegram all working. Single `cmd/zlaw/` binary with subcommands (`run`, `serve`, `attach`, `auth`, `init`, `hub`).
+Phase 1 (standalone agent) done — agent loop, tools, adapters, memory, cron, Telegram all working. Single `cmd/zlaw/` binary with subcommands (`run`, `serve`, `attach`, `auth`, `ctl`, `hub`).
 
-Phase 2 focus: zlaw-hub binary, hub CLI bootstrap (`init`, `start`, `status`), hub core (NATS embed, agent supervisor, registry, identity verification). Hub internals partially implemented (`internal/hub/`).
-
-Remaining Phase 1 gaps: plugin binary IPC, working memory, dry-run/sandbox mode.
+Phase 2 focus: hub binary, agent management, P2P delegation.
 
 ---
 
 ## Key Architectural Decisions
 
 - **Language**: Go. No other langs in core. Skill plugins any language via gRPC/IPC.
-- **zlaw role**: Broker only — routes, verifies identity, audits. No planning/orchestration.
-- **Manager agent**: One agent receives user input, delegates to peers. Routing in agent, not hub. Regular agent + hub-management tools + self-protection.
-- **A2A routing**: All inter-agent msgs via zlaw. Never direct agent-to-agent.
+- **Hub role**: Broker + process manager — routes, verifies identity, audits. No planning/orchestration.
+- **Agents**: All equal peers. Lifecycle tools (create/stop/configure) are CLI-only via `ctl`. P2P delegation via NATS.
 - **Config format**: TOML. Per-agent `agent.toml`, global `zlaw.toml`.
 - **Personality**: `SOUL.md` + `IDENTITY.md` per agent. Hot-reloaded on change.
 - **Session model**: `map[sessionID → history]` from day one. No global history.
 - **Secrets**: Env-var injection only. Never plaintext in config.
 - **Plugin system**: Skill binaries over gRPC or net/rpc. Versioned contract in `plugins/`.
-- **Message bus**: NATS, embedded in zlaw-hub binary by default.
+- **Message bus**: NATS, embedded in hub binary by default.
 
 ---
 
@@ -56,7 +53,7 @@ Input → Build context → LLM call
 ```
 zlaw/
 ├── cmd/
-│   └── zlaw/         # single binary: init/hub/agent subcommands
+│   └── zlaw/         # single binary: init/agent/hub/ctl subcommands
 ├── internal/
 │   ├── agent/        # agentic loop, history, context builder, memory, optimizer
 │   ├── app/          # wiring for agent-run/serve/attach/hub modes
@@ -64,23 +61,16 @@ zlaw/
 │   ├── tools/builtin/# file I/O, bash, glob, grep, web, HTTP, memory, cron, delegate
 │   ├── hub/          # hub core: registry, supervisor, inbox, NATS, ACL, credentials
 │   ├── nats/         # embedded NATS wrapper
-│   ├── identity/     # keypair management
 │   ├── adapters/     # CLI, daemon, Telegram
-│   ├── session/      # session manager, event log, sink
-│   ├── skills/       # skill file discovery + injection
-│   ├── slashcmd/     # slash command parser + builtins
-│   ├── push/         # push notification (Telegram)
 │   ├── config/       # config loading, hot-reload
-│   ├── cron/         # cron scheduler
-│   ├── messaging/    # message types
-│   ├── transport/    # Unix socket transport
-│   ├── zlaw/         # zlaw core (Phase 2)
-│   └── version/      # version info
+│   └── ...
 ├── agents/
 │   └── <id>/ # agent.toml, SOUL.md, IDENTITY.md, cron.toml
-├── plugins/          # skill plugin contracts + binaries
-├── zlaw.toml
-└── README.md
+├── plans/            # living implementation plans (evolves fast)
+├── docs/
+│   ├── design/       # architecture, principles, design decisions
+│   └── users/        # user-facing documentation
+└── plugins/          # skill plugin contracts
 ```
 
 ---
@@ -94,31 +84,38 @@ zlaw/
 - Config loaded once at startup, passed down; hot-reload fires callback, no unsafe mutation.
 - Structured logging with `slog` (stdlib). Every log: `agent`, `session_id`, `trace_id` where applicable.
 - Tests alongside code (`_test.go`). Unit test loop with mock LLM client.
+- Parameter naming: `agentID` not `id` (Go keyword).
 
 ---
 
-## Phase 2 Focus (current)
+## Documentation Map
 
-Active work: hub bootstrap CLI + hub core.
+```
+plans/                    # Living plans — implementation tracking, evolves fast
+├── planning.md           # Feature checklist, prioritized
+├── agent_portability.md # ZLAW_AGENT_HOME consolidation design
+├── ctl_plan.md          # ctl subcommand implementation
+└── web_ui_plan.md       # Web UI implementation plan
 
-Next tasks (from `docs/plans/PLANNING.md`):
-- `zlaw ctl` subcommand — operational commands for hub-connected agent management
-- `zlaw agent auth set/list/remove` — manage per-agent credentials in `agents/<id>/credentials.toml`
-- `zlaw hub start` — start hub, embed NATS, spawn agents
-- `zlaw hub status` — hub health + per-agent status
-- `zlaw hub agent` subcommands — list/logs/restart/stop/remove
-- Hub binary `serve` — NATS embed, agent supervisor, registry, identity verify, audit log
-- Manager agent — gets hub-management tools, delegates to peers via NATS
+docs/design/              # Architecture & design — the goal state
+├── architecture.md      # Full system design, topology, security model
+└── architecture_principles.md # Hard rules, violations, separation of concerns
 
-See `docs/plans/PLANNING.md` for full checklist. See `docs/ARCHITECTURE_PRINCIPLES.md` for separation of concerns rules.
+docs/users/               # User-facing documentation
+├── configuration.md     # Configuration guide
+└── tools.md              # Built-in tools reference
+
+SEPARATION.md            # Current separation of concerns violations (internal)
+```
 
 ---
 
-## References
+## Next Tasks
 
-- `ARCHITECTURE.md` — full system design, topology diagram, security model
-- `docs/ARCHITECTURE_PRINCIPLES.md` — architectural principles and hard rules (agent isolation, hub boundaries, ctl role)
-- `docs/plans/` — implementation plans for agent-oriented features:
-  - `PLANNING.md` — prioritized feature checklist
-  - `AGENT_PORTABILITY.md` — agent directory consolidation design
-  - `CTL_PLAN.md` — ctl subcommand implementation
+See `plans/planning.md` for full feature checklist.
+
+- Hub binary: NATS embed, agent supervisor, registry
+- P2P delegation: agent-to-agent via NATS
+- Identity: NKeys keypair generation + hub verification
+
+See `docs/design/architecture.md` for system design. See `docs/design/architecture_principles.md` for architectural rules.
