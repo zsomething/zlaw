@@ -2,65 +2,53 @@
 
 ## Overview
 
-Credentials are injected into agents at spawn time via environment variables. The agent does not read raw secrets — it only receives a path to a credential profile.
+Credentials are injected into agents at spawn time via environment variables. Each credential value is passed directly as an env var — no file path exposed. This prevents a compromised/prompt-injected agent from reading secrets.
 
 ## Design Goals
 
-1. **Secret isolation** — agents never read raw secrets; hub handles credential files
-2. **Minimal exposure** — agent only gets the profiles it needs, not all profiles
-3. **No credential exfiltration** — agent cannot read or expose credential file contents
+1. **Secret isolation** — agent only receives env vars with values it needs
+2. **No credential file exposure** — no file path, no file to read
+3. **Minimal surface** — agent receives only the credentials it needs
 
 ## Injection Flow
 
 ```
-Hub                                Agent
- │                                    │
- │ Read agents/<id>/agent.toml        │
- │ Determine required auth profiles   │
- │                                    │
- │ Read agents/<id>/credentials.toml  │
- │ Extract needed profiles            │
- │                                    │
- │ Write run/credentials/<id>.toml    │  (hub-owned, agent cannot access before spawn)
- │                                    │
- │ Spawn agent with env:              │
- │   ZLAW_CREDENTIALS_FILE=<path>     │──► Agent reads ONLY this file at startup
- │                                    │
+Hub                                     Agent
+ │                                        │
+ │ Read agents/<id>/credentials.toml      │
+ │ Extract needed profiles                │
+ │                                        │
+ │ Inject as env vars at spawn:           │
+ │   MINIMAX_API_KEY=sk-...              ──┤─ Agent only sees env vars
+ │   TELEGRAM_BOT_TOKEN=...              ──┤
+ │   (per-profile keys as env vars)        │
+ │                                        │
+ │ Agent reads env vars directly           │  No file path, no file to read
 ```
 
-## Environment Variable
+## Environment Variables
 
-| Variable | Set by | Purpose |
-|----------|--------|---------|
-| `ZLAW_CREDENTIALS_FILE` | Hub at spawn | Path to agent's credential profile |
+Hub injects profile values as env vars. Env var names are derived from profile name and key:
+
+| Profile | Env Var | Example |
+|---------|---------|---------|
+| `minimax-default` | `MINIMAX_DEFAULT_API_KEY` | `sk-...` |
+| `anthropic-main` | `ANTHROPIC_MAIN_API_KEY` | `sk-ant-...` |
+| `telegram-bot` | `TELEGRAM_BOT_TOKEN` | `12345:abc...` |
 
 ## Agent Usage
 
 ```go
-// Agent reads credential file via LLM factory
-src, err := credentials.NewTokenSourceFromStore(
-    os.Getenv("ZLAW_CREDENTIALS_FILE"),
-    cfg.AuthProfile,  // e.g., "minimax-default"
-)
+// Agent reads credential via env var lookup
+apiKey := os.Getenv("MINIMAX_DEFAULT_API_KEY")
 ```
 
-The agent:
-- Reads only the profile named in `agent.toml` (`auth_profile` field)
-- Cannot enumerate other profiles in the file
-- Cannot access `credentials.toml` directly
+Agent does NOT:
+- Receive any file path
+- Know where credentials are stored
+- Have access to credential files
 
-## Credential File Structure
-
-`run/credentials/<agentID>.toml`:
-```toml
-[<profile-name>]
-api_key = "sk-..."
-# or for OAuth2:
-client_id = "..."
-client_secret = "..."
-```
-
-## Auth Profile Resolution
+## Profile Reference
 
 In `agent.toml`:
 ```toml
@@ -69,19 +57,35 @@ backend = "minimax"
 auth_profile = "minimax-default"
 ```
 
-The agent looks up `minimax-default` from the injected credentials file.
+The agent looks up `MINIMAX_DEFAULT_API_KEY` env var at startup.
 
-## Agent Never Sees
+## Credential Structure
 
-- Raw `credentials.toml` in agent directory
-- Profiles it doesn't need
-- Global credentials
+Credentials are stored in `credentials.toml` (hub-owned):
 
-## Current Implementation
+```toml
+[minimax-default]
+api_key = "sk-..."
 
-The current implementation reads from `agents/<id>/credentials.toml` directly — this is a known violation. See [plans/separation.md](../plans/separation.md) for planned fixes.
+[anthropic-main]
+api_key = "sk-ant-..."
+
+[telegram-bot]
+telegram_bot_token = "12345:abc..."
+```
+
+Hub extracts and injects only the profiles the agent needs.
+
+## Security Properties
+
+- **No file to read** — credentials as env vars, not file path
+- **No enumeration** — agent doesn't know other profile names
+- **Compromise resistant** — even if agent is prompt-injected, no file path to read
+- **Minimal exposure** — only needed credentials injected
+- **Subprocess filtered** — credential env vars not passed to subprocesses (e.g., bash tool)
 
 ## See Also
 
 - [agent_standalone.md](./agent_standalone.md) — agent startup sequence
+- [security.md](./security.md) — security model
 - [plans/separation.md](../plans/separation.md) — architectural violations

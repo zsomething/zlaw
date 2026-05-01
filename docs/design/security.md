@@ -14,15 +14,23 @@ Default permissions (all agents equal):
 
 ## Credential Isolation
 
-Agents never read `credentials.toml`. Hub injects only referenced profile as env vars.
+Credentials are injected as environment variables, not file paths. Agent cannot read credential files.
 
 Flow:
 1. Hub reads `agents/<id>/credentials.toml` at spawn
 2. Extracts only the profiles the agent needs
-3. Writes to `run/credentials/<id>.toml`
-4. Sets `ZLAW_CREDENTIALS_FILE` env var
+3. Injects as env vars: `MINIMAX_API_KEY=sk-...`, etc.
+4. Agent reads env vars directly — no file path exposed
 
 See [agent_credentials.md](./agent_credentials.md) for details.
+
+## Subprocess Isolation (Planned)
+
+When agents spawn subprocesses (e.g., bash tool), credential env vars should be **filtered** — not passed through.
+
+Planned implementation: subprocesses inherit only essential runtime vars (`ZLAW_AGENT_HOME`, `PATH`, etc.), excluding credential keys.
+
+This prevents compromised subprocesses from accessing agent credentials.
 
 ## Self-Protection
 
