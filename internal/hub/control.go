@@ -174,6 +174,8 @@ func (cs *ControlSocket) dispatch(ctx context.Context, req ControlRequest) (json
 		return cs.agentList()
 	case "agent.status":
 		return cs.agentStatus(req.Params)
+	case "agent.start":
+		return nil, cs.agentStart(ctx, req.Params)
 	case "agent.create":
 		return nil, cs.agentCreate(ctx, req.Params)
 	case "agent.configure":
@@ -427,6 +429,27 @@ func (cs *ControlSocket) agentStop(params json.RawMessage) error {
 		return fmt.Errorf("param 'id' is required")
 	}
 	return cs.supervisor.Stop(p.ID)
+}
+
+// agentStart spawns an agent by ID.
+func (cs *ControlSocket) agentStart(ctx context.Context, params json.RawMessage) error {
+	var p struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("parse params: %w", err)
+	}
+	if p.ID == "" {
+		return fmt.Errorf("param 'id' is required")
+	}
+
+	// Look up agent entry in config.
+	entry, ok := cs.cfg.FindAgent(p.ID)
+	if !ok {
+		return fmt.Errorf("agent %q not found in config", p.ID)
+	}
+
+	return cs.supervisor.Spawn(ctx, entry)
 }
 
 // agentRestart restarts a named agent.

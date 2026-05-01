@@ -48,7 +48,6 @@ const (
 // Hub knows only what it needs to manage the process lifecycle.
 type AgentEntry struct {
 	// ID is the stable machine-readable agent identifier.
-	// Backward compat: existing zlaw.toml entries with "name" key are ignored.
 	ID string `toml:"id"`
 	// Dir is the absolute path to the agent's self-contained root (ZLAW_AGENT_HOME).
 	// Contains agent.toml, credentials.toml, SOUL.md, sessions/, memories/, workspace/.
@@ -57,6 +56,15 @@ type AgentEntry struct {
 	// Binary is the path to the agent executable.
 	// When empty, defaults to the hub's own executable (zlaw agent serve).
 	Binary string `toml:"binary"`
+	// Executor defines how the agent is spawned and supervised.
+	// Valid values: "subprocess", "systemd", "docker". Defaults to "subprocess".
+	Executor string `toml:"executor"`
+	// Target defines where the agent runs.
+	// Valid values: "local", "ssh". Defaults to "local".
+	Target string `toml:"target"`
+	// TargetSSH is the SSH connection string for remote agents.
+	// Required when target="ssh". Example: "user@host:2222".
+	TargetSSH string `toml:"target_ssh"`
 	// RestartPolicy controls when the supervisor restarts a crashed agent.
 	// Valid values: "always", "on-failure", "never". Defaults to "on-failure".
 	RestartPolicy RestartPolicy `toml:"restart_policy"`

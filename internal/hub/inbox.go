@@ -150,6 +150,8 @@ func (h *ManagementHandler) dispatch(ctx context.Context, op string, params map[
 	switch op {
 	case "agent.list":
 		return h.opAgentList()
+	case "agent.start":
+		return nil, h.opAgentStart(ctx, params)
 	case "agent.create":
 		return nil, h.opAgentCreate(ctx, params)
 	case "agent.configure":
@@ -177,6 +179,31 @@ func (h *ManagementHandler) AgentCreate(ctx context.Context, name, dir string) e
 		"name": name,
 		"dir":  dir,
 	})
+}
+
+// opAgentStart spawns an agent by ID from zlaw.toml config.
+func (h *ManagementHandler) opAgentStart(ctx context.Context, params map[string]any) error {
+	agentID, ok := stringParam(params, "id")
+	if !ok || agentID == "" {
+		return fmt.Errorf("agent.start: param 'id' is required")
+	}
+
+	// Look up agent entry in config.
+	hubCfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+	if err != nil {
+		return fmt.Errorf("agent.start: load config: %w", err)
+	}
+	entry, ok := hubCfg.FindAgent(agentID)
+	if !ok {
+		return fmt.Errorf("agent.start: agent %q not found in config", agentID)
+	}
+
+	if err := h.supervisor.Spawn(ctx, entry); err != nil {
+		return fmt.Errorf("agent.start: spawn: %w", err)
+	}
+
+	h.logger.Info("hub inbox: agent started", "agent", agentID)
+	return nil
 }
 
 // opAgentCreate validates the agent dir, registers the entry, and spawns the agent.

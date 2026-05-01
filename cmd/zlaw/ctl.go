@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/zsomething/zlaw/internal/app"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
 )
@@ -85,15 +86,39 @@ Your name is %s.
 // ── CtlCmd ───────────────────────────────────────────────────────────────────
 
 type CtlCmd struct {
+	Start     CtlStartCmd     `cmd:"" help:"start NATS, hub, and all agents"`
+	Stop      CtlStopCmd      `cmd:"" help:"stop NATS, hub, and all agents"`
+	Create    CtlCreateCmd    `cmd:"" help:"create and register a new agent"`
 	Get       CtlGetCmd       `cmd:"" help:"get resource info"`
-	Stop      CtlStopCmd      `cmd:"" help:"stop an agent"`
-	Restart   CtlRestartCmd   `cmd:"" help:"restart an agent"`
-	Disable   CtlDisableCmd   `cmd:"" help:"disable an agent (stop + prevent respawn)"`
-	Enable    CtlEnableCmd    `cmd:"" help:"re-enable a disabled agent"`
-	Delete    CtlDeleteCmd    `cmd:"" help:"stop and remove an agent"`
-	Create    CtlCreateCmd    `cmd:"" help:"create a resource"`
+	Agent     CtlAgentCmd     `cmd:"" help:"agent lifecycle management"`
 	Configure CtlConfigureCmd `cmd:"" help:"update a runtime field"`
 	Logs      CtlLogsCmd      `cmd:"" help:"stream agent logs"`
+}
+
+// ── ctl agent ─────────────────────────────────────────────────────────────────
+
+type CtlAgentCmd struct {
+	Start   CtlAgentStartCmd   `cmd:"" help:"start an agent"`
+	Stop    CtlAgentStopCmd    `cmd:"" help:"stop an agent"`
+	Restart CtlAgentRestartCmd `cmd:"" help:"restart an agent"`
+	Delete  CtlAgentDeleteCmd  `cmd:"" help:"delete an agent (preserves home)"`
+}
+
+type CtlAgentStartCmd struct {
+	ID string `arg:"true" help:"agent id"`
+}
+
+type CtlAgentStopCmd struct {
+	ID string `arg:"true" help:"agent id"`
+}
+
+type CtlAgentRestartCmd struct {
+	ID string `arg:"true" help:"agent id"`
+}
+
+type CtlAgentDeleteCmd struct {
+	ID    string `arg:"true" help:"agent id"`
+	Prune bool   `short:"p" help:"also delete agent home directory"`
 }
 
 // ── ctl get ──────────────────────────────────────────────────────────────────
@@ -382,73 +407,124 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return nil
 }
 
+// ── ctl start ─────────────────────────────────────────────────────────────────
+
+// CtlStartCmd starts the entire system (NATS, hub, all agents).
+type CtlStartCmd struct {
+	NoStartAgents bool `name:"no-start-agents" help:"start NATS and hub only, skip agent spawning"`
+}
+
+func (c *CtlStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	fmt.Printf("starting system...\n")
+
+	// Start hub (which includes NATS)
+	if err := app.StartHub(ctx, config.DefaultHubConfigPath(), "", "", logger, hub.DefaultNoColor()); err != nil {
+		return fmt.Errorf("start hub: %w", err)
+	}
+	fmt.Printf("  hub started\n")
+
+	// Start all agents if not skipped
+	if !c.NoStartAgents {
+		cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+		for _, agent := range cfg.Agents {
+			if agent.Disabled {
+				continue
+			}
+			if err := ctlAgentAction("agent.start", map[string]any{"id": agent.ID}); err != nil {
+				logger.Warn("failed to start agent", "id", agent.ID, "err", err)
+			} else {
+				fmt.Printf("  agent %q started\n", agent.ID)
+			}
+		}
+	}
+
+	fmt.Printf("system started\n")
+	return nil
+}
+
 // ── ctl stop ──────────────────────────────────────────────────────────────────
 
-type CtlStopCmd struct {
-	Name string `arg:"true" help:"agent id"`
-}
+// CtlStopCmd stops the entire system (NATS, hub, all agents).
+type CtlStopCmd struct{}
 
-func (c *CtlStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.stop", map[string]any{"id": c.Name}); err != nil {
-		return err
+func (c *CtlStopCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	// Stop all agents first
+	cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+	if err == nil {
+		for _, agent := range cfg.Agents {
+			if err := ctlAgentAction("agent.stop", map[string]any{"id": agent.ID}); err != nil {
+				logger.Warn("failed to stop agent", "id", agent.ID, "err", err)
+			}
+		}
 	}
-	fmt.Printf("agent %q stopped\n", c.Name)
+
+	// Stop hub via hub stop command
+	if err := app.StopHub(""); err != nil {
+		logger.Warn("failed to stop hub", "err", err)
+	}
+
+	fmt.Printf("system stopped\n")
 	return nil
 }
 
-// ── ctl restart ──────────────────────────────────────────────────────────────
+// ── ctl agent start ────────────────────────────────────────────────────────────
 
-type CtlRestartCmd struct {
-	Name string `arg:"true" help:"agent id"`
-}
-
-func (c *CtlRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.restart", map[string]any{"id": c.Name}); err != nil {
+func (c *CtlAgentStartCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := ctlAgentAction("agent.start", map[string]any{"id": c.ID}); err != nil {
 		return err
 	}
-	fmt.Printf("agent %q restarted\n", c.Name)
+	fmt.Printf("agent %q started\n", c.ID)
 	return nil
 }
 
-// ── ctl disable ─────────────────────────────────────────────────────────────
+// ── ctl agent stop ────────────────────────────────────────────────────────────
 
-type CtlDisableCmd struct {
-	Name string `arg:"true" help:"agent id"`
-}
-
-func (c *CtlDisableCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.disable", map[string]any{"id": c.Name}); err != nil {
+func (c *CtlAgentStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := ctlAgentAction("agent.stop", map[string]any{"id": c.ID}); err != nil {
 		return err
 	}
-	fmt.Printf("agent %q disabled\n", c.Name)
+	fmt.Printf("agent %q stopped\n", c.ID)
 	return nil
 }
 
-// ── ctl enable ────────────────────────────────────────────────────────────────
+// ── ctl agent restart ──────────────────────────────────────────────────────────
 
-type CtlEnableCmd struct {
-	Name string `arg:"true" help:"agent id"`
-}
-
-func (c *CtlEnableCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.enable", map[string]any{"id": c.Name}); err != nil {
+func (c *CtlAgentRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	if err := ctlAgentAction("agent.restart", map[string]any{"id": c.ID}); err != nil {
 		return err
 	}
-	fmt.Printf("agent %q enabled\n", c.Name)
+	fmt.Printf("agent %q restarted\n", c.ID)
 	return nil
 }
 
-// ── ctl delete ────────────────────────────────────────────────────────────────
+// ── ctl agent delete ────────────────────────────────────────────────────────────
 
-type CtlDeleteCmd struct {
-	Name string `arg:"true" help:"agent id"`
-}
+func (c *CtlAgentDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
+	// Stop agent first (ignore if not running)
+	_ = ctlAgentAction("agent.stop", map[string]any{"id": c.ID})
 
-func (c *CtlDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.remove", map[string]any{"id": c.Name}); err != nil {
-		return err
+	// Remove from zlaw.toml
+	cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
-	fmt.Printf("agent %q deleted\n", c.Name)
+	if err := cfg.RemoveAgent(c.ID); err != nil {
+		return fmt.Errorf("remove agent from config: %w", err)
+	}
+
+	// Delete home directory if --prune
+	if c.Prune {
+		agentDir := filepath.Join(config.ZlawHome(), "agents", c.ID)
+		if err := os.RemoveAll(agentDir); err != nil {
+			return fmt.Errorf("delete agent home: %w", err)
+		}
+		fmt.Printf("agent %q deleted (home pruned)\n", c.ID)
+	} else {
+		fmt.Printf("agent %q deleted (home preserved)\n", c.ID)
+	}
 	return nil
 }
 
