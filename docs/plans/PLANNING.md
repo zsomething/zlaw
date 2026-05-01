@@ -112,11 +112,11 @@ Goal: zlaw-hub process with embedded NATS, agent supervisor, registry, identity 
 - [ ] **NATS ACL enforcement** — per-agent publish/subscribe permissions configured by hub at NATS server level; manager gets broad publish ACL, specialists get narrow (reply-only by default)
 - [ ] **`zlaw.hub.inbox` handler** — hub listens for hub-management requests (agent_create, agent_list, agent_configure, agent_stop, agent_restart) and executes them
 
-### P3 — Manager Agent Tools
+### P3 — Agent Lifecycle Tools
 
-Manager agent is a regular agent with `manager: true` in `agent.toml`. Hub grants it the hub-management tool set and enforces self-protection.
+All lifecycle tools are CLI-only (via ctl). Agents communicate peer-to-peer over NATS.
 
-- [ ] **`agent_create(id, role, description)`** — scaffold `agents/<id>/` dir + files, register in hub, spawn process
+- [x] **`agent_create(id, role, description)`** — scaffold `agents/<id>/` dir + files, register in hub, spawn process
 - [ ] **`agent_list()`** — list all registered agents, status, capabilities
 - [ ] **`agent_configure(id, key, value)`** — write to agent's `runtime.toml`, triggers hot-reload
 - [ ] **`agent_stop(id)` / `agent_restart(id)`** — process lifecycle control
