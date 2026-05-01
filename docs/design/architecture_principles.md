@@ -120,6 +120,6 @@ See [SEPARATION.md](./SEPARATION.md) for detailed violations.
 
 ## References
 
-- [SEPARATION.md](./SEPARATION.md) - Detailed violations and future fixes
+- [separation.md](../plans/separation.md) - Detailed violations and future fixes
 - [ctl_plan.md](../plans/ctl_plan.md) - ctl subcommand implementation plan
 - [agent_portability.md](../plans/agent_portability.md) - Original portability design
