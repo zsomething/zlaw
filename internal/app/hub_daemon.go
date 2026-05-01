@@ -14,35 +14,41 @@ import (
 	"github.com/zsomething/zlaw/internal/hub"
 )
 
-// hubPIDPath returns the path to the hub PID file.
-func hubPIDPath() string {
-	return filepath.Join(runDir(), "hub.pid")
+// resolveRunDir returns runDir if non-empty, otherwise $ZLAW_HOME/run.
+func resolveRunDir(runDir string) string {
+	if runDir != "" {
+		return runDir
+	}
+	return filepath.Join(config.ZlawHome(), "run")
 }
 
-// runDir returns the zlaw run directory, consistent with config.ZlawHome().
-func runDir() string {
-	return filepath.Join(config.ZlawHome(), "run")
+// hubPIDPath returns the path to the hub PID file within runDir.
+func hubPIDPath(runDir string) string {
+	return filepath.Join(runDir, "hub.pid")
 }
 
 // StartHub daemonizes the hub and starts it in the background.
 // It returns immediately after spawning the hub process.
 // If the hub is already running (PID file exists and process is alive),
 // it returns nil without spawning a new process.
-func StartHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+// runDir defaults to $ZLAW_HOME/run when empty.
+func StartHub(ctx context.Context, configPath, runDir, externalNATSURL string, logger *slog.Logger, noColor bool) error {
 	configPath = resolveConfigPath(configPath)
+	runDir = resolveRunDir(runDir)
+
 	// Check if already running.
-	if pid, running := isHubRunning(); running {
+	if pid, running := isHubRunning(runDir); running {
 		fmt.Printf("hub already running (PID %d)\n", pid)
 		return nil
 	}
 
 	// Ensure run dir exists.
-	if err := os.MkdirAll(runDir(), 0o700); err != nil {
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("create run dir: %w", err)
 	}
 
 	// Remove stale control socket from a crashed hub so we can bind a fresh one.
-	controlPath := hub.ControlSocketPath(config.ZlawHome())
+	controlPath := hub.ControlSocketPath(runDir)
 	if _, err := os.Stat(controlPath); err == nil {
 		os.Remove(controlPath) //nolint:errcheck
 	}
@@ -53,11 +59,8 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 		return fmt.Errorf("resolve executable: %w", err)
 	}
 
-	// Build args: "hub run --config <path> [--nats-url <url>]"
-	args := []string{"hub", "run"}
-	if configPath != "" && configPath != config.DefaultHubConfigPath() {
-		args = append(args, "--config", configPath)
-	}
+	// Build args: "hub run --config <path> --run-dir <path> [--nats-url <url>]"
+	args := []string{"hub", "run", "--config", configPath, "--run-dir", runDir}
 	if externalNATSURL != "" {
 		args = append(args, "--nats-url", externalNATSURL)
 	}
@@ -87,7 +90,7 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 	}
 
 	// Parent writes PID and exits.
-	if err := os.WriteFile(hubPIDPath(), []byte(fmt.Sprintf("%d\n", process.Pid)), 0o600); err != nil {
+	if err := os.WriteFile(hubPIDPath(runDir), []byte(fmt.Sprintf("%d\n", process.Pid)), 0o600); err != nil {
 		process.Kill() //nolint:errcheck
 		return fmt.Errorf("write PID file: %w", err)
 	}
@@ -98,14 +101,17 @@ func StartHub(ctx context.Context, configPath string, externalNATSURL string, lo
 
 // RunHub starts the hub in the foreground and blocks until ctx is cancelled.
 // This is the blocking equivalent of StartHub.
-func RunHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
-	return runHub(ctx, resolveConfigPath(configPath), externalNATSURL, logger, noColor)
+// runDir defaults to $ZLAW_HOME/run when empty.
+func RunHub(ctx context.Context, configPath, runDir, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+	return runHub(ctx, resolveConfigPath(configPath), resolveRunDir(runDir), externalNATSURL, logger, noColor)
 }
 
 // StopHub reads the hub PID file and sends SIGTERM to the hub process.
 // It waits up to 5 seconds for graceful shutdown, then sends SIGKILL.
-func StopHub() error {
-	pid, running := isHubRunning()
+// runDir defaults to $ZLAW_HOME/run when empty.
+func StopHub(runDir string) error {
+	runDir = resolveRunDir(runDir)
+	pid, running := isHubRunning(runDir)
 	if !running {
 		fmt.Println("hub not running")
 		return nil
@@ -119,7 +125,7 @@ func StopHub() error {
 	// Send SIGTERM for graceful shutdown.
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		if execErr, ok := err.(*exec.Error); ok && execErr.Err == os.ErrProcessDone {
-			cleanupPIDFile()
+			cleanupPIDFile(runDir)
 			fmt.Println("hub not running")
 			return nil //nolint:nilerr
 		}
@@ -131,7 +137,7 @@ func StopHub() error {
 	for time.Now().Before(deadline) {
 		if p, err := os.FindProcess(pid); err != nil || p.Signal(syscall.Signal(0)) != nil {
 			// Process is gone.
-			cleanupPIDFile()
+			cleanupPIDFile(runDir)
 			fmt.Println("hub stopped")
 			return nil //nolint:nilerr
 		}
@@ -140,14 +146,14 @@ func StopHub() error {
 
 	// Graceful timeout — SIGKILL.
 	proc.Kill() //nolint:errcheck
-	cleanupPIDFile()
+	cleanupPIDFile(runDir)
 	fmt.Println("hub stopped (forced)")
 	return nil
 }
 
 // isHubRunning returns the hub PID and true if a hub process is currently running.
-func isHubRunning() (pid int, running bool) {
-	data, err := os.ReadFile(hubPIDPath())
+func isHubRunning(runDir string) (pid int, running bool) {
+	data, err := os.ReadFile(hubPIDPath(runDir))
 	if err != nil {
 		return 0, false
 	}
@@ -168,14 +174,14 @@ func isHubRunning() (pid int, running bool) {
 	// Signal 0 checks liveness without sending a signal.
 	if err := proc.Signal(syscall.Signal(0)); err != nil {
 		// Process is gone — stale PID file.
-		cleanupPIDFile()
+		cleanupPIDFile(runDir)
 		return 0, false
 	}
 	return p, true
 }
 
-func cleanupPIDFile() {
-	os.Remove(hubPIDPath()) //nolint:errcheck
+func cleanupPIDFile(runDir string) {
+	os.Remove(hubPIDPath(runDir)) //nolint:errcheck
 }
 
 // resolveConfigPath returns configPath if non-empty, otherwise the default.

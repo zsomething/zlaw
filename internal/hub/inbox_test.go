@@ -106,20 +106,27 @@ func TestManagementHandler_AgentCreate(t *testing.T) {
 	sup := &stubSpawner{}
 	req := runInbox(t, sup, &stubRegistry{entries: map[string]hub.RegistryEntry{}}, zlawHome)
 
+	// Hub no longer scaffolds files — ctl creates the agent dir first.
+	agentDir := filepath.Join(zlawHome, "agents", "newbot")
+	if err := os.MkdirAll(agentDir, 0o700); err != nil {
+		t.Fatalf("mkdir agentDir: %v", err)
+	}
+	// Pre-create zlaw.toml so AddAgent can write to it.
+	zlawTOML := filepath.Join(zlawHome, "zlaw.toml")
+	if err := os.WriteFile(zlawTOML, []byte("[hub]\nname=\"test\"\n"), 0o600); err != nil {
+		t.Fatalf("write zlaw.toml: %v", err)
+	}
+	t.Setenv("ZLAW_HOME", zlawHome)
+
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.create",
-		Params: map[string]any{"name": "newbot"},
+		Params: map[string]any{"name": "newbot", "dir": agentDir},
 	})
 	if !reply.OK {
 		t.Fatalf("expected OK, got error: %s", reply.Error)
 	}
 	if len(sup.spawned) != 1 || sup.spawned[0] != "newbot" {
 		t.Errorf("expected newbot spawned, got: %v", sup.spawned)
-	}
-
-	tomlPath := filepath.Join(zlawHome, "agents", "newbot", "agent.toml")
-	if _, err := os.Stat(tomlPath); err != nil {
-		t.Errorf("agent.toml not scaffolded at %s: %v", tomlPath, err)
 	}
 }
 
