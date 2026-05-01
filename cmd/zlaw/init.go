@@ -16,8 +16,11 @@ name = "main"
 description = "zlaw hub"
 
 [[agents]]
-name = "manager"
+id = "manager"
 dir = %q
+executor = "subprocess"
+target = "local"
+restart_policy = "on-failure"
 
 [nats]
 # Embedded NATS server listen address. Defaults to 127.0.0.1:4222.
@@ -143,7 +146,7 @@ func (c *InitCmd) initAgent(name string) error {
 
 	fmt.Fprintf(os.Stdout, "\nAgent %q created at %s\n", name, agentDir)
 	fmt.Fprintf(os.Stdout, "Register with hub by adding to zlaw.toml:\n")
-	fmt.Fprintf(os.Stdout, "  [[agents]]\n  name = %q\n  dir = %q\n", name, agentDir)
+	fmt.Fprintf(os.Stdout, "  [[agents]]\n  id = %q\n  dir = %q\n", name, agentDir)
 	fmt.Fprintf(os.Stdout, "Then run: zlaw hub start\n")
 	return nil
 }

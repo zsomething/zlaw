@@ -40,9 +40,12 @@ type agentStatusEntry struct {
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
-// agentTOMLTemplate has agent name substituted for %s.
+// agentTOMLTemplate has agent name, executor, and target substituted for %s, %s, %s.
 const agentTOMLTemplate = `[agent]
 id = %q
+executor = %q
+target = %q
+restart_policy = "on-failure"
 description = ""
 
 [llm]
@@ -339,6 +342,8 @@ type CtlCreateCmd struct {
 
 type CtlCreateAgentCmd struct {
 	Name      string `arg:"true" help:"agent id"`
+	Executor  string `short:"e" name:"executor" help:"executor type (subprocess, systemd, docker)"`
+	Target    string `short:"t" name:"target" help:"target (local, ssh)"`
 	AgentHome string `name:"agent-home" help:"absolute path for agent home (default: $ZLAW_HOME/agents/<name>)"`
 	Start     bool   `help:"spawn the agent after registration"`
 }
@@ -356,6 +361,16 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 		agentHome = abs
 	}
 
+	// Default executor/target
+	executor := c.Executor
+	if executor == "" {
+		executor = "subprocess"
+	}
+	target := c.Target
+	if target == "" {
+		target = "local"
+	}
+
 	// 1. Create agent home directory.
 	if err := os.MkdirAll(agentHome, 0o700); err != nil {
 		return fmt.Errorf("create agent home %s: %w", agentHome, err)
@@ -368,13 +383,14 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	}
 
 	// 3. Scaffold files (skip if already exist).
+	agentToml := fmt.Sprintf(agentTOMLTemplate, c.Name, executor, target)
 	type scaffold struct {
 		path    string
 		content string
 		mode    os.FileMode
 	}
 	files := []scaffold{
-		{filepath.Join(agentHome, "agent.toml"), fmt.Sprintf(agentTOMLTemplate, c.Name), 0o600},
+		{filepath.Join(agentHome, "agent.toml"), agentToml, 0o600},
 		{filepath.Join(agentHome, "credentials.toml"), credentialsTOMLTemplate, 0o600},
 		{filepath.Join(agentHome, "SOUL.md"), ctlSoulMDTemplate, 0o644},
 		{filepath.Join(agentHome, "IDENTITY.md"), fmt.Sprintf(ctlIdentityMDTemplate, c.Name), 0o644},
