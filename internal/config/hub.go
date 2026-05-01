@@ -45,22 +45,22 @@ const (
 )
 
 // AgentEntry describes a single agent supervised by the hub.
+// Hub knows only what it needs to manage the process lifecycle.
 type AgentEntry struct {
 	// Name is the logical agent name.
 	Name string `toml:"name"`
-	// Dir is the path to the agent's config directory (agent.toml, credentials.toml).
+	// Dir is the absolute path to the agent's self-contained root (ZLAW_AGENT_HOME).
+	// Contains agent.toml, credentials.toml, SOUL.md, sessions/, memories/, workspace/.
 	// When empty, defaults to $ZLAW_HOME/agents/<name>.
 	Dir string `toml:"dir"`
-	// Workspace is the path to the agent's workspace (SOUL.md, IDENTITY.md, memories/).
-	// When empty, defaults to $ZLAW_HOME/workspaces/<name>.
-	// The agent has read/write access to this directory.
-	Workspace string `toml:"workspace"`
 	// Binary is the path to the agent executable.
 	// When empty, defaults to the hub's own executable (zlaw agent serve).
 	Binary string `toml:"binary"`
 	// RestartPolicy controls when the supervisor restarts a crashed agent.
 	// Valid values: "always", "on-failure", "never". Defaults to "on-failure".
 	RestartPolicy RestartPolicy `toml:"restart_policy"`
+	// Disabled prevents the hub from spawning or respawning this agent.
+	Disabled bool `toml:"disabled,omitempty"`
 }
 
 // NATSConfig holds embedded NATS server settings.
@@ -146,14 +146,14 @@ func (c HubConfig) AddAgent(entry AgentEntry) error {
 	if entry.Dir != "" {
 		newEntry["dir"] = entry.Dir
 	}
-	if entry.Workspace != "" {
-		newEntry["workspace"] = entry.Workspace
-	}
 	if entry.Binary != "" {
 		newEntry["binary"] = entry.Binary
 	}
 	if entry.RestartPolicy != "" {
 		newEntry["restart_policy"] = string(entry.RestartPolicy)
+	}
+	if entry.Disabled {
+		newEntry["disabled"] = true
 	}
 	agents = append(agents, newEntry)
 	raw["agents"] = agents
@@ -182,9 +182,9 @@ func writeHubConfig(path string, raw map[string]any) error {
 	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
 
-// WriteAgentDisabled writes disabled=true or disabled=false to an agent's agent.toml.
-func WriteAgentDisabled(agentDir string, disabled bool) error {
-	path := filepath.Join(agentDir, "agent.toml")
+// SetAgentDisabled updates the disabled flag for agent name in zlaw.toml.
+func (c HubConfig) SetAgentDisabled(name string, disabled bool) error {
+	path := DefaultHubConfigPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
@@ -195,15 +195,27 @@ func WriteAgentDisabled(agentDir string, disabled bool) error {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	if raw == nil {
-		raw = make(map[string]any)
+	agents, ok := raw["agents"].([]map[string]any)
+	if !ok {
+		return fmt.Errorf("agents section not found in %s", path)
 	}
-	raw["disabled"] = disabled
 
-	var buf bytes.Buffer
-	enc := toml.NewEncoder(&buf)
-	if err := enc.Encode(raw); err != nil {
-		return fmt.Errorf("encode: %w", err)
+	found := false
+	for _, entry := range agents {
+		if entry["name"] == name {
+			if disabled {
+				entry["disabled"] = true
+			} else {
+				delete(entry, "disabled")
+			}
+			found = true
+			break
+		}
 	}
-	return os.WriteFile(path, buf.Bytes(), 0o600)
+	if !found {
+		return fmt.Errorf("agent %q not found in %s", name, path)
+	}
+	raw["agents"] = agents
+
+	return writeHubConfig(path, raw)
 }
