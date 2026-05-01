@@ -210,7 +210,7 @@ name     = "coder"
 workspace = "workspaces/coder"
 ```
 
-Each agent gets its own `agent.toml`, `SOUL.md`, `IDENTITY.md`, and `credentials.toml` under `agents/<name>/`.
+Each agent gets its own `agent.toml`, `SOUL.md`, `IDENTITY.md`, and `credentials.toml` under `agents/<id>/`.
 
 ---
 
@@ -230,7 +230,7 @@ listen = "127.0.0.1:4222"  # NATS server listen address
 name      = "manager"
 manager   = true            # receives user input, delegates to peers
 workspace = "workspaces/manager"  # agent's working directory
-# dir = "agents/manager"     # optional, defaults to agents/<name>
+# dir = "agents/manager"     # optional, defaults to agents/<id>
 ```
 
 ### Minimal `agent.toml`
@@ -271,7 +271,7 @@ backend = "openrouter"
 model   = "openai/text-embedding-3-small"
 ```
 
-Memory files live under `$ZLAW_HOME/memories/<agentName>/` as plain Markdown — readable and editable. The vector index is a local cache; delete it to rebuild.
+Memory files live under `$ZLAW_HOME/memories/<id>/` as plain Markdown — readable and editable. The vector index is a local cache; delete it to rebuild.
 
 ### Context management
 

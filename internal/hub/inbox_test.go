@@ -22,7 +22,7 @@ type stubSpawner struct {
 }
 
 func (s *stubSpawner) Spawn(_ context.Context, entry config.AgentEntry) error {
-	s.spawned = append(s.spawned, entry.Name)
+	s.spawned = append(s.spawned, entry.ID)
 	return nil
 }
 
@@ -87,8 +87,8 @@ func runInbox(t *testing.T, sup hub.AgentSpawner, reg hub.AgentRegistryReader, z
 
 func TestManagementHandler_AgentList(t *testing.T) {
 	reg := &stubRegistry{entries: map[string]hub.RegistryEntry{
-		"worker":  {Name: "worker", Status: hub.AgentConnected},
-		"analyst": {Name: "analyst", Status: hub.AgentConnected},
+		"worker":  {ID: "worker", Status: hub.AgentConnected},
+		"analyst": {ID: "analyst", Status: hub.AgentConnected},
 	}}
 	req := runInbox(t, &stubSpawner{}, reg, t.TempDir())
 
@@ -120,7 +120,7 @@ func TestManagementHandler_AgentCreate(t *testing.T) {
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.create",
-		Params: map[string]any{"name": "newbot", "dir": agentDir},
+		Params: map[string]any{"id": "newbot", "dir": agentDir},
 	})
 	if !reply.OK {
 		t.Fatalf("expected OK, got error: %s", reply.Error)
@@ -154,7 +154,7 @@ func TestManagementHandler_AgentConfigure(t *testing.T) {
 	reply := req(hub.ManagementRequest{
 		Op: "agent.configure",
 		Params: map[string]any{
-			"name":  "worker",
+			"id":    "worker",
 			"key":   "llm.model",
 			"value": "claude-opus-4-6",
 		},
@@ -179,7 +179,7 @@ func TestManagementHandler_AgentConfigure_InvalidKey(t *testing.T) {
 	reply := req(hub.ManagementRequest{
 		Op: "agent.configure",
 		Params: map[string]any{
-			"name":  "worker",
+			"id":    "worker",
 			"key":   "llm.backend", // not in allowlist
 			"value": "openai",
 		},
@@ -195,7 +195,7 @@ func TestManagementHandler_AgentStop(t *testing.T) {
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.stop",
-		Params: map[string]any{"name": "worker"},
+		Params: map[string]any{"id": "worker"},
 	})
 	if !reply.OK {
 		t.Fatalf("expected OK, got: %s", reply.Error)
@@ -211,7 +211,7 @@ func TestManagementHandler_AgentRestart(t *testing.T) {
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.restart",
-		Params: map[string]any{"name": "worker"},
+		Params: map[string]any{"id": "worker"},
 	})
 	if !reply.OK {
 		t.Fatalf("expected OK, got: %s", reply.Error)
@@ -223,18 +223,18 @@ func TestManagementHandler_AgentRestart(t *testing.T) {
 
 func TestManagementHandler_AgentRemove(t *testing.T) {
 	sup := &stubSpawner{}
-	reg := &stubRegistry{entries: map[string]hub.RegistryEntry{"worker": {Name: "worker"}}}
+	reg := &stubRegistry{entries: map[string]hub.RegistryEntry{"worker": {ID: "worker"}}}
 	req := runInbox(t, sup, reg, t.TempDir())
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.remove",
-		Params: map[string]any{"name": "worker"},
+		Params: map[string]any{"id": "worker"},
 	})
 	if !reply.OK {
 		t.Fatalf("expected OK, got: %s", reply.Error)
 	}
 	for _, e := range reg.List() {
-		if e.Name == "worker" {
+		if e.ID == "worker" {
 			t.Error("expected worker deregistered")
 		}
 	}
@@ -247,7 +247,7 @@ func TestManagementHandler_AgentRemove_NoSelfProtection(t *testing.T) {
 
 	reply := req(hub.ManagementRequest{
 		Op:     "agent.remove",
-		Params: map[string]any{"name": "any-agent"},
+		Params: map[string]any{"id": "any-agent"},
 	})
 	// No error — any agent can be removed in the P2P model.
 	if !reply.OK {

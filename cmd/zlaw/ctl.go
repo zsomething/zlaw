@@ -18,7 +18,7 @@ import (
 // Types shared between ctl and agent commands
 
 type agentListEntry struct {
-	Name          string   `json:"name"`
+	ID            string   `json:"id"`
 	Version       string   `json:"version"`
 	Capabilities  []string `json:"capabilities"`
 	Roles         []string `json:"roles"`
@@ -27,7 +27,7 @@ type agentListEntry struct {
 }
 
 type agentStatusEntry struct {
-	Name          string   `json:"name"`
+	ID            string   `json:"id"`
 	Running       bool     `json:"running"`
 	PID           int      `json:"pid"`
 	LastErr       string   `json:"last_err,omitempty"`
@@ -160,7 +160,7 @@ func (c *CtlGetAgentsCmd) Run(ctx context.Context, _ *slog.Logger) error {
 		if heartbeat == "" {
 			heartbeat = "-"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%v\n", e.Name, e.Status, heartbeat, e.Roles)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%v\n", e.ID, e.Status, heartbeat, e.Roles)
 	}
 	return tw.Flush()
 }
@@ -168,7 +168,7 @@ func (c *CtlGetAgentsCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ctl get agent <name>
 
 type CtlGetAgentCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 	JSON bool   `long:"json" help:"output as JSON"`
 }
 
@@ -179,7 +179,7 @@ func (c *CtlGetAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	}
 	defer conn.Close() //nolint:errcheck
 
-	req := map[string]any{"method": "agent.status", "params": map[string]any{"name": c.Name}}
+	req := map[string]any{"method": "agent.status", "params": map[string]any{"id": c.Name}}
 	data, _ := json.Marshal(req)
 	conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 	conn.SetReadDeadline(time.Now().Add(time.Second))  //nolint:errcheck
@@ -217,7 +217,7 @@ func (c *CtlGetAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	if !status.Running {
 		running = "no"
 	}
-	fmt.Printf("Name:      %s\n", status.Name)
+	fmt.Printf("ID:       %s\n", status.ID)
 	fmt.Printf("Running:   %s\n", running)
 	if status.PID > 0 {
 		fmt.Printf("PID:       %d\n", status.PID)
@@ -313,7 +313,7 @@ type CtlCreateCmd struct {
 }
 
 type CtlCreateAgentCmd struct {
-	Name      string `arg:"true" help:"agent name"`
+	Name      string `arg:"true" help:"agent id"`
 	AgentHome string `name:"agent-home" help:"absolute path for agent home (default: $ZLAW_HOME/agents/<name>)"`
 	Start     bool   `help:"spawn the agent after registration"`
 }
@@ -368,8 +368,8 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	// 4. Register with hub via control socket.
 	method := "agent.create"
 	params := map[string]any{
-		"name": c.Name,
-		"dir":  agentHome,
+		"id":  c.Name,
+		"dir": agentHome,
 	}
 	if err := ctlSocketCall(method, params); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not register with hub: %v\n", err)
@@ -385,11 +385,11 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl stop ──────────────────────────────────────────────────────────────────
 
 type CtlStopCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 }
 
 func (c *CtlStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.stop", map[string]any{"name": c.Name}); err != nil {
+	if err := ctlAgentAction("agent.stop", map[string]any{"id": c.Name}); err != nil {
 		return err
 	}
 	fmt.Printf("agent %q stopped\n", c.Name)
@@ -399,11 +399,11 @@ func (c *CtlStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl restart ──────────────────────────────────────────────────────────────
 
 type CtlRestartCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 }
 
 func (c *CtlRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.restart", map[string]any{"name": c.Name}); err != nil {
+	if err := ctlAgentAction("agent.restart", map[string]any{"id": c.Name}); err != nil {
 		return err
 	}
 	fmt.Printf("agent %q restarted\n", c.Name)
@@ -413,11 +413,11 @@ func (c *CtlRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl disable ─────────────────────────────────────────────────────────────
 
 type CtlDisableCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 }
 
 func (c *CtlDisableCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.disable", map[string]any{"name": c.Name}); err != nil {
+	if err := ctlAgentAction("agent.disable", map[string]any{"id": c.Name}); err != nil {
 		return err
 	}
 	fmt.Printf("agent %q disabled\n", c.Name)
@@ -427,11 +427,11 @@ func (c *CtlDisableCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl enable ────────────────────────────────────────────────────────────────
 
 type CtlEnableCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 }
 
 func (c *CtlEnableCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.enable", map[string]any{"name": c.Name}); err != nil {
+	if err := ctlAgentAction("agent.enable", map[string]any{"id": c.Name}); err != nil {
 		return err
 	}
 	fmt.Printf("agent %q enabled\n", c.Name)
@@ -441,11 +441,11 @@ func (c *CtlEnableCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl delete ────────────────────────────────────────────────────────────────
 
 type CtlDeleteCmd struct {
-	Name string `arg:"true" help:"agent name"`
+	Name string `arg:"true" help:"agent id"`
 }
 
 func (c *CtlDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.remove", map[string]any{"name": c.Name}); err != nil {
+	if err := ctlAgentAction("agent.remove", map[string]any{"id": c.Name}); err != nil {
 		return err
 	}
 	fmt.Printf("agent %q deleted\n", c.Name)
@@ -455,13 +455,13 @@ func (c *CtlDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl configure ─────────────────────────────────────────────────────────────
 
 type CtlConfigureCmd struct {
-	Name  string `arg:"true" help:"agent name"`
+	Name  string `arg:"true" help:"agent id"`
 	Key   string `arg:"true" help:"field key (e.g., llm.model, llm.backend)"`
 	Value string `arg:"true" help:"field value"`
 }
 
 func (c *CtlConfigureCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	params := map[string]any{"name": c.Name, "key": c.Key, "value": c.Value}
+	params := map[string]any{"id": c.Name, "key": c.Key, "value": c.Value}
 	if err := ctlAgentAction("agent.configure", params); err != nil {
 		return err
 	}
@@ -472,7 +472,7 @@ func (c *CtlConfigureCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl logs ────────────────────────────────────────────────────────────────────
 
 type CtlLogsCmd struct {
-	Agent    string        `help:"agent name to filter logs (default: all agents)"`
+	Agent    string        `help:"agent id to filter logs (default: all agents)"`
 	Level    string        `help:"minimum log level (debug/info/warn/error)"`
 	Since    time.Duration `help:"show logs from the last N seconds"`
 	Follow   bool          `short:"f" help:"follow logs continuously"`

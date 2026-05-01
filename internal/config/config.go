@@ -85,9 +85,9 @@ type AgentMeta struct {
 	// for all runtime paths (socket, pid, session dir, memory dir) and as the
 	// NATS username when connecting to the hub. It must not change at runtime.
 	ID string `toml:"id"`
-	// Name is the optional human-readable display name used in system prompts
-	// and agent greetings. Falls back to ID if unset.
-	Name        string `toml:"name"`
+	// DisplayName is the optional human-readable display name used in system
+	// prompts and agent greetings. Falls back to ID if unset.
+	DisplayName string `toml:"name"`
 	Description string `toml:"description"`
 	// Roles are the functional specializations of this agent.
 	// Used by hub registry and manager routing for peer discovery.
@@ -95,11 +95,11 @@ type AgentMeta struct {
 	Roles []string `toml:"roles"`
 }
 
-// DisplayName returns the human-readable display name. When Name is empty it
+// GetDisplayName returns the human-readable display name. When Name is empty it
 // falls back to ID, so callers never need to handle the empty-name case.
-func (m AgentMeta) DisplayName() string {
-	if m.Name != "" {
-		return m.Name
+func (m AgentMeta) GetDisplayName() string {
+	if m.DisplayName != "" {
+		return m.DisplayName
 	}
 	return m.ID
 }

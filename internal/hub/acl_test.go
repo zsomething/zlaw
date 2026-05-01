@@ -9,8 +9,8 @@ import (
 
 func TestBuildHubACL_AllAgentsHaveEqualPermissions(t *testing.T) {
 	acl, err := hub.BuildHubACL([]config.AgentEntry{
-		{Name: "specialist"},
-		{Name: "worker"},
+		{ID: "specialist"},
+		{ID: "worker"},
 	})
 	if err != nil {
 		t.Fatalf("BuildHubACL: %v", err)
@@ -51,7 +51,7 @@ func TestBuildHubACL_AgentCannotPublishHubInbox(t *testing.T) {
 	// In the P2P model, no agent should be able to publish to zlaw.hub.inbox
 	// (hub management API is CLI-only via control socket).
 	acl, err := hub.BuildHubACL([]config.AgentEntry{
-		{Name: "specialist"},
+		{ID: "specialist"},
 	})
 	if err != nil {
 		t.Fatalf("BuildHubACL: %v", err)

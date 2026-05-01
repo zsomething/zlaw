@@ -18,7 +18,7 @@ type AgentAuthCmd struct {
 // ── hub auth set ───────────────────────────────────────────────────────────────
 
 type AgentAuthSetCmd struct {
-	Agent   string `required:"" help:"agent name"`
+	Agent   string `required:"" help:"agent id"`
 	Profile string `required:"" help:"profile name (e.g., anthropic, telegram, fizzy)"`
 	Key     string `required:"" help:"credential value or secret key"`
 }
@@ -66,7 +66,7 @@ func (c *AgentAuthSetCmd) Run() error {
 // ── hub auth list ─────────────────────────────────────────────────────────────
 
 type AgentAuthListCmd struct {
-	Agent string `required:"" help:"agent name"`
+	Agent string `required:"" help:"agent id"`
 }
 
 func (c *AgentAuthListCmd) Run() error {
@@ -104,7 +104,7 @@ func (c *AgentAuthListCmd) Run() error {
 // ── hub auth remove ───────────────────────────────────────────────────────────
 
 type AgentAuthRemoveCmd struct {
-	Agent   string `required:"" help:"agent name"`
+	Agent   string `required:"" help:"agent id"`
 	Profile string `required:"" help:"profile name to remove"`
 }
 

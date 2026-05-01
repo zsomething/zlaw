@@ -34,7 +34,7 @@ const (
 
 // RegistryEntry holds the live state of a single registered agent.
 type RegistryEntry struct {
-	Name          string          `json:"name"`
+	ID            string          `json:"id"`
 	Version       string          `json:"version"`
 	Capabilities  []string        `json:"capabilities"`
 	Roles         []string        `json:"roles"`
@@ -44,7 +44,7 @@ type RegistryEntry struct {
 
 // registrationMsg is the payload agents publish to zlaw.registry.
 type registrationMsg struct {
-	Name         string   `json:"name"`
+	ID           string   `json:"id"`
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
@@ -119,11 +119,11 @@ func (r *Registry) List() []RegistryEntry {
 	return out
 }
 
-// Get returns the registry entry for the named agent, and whether it exists.
-func (r *Registry) Get(name string) (RegistryEntry, bool) {
+// Get returns the registry entry for the agent ID, and whether it exists.
+func (r *Registry) Get(agentID string) (RegistryEntry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	e, ok := r.entries[name]
+	e, ok := r.entries[agentID]
 	if !ok {
 		return RegistryEntry{}, false
 	}
@@ -145,21 +145,21 @@ func (r *Registry) handleRegistration(data []byte) {
 		r.logger.Warn("registry: invalid registration message", "err", err)
 		return
 	}
-	if msg.Name == "" {
-		r.logger.Warn("registry: registration message missing name")
+	if msg.ID == "" {
+		r.logger.Warn("registry: registration message missing id")
 		return
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	entry, exists := r.entries[msg.Name]
+	entry, exists := r.entries[msg.ID]
 	if !exists {
-		entry = &RegistryEntry{Name: msg.Name}
-		r.entries[msg.Name] = entry
-		r.logger.Info("registry: agent registered", "agent", msg.Name, "version", msg.Version)
+		entry = &RegistryEntry{ID: msg.ID}
+		r.entries[msg.ID] = entry
+		r.logger.Info("registry: agent registered", "agent", msg.ID, "version", msg.Version)
 	} else {
-		r.logger.Debug("registry: heartbeat received", "agent", msg.Name)
+		r.logger.Debug("registry: heartbeat received", "agent", msg.ID)
 	}
 
 	entry.Version = msg.Version
@@ -187,7 +187,7 @@ func (r *Registry) checkHeartbeats() {
 		if entry.Status == AgentConnected && entry.LastHeartbeat.Before(deadline) {
 			entry.Status = AgentDisconnected
 			r.logger.Warn("registry: agent disconnected (missed heartbeats)",
-				"agent", entry.Name,
+				"agent", entry.ID,
 				"last_heartbeat", entry.LastHeartbeat,
 			)
 		}

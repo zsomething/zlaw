@@ -51,7 +51,7 @@ func (r *NATSAgentRegistry) GetAgent(ctx context.Context, name string) (*hub.Reg
 		return nil, err
 	}
 	for i := range entries {
-		if entries[i].Name == name {
+		if entries[i].ID == name {
 			return &entries[i], nil
 		}
 	}
@@ -113,12 +113,12 @@ func (t *AgentList) Execute(ctx context.Context, input json.RawMessage) (string,
 	agentListOut := make([]map[string]any, len(entries))
 	for i, e := range entries {
 		m := map[string]any{
-			"name":         e.Name,
+			"id":           e.ID,
 			"version":      e.Version,
 			"capabilities": e.Capabilities,
 			"roles":        e.Roles,
 			"status":       e.Status,
-			"is_self":      e.Name == t.AgentID,
+			"is_self":      e.ID == t.AgentID,
 		}
 		agentListOut[i] = m
 	}

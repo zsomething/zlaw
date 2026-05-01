@@ -15,7 +15,7 @@ func resolveAgentDir(entry config.AgentEntry) string {
 	if entry.Dir != "" {
 		return entry.Dir
 	}
-	return filepath.Join(config.ZlawHome(), "agents", entry.Name)
+	return filepath.Join(config.ZlawHome(), "agents", entry.ID)
 }
 
 // BuildCredentialEnv reads the agent's agent.toml to discover required auth
@@ -60,7 +60,7 @@ func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 	for _, name := range profiles {
 		profile, ok := store.Profiles[name]
 		if !ok {
-			return nil, fmt.Errorf("agent %q requires auth profile %q which does not exist in %s", entry.Name, name, sourceCredsPath)
+			return nil, fmt.Errorf("agent %q requires auth profile %q which does not exist in %s", entry.ID, name, sourceCredsPath)
 		}
 		needed.Profiles[name] = profile
 	}
@@ -73,7 +73,7 @@ func BuildCredentialEnv(entry config.AgentEntry) ([]string, error) {
 	if err := os.MkdirAll(runtimeCredsDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create runtime credentials dir: %w", err)
 	}
-	activeCredsPath := filepath.Join(runtimeCredsDir, entry.Name+".toml")
+	activeCredsPath := filepath.Join(runtimeCredsDir, entry.ID+".toml")
 	if err := credentials.SaveStore(activeCredsPath, needed); err != nil {
 		return nil, fmt.Errorf("write credentials: %w", err)
 	}
