@@ -9,7 +9,7 @@
 | Command | Purpose | Runs as |
 |---------|---------|---------|
 | `zlaw init` | Bootstrap `$ZLAW_HOME` or create agent workspace | Any |
-| `zlaw agent` | Run/serve/attach agents, manage auth | Standalone or hub-managed |
+| `zlaw agent` | Run/serve/attach agents, manage auth | Standalone |
 | `zlaw hub` | Start hub, check status | Controller |
 | `zlaw ctl` | Operational commands (requires hub running) | Operator |
 

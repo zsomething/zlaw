@@ -12,7 +12,7 @@ zlaw auth login --profile anthropic --type apikey
 # Prompts for API key → saves to credentials.toml
 
 zlaw hub start
-# Starts hub, spawns registered agents
+# Starts hub with embedded NATS
 # Telegram is live. User can chat immediately.
 ```
 
@@ -24,7 +24,7 @@ zlaw ctl create agent id=coding role="Go developer"
 ```
 
 - ctl scaffolds `$ZLAW_HOME/agents/coding/` with agent.toml + personality files
-- ctl registers with hub, hub spawns process
+- ctl registers with hub (hub does not spawn agents directly)
 - User: "Done. I can delegate coding work to it now."
 
 ## Day N — Operations
