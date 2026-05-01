@@ -96,8 +96,11 @@ See [agent_tools.md](./agent_tools.md) and [agent_skills.md](./agent_skills.md).
 | `ZLAW_AGENT_HOME` | Hub injects at spawn | Root for all agent files |
 | `ZLAW_AGENT_ID` | Hub injects | Agent ID |
 | `ZLAW_NATS_URL` | Hub injects | NATS connection (standalone: not set) |
-| `MINIMAX_DEFAULT_API_KEY` | Hub injects | Credential env vars |
-| `...` | Hub injects | Per-profile credentials |
+| `ANTHROPIC_API_KEY` | Hub injects at spawn | From credentials.toml |
+| `MINIMAX_API_KEY` | Hub injects at spawn | From credentials.toml |
+| `TELEGRAM_BOT_TOKEN` | Hub injects at spawn | From credentials.toml |
+
+Agent receives credentials as env vars at spawn — no file path exposed.
 
 Agent does NOT know about `ZLAW_HOME`.
 

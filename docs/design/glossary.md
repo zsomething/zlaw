@@ -18,7 +18,7 @@ Communication broker. Routes messages between agents and provides external inter
 
 ## ctl
 
-Human operator CLI. Scaffolds agent directories, manages agent lifecycle (create/stop/restart), talks to hub via control socket.
+Human operator CLI. Scaffolds agent directories, manages agent lifecycle (create/start/stop/restart/delete), talks to hub via control socket. Uses executor abstraction for execution.
 
 **Not**: Agent, plugin.
 
@@ -94,7 +94,14 @@ Per-agent permissions enforced at NATS broker layer. All agents equal: subscribe
 
 ## Control Socket
 
-Unix socket at `$ZLAW_HOME/run/control.sock`. ctl communicates with hub via this socket.
+Unix socket exposed by hub and agent for ctl commands.
+
+| Component | Socket Path | Purpose |
+|----------|------------|---------|
+| hub | `$ZLAW_HOME/run/hub.sock` | Agent lifecycle commands |
+| agent | `$ZLAW_HOME/agents/<id>/agent.sock` | Local agent control |
+
+ctl connects directly to these sockets. No NATS involved.
 
 ## See Also
 

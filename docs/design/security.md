@@ -2,7 +2,27 @@
 
 ## Agent Identity
 
-Each agent has a keypair (NKeys). Hub verifies on connect. Messages signed.
+Each agent has an Ed25519 keypair for cryptographic identity. This is core to the security model:
+
+- **Agent keypair** — generated at agent creation time, stored at `$ZLAW_AGENT_HOME/identity.key`
+- **Public key** — included in registration message, stored in hub registry
+- **Message signing** — agents sign task envelopes, hub verifies signatures
+- **NATS authentication** — agents authenticate to NATS using their keypair
+
+### Design Requirements
+
+1. Each agent generates a keypair on first run (self-sovereign identity)
+2. Public key is registered with hub at connection time
+3. Task envelopes include signature over payload (From + To + Task + SessionID)
+4. Receiving agents verify signature against sender's public key from registry
+5. Subprocess isolation prevents credential leakage
+
+### Future: Hub ACL with Keypairs
+
+Hub may use agent public keys for per-agent NATS ACL (instead of token-based). This enables:
+- Cryptographic verification of agent identity at NATS layer
+- Revocation by removing key from hub's trust store
+- No shared secrets (tokens) to manage
 
 ## NATS ACL
 

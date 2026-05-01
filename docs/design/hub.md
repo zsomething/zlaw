@@ -2,7 +2,9 @@
 
 ## Overview
 
-Hub is a communication broker. It routes messages between agents and provides external interfaces. It does NOT manage agent lifecycle — that's ctl's responsibility.
+Hub is a communication broker. It routes messages between agents and provides external interfaces.
+
+Hub lifecycle is managed by **ctl** via its supervisor subsystem. See [ctl_supervisor.md](./ctl_supervisor.md).
 
 ## Hub's Role
 
@@ -10,17 +12,19 @@ Hub is a communication broker. It routes messages between agents and provides ex
 - **External interface** — optional webhook/HTTP endpoint to reach agents
 - **ACL enforcement** — per-agent permissions at NATS layer
 - **Audit logging** — logs all messages and tool calls
+- **Credential injection** — reads credentials.toml at spawn, injects env vars
 
 Hub does NOT:
 - Spawn or stop agents
 - Read agent configuration files
 - Manage agent directories
+- Own or manage credentials (ctl owns credentials.toml)
 
 ## Components
 
 | Component | Purpose |
 |-----------|---------|
-| NATS Server | Embedded message bus (JetStream enabled) |
+| NATS Server | Embedded message bus (JetStream enabled), managed by supervisor |
 | NATS ACL | Per-agent publish/subscribe permissions |
 | Audit Logger | Append-only structured log |
 | Registry | Tracks connected agents (for routing, not management) |
@@ -28,12 +32,7 @@ Hub does NOT:
 
 ## Startup
 
-```
-1. Load zlaw.toml                 → NATS config
-2. Start embedded NATS server     → with per-agent ACL
-3. Start webhook handler          → optional HTTP endpoint
-4. Subscribe to registry          → track connected agents for routing
-```
+Managed by supervisor. See [agent_lifecycle.md](./agent_lifecycle.md).
 
 ## NATS ACL
 
@@ -73,10 +72,13 @@ Hub validates and routes to `agent.<id>.inbox` via NATS.
 
 ## Agent Lifecycle
 
-Handled by ctl, not hub. See [command_line.md](./command_line.md).
+Managed by ctl via supervisor. See [ctl_supervisor.md](./ctl_supervisor.md).
 
 ## See Also
 
+- [ctl_supervisor.md](./ctl_supervisor.md) — ctl and supervisor design
+- [hub_lifecycle.md](./hub_lifecycle.md) — hub lifecycle management
+- [agent_lifecycle.md](./agent_lifecycle.md) — agent lifecycle
 - [overview.md](./overview.md) — high-level architecture
 - [agent_delegation.md](./agent_delegation.md) — P2P delegation
 - [constraints.md](./constraints.md) — separation of concerns
