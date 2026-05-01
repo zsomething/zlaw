@@ -96,4 +96,3 @@ type HubStatusCmd struct {
 func (c *HubStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return app.HubStatus(ctx, c.JSON)
 }
-
