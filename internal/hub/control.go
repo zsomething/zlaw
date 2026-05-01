@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -395,6 +394,7 @@ func (cs *ControlSocket) agentEnable(params json.RawMessage) error {
 }
 
 // agentConfigure updates a runtime field for a named agent.
+// Hub no longer writes to agent directories — this is a no-op with a warning.
 func (cs *ControlSocket) agentConfigure(ctx context.Context, params json.RawMessage) error {
 	var p struct {
 		ID    string `json:"id"`
@@ -408,10 +408,10 @@ func (cs *ControlSocket) agentConfigure(ctx context.Context, params json.RawMess
 		return fmt.Errorf("params 'id', 'key', 'value' are required")
 	}
 
-	agentDir := filepath.Join(config.ZlawHome(), "agents", p.ID)
-	if err := config.WriteRuntimeFieldToDir(agentDir, p.Key, p.Value); err != nil {
-		return fmt.Errorf("agent.configure: %w", err)
-	}
+	cs.logger.Warn("control: agent.configure is deprecated; hub no longer writes to agent directories",
+		"agent", p.ID,
+		"key", p.Key,
+	)
 	return nil
 }
 

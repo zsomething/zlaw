@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
@@ -376,9 +377,8 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	agentDir := resolveAgentDir(entry)
 
 	// AgentEntry.Dir must always be absolute (written by ctl at create time).
-	// Fall back to ZlawHome()-relative path only for legacy entries without a dir.
 	if !filepath.IsAbs(agentDir) {
-		agentDir = filepath.Join(config.ZlawHome(), agentDir)
+		return nil, fmt.Errorf("agent %q dir must be absolute, got %q", entry.ID, agentDir)
 	}
 
 	var args []string
@@ -415,22 +415,15 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderrWriter
 
-	// Inject credentials from the per-agent credentials file.
-	// The hub scaffolds and manages these files; the agent only gets access
-	// via this injected env var at runtime.
-	credEnv, err := BuildCredentialEnv(entry)
-	if err != nil {
-		return nil, fmt.Errorf("credential injection for agent %q: %w", entry.ID, err)
-	}
-	for _, kv := range credEnv {
-		idx := len(kv)
-		for i, c := range kv {
-			if c == '=' {
-				idx = i
-				break
-			}
+	// Inject credentials from the global credentials.toml.
+	// Hub reads from $ZLAW_HOME/credentials.toml and writes filtered profiles
+	// to $ZLAW_HOME/run/credentials/<id>.toml for injection.
+	if len(entry.AuthProfiles) > 0 {
+		runtimeCredsPath := filepath.Join(config.ZlawHome(), "run", "credentials", entry.ID+".toml")
+		if err := injectCredentialsFromGlobal(entry.AuthProfiles, runtimeCredsPath); err != nil {
+			return nil, fmt.Errorf("credential injection for agent %q: %w", entry.ID, err)
 		}
-		env = SetEnv(env, kv[:idx], kv[idx+1:])
+		env = SetEnv(env, "ZLAW_CREDENTIALS_FILE", runtimeCredsPath)
 	}
 
 	// Inject the NATS token for this agent so NATSMessenger can authenticate.
@@ -473,6 +466,42 @@ func BackoffDelay(attempt int) time.Duration {
 		return backoffMax
 	}
 	return d
+}
+
+// injectCredentialsFromGlobal reads the named auth profiles from the global
+// credentials.toml and writes a filtered copy to runtimeCredsPath.
+func injectCredentialsFromGlobal(profiles []string, runtimeCredsPath string) error {
+	globalCredsPath := filepath.Join(config.ZlawHome(), "credentials.toml")
+	store, err := credentials.LoadStore(globalCredsPath)
+	if err != nil {
+		return fmt.Errorf("load global credentials: %w", err)
+	}
+
+	// Filter to only needed profiles.
+	filtered := credentials.CredentialStore{
+		Profiles: make(map[string]credentials.CredentialProfile, len(profiles)),
+	}
+	for _, name := range profiles {
+		profile, ok := store.Profiles[name]
+		if !ok {
+			return fmt.Errorf("auth profile %q not found in global credentials", name)
+		}
+		filtered.Profiles[name] = profile
+	}
+
+	// Write filtered credentials to runtime dir.
+	runDir := filepath.Join(config.ZlawHome(), "run", "credentials")
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
+		return fmt.Errorf("create runtime credentials dir: %w", err)
+	}
+
+	return credentials.SaveStore(runtimeCredsPath, filtered)
+}
+
+// resolveAgentDir returns the agent directory from entry.Dir.
+// entry.Dir must be absolute — caller is responsible for validation.
+func resolveAgentDir(entry config.AgentEntry) string {
+	return entry.Dir
 }
 
 // SetEnv sets or replaces key=value in an environment slice.

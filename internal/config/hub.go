@@ -62,6 +62,9 @@ type AgentEntry struct {
 	RestartPolicy RestartPolicy `toml:"restart_policy"`
 	// Disabled prevents the hub from spawning or respawning this agent.
 	Disabled bool `toml:"disabled,omitempty"`
+	// AuthProfiles lists the credential profile names required by this agent.
+	// The hub injects these from the global credentials.toml at spawn time.
+	AuthProfiles []string `toml:"auth_profiles,omitempty"`
 }
 
 // NATSConfig holds embedded NATS server settings.
