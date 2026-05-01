@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/BurntSushi/toml"
 	"github.com/zsomething/zlaw/internal/config"
 )
 
@@ -164,9 +163,8 @@ name = "alice"
 	}
 
 	entry := config.AgentEntry{
-		Name:      "bob",
-		Dir:       "agents/bob",
-		Workspace: "workspaces/bob",
+		Name: "bob",
+		Dir:  "agents/bob",
 	}
 	if err := cfg.AddAgent(entry); err != nil {
 		t.Fatalf("AddAgent: %v", err)
@@ -179,8 +177,8 @@ name = "alice"
 	if cfg2.Agents[1].Name != "bob" {
 		t.Errorf("Agents[1].Name = %q, want %q", cfg2.Agents[1].Name, "bob")
 	}
-	if cfg2.Agents[1].Workspace != "workspaces/bob" {
-		t.Errorf("Agents[1].Workspace = %q, want %q", cfg2.Agents[1].Workspace, "workspaces/bob")
+	if cfg2.Agents[1].Dir != "agents/bob" {
+		t.Errorf("Agents[1].Dir = %q, want %q", cfg2.Agents[1].Dir, "agents/bob")
 	}
 }
 
@@ -249,53 +247,69 @@ name = "bob"
 	}
 }
 
-func TestWriteAgentDisabled(t *testing.T) {
+func TestSetAgentDisabled(t *testing.T) {
 	dir := t.TempDir()
-	agentDir := filepath.Join(dir, "agents", "testbot")
-	if err := os.MkdirAll(agentDir, 0o700); err != nil {
+	zlawDir := filepath.Join(dir, ".zlaw")
+	if err := os.MkdirAll(zlawDir, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	agentTOML := filepath.Join(agentDir, "agent.toml")
-	if err := os.WriteFile(agentTOML, []byte(`[agent]
-id = "testbot"
+	configPath := filepath.Join(zlawDir, "zlaw.toml")
+	if err := os.WriteFile(configPath, []byte(`[hub]
+name = "test"
+
+[[agents]]
+name = "testbot"
+dir = "agents/testbot"
 `), 0o600); err != nil {
-		t.Fatalf("write agent.toml: %v", err)
+		t.Fatalf("write zlaw.toml: %v", err)
+	}
+	t.Setenv("ZLAW_HOME", zlawDir)
+
+	cfg, err := config.LoadHubConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadHubConfig: %v", err)
 	}
 
-	// Write disabled = true.
-	if err := config.WriteAgentDisabled(agentDir, true); err != nil {
-		t.Fatalf("WriteAgentDisabled(true): %v", err)
+	// Disable the agent.
+	if err := cfg.SetAgentDisabled("testbot", true); err != nil {
+		t.Fatalf("SetAgentDisabled(true): %v", err)
+	}
+	cfg2, _ := config.LoadHubConfig(configPath)
+	if !cfg2.Agents[0].Disabled {
+		t.Error("Disabled = false, want true")
 	}
 
-	// Verify the written value by re-reading the raw file.
-	data, _ := os.ReadFile(agentTOML)
-	var raw map[string]any
-	if _, err := toml.Decode(string(data), &raw); err != nil {
-		t.Fatalf("parse written TOML: %v", err)
+	// Re-enable the agent.
+	if err := cfg.SetAgentDisabled("testbot", false); err != nil {
+		t.Fatalf("SetAgentDisabled(false): %v", err)
 	}
-	if v, ok := raw["disabled"].(bool); !ok || !v {
-		t.Errorf("disabled = %v, want true", raw["disabled"])
-	}
-
-	// Write disabled = false.
-	if err := config.WriteAgentDisabled(agentDir, false); err != nil {
-		t.Fatalf("WriteAgentDisabled(false): %v", err)
-	}
-
-	data2, _ := os.ReadFile(agentTOML)
-	var raw2 map[string]any
-	if _, err := toml.Decode(string(data2), &raw2); err != nil {
-		t.Fatalf("parse written TOML: %v", err)
-	}
-	if v, ok := raw2["disabled"].(bool); !ok || v {
-		t.Errorf("disabled = %v, want false", raw2["disabled"])
+	cfg3, _ := config.LoadHubConfig(configPath)
+	if cfg3.Agents[0].Disabled {
+		t.Error("Disabled = true, want false")
 	}
 }
 
-func TestWriteAgentDisabled_MissingAgentDir(t *testing.T) {
-	err := config.WriteAgentDisabled("/ghost/agent/dir", true)
+func TestSetAgentDisabled_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	zlawDir := filepath.Join(dir, ".zlaw")
+	if err := os.MkdirAll(zlawDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	configPath := filepath.Join(zlawDir, "zlaw.toml")
+	if err := os.WriteFile(configPath, []byte(`[hub]
+name = "test"
+
+[[agents]]
+name = "other"
+`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Setenv("ZLAW_HOME", zlawDir)
+
+	cfg, _ := config.LoadHubConfig(configPath)
+	err := cfg.SetAgentDisabled("ghost", true)
 	if err == nil {
-		t.Error("expected error for missing agent dir, got nil")
+		t.Error("expected error for missing agent, got nil")
 	}
 }
 
@@ -317,7 +331,7 @@ restart_policy = "always"
 
 [[agents]]
 name = "worker"
-workspace = "workspaces/worker"
+dir = "agents/worker"
 
 [nats]
 listen = "0.0.0.0:4222"
@@ -345,8 +359,8 @@ listen = "0.0.0.0:4222"
 	if cfg.Agents[0].RestartPolicy != config.RestartAlways {
 		t.Errorf("Agents[0].RestartPolicy = %v, want RestartAlways", cfg.Agents[0].RestartPolicy)
 	}
-	if cfg.Agents[1].Workspace != "workspaces/worker" {
-		t.Errorf("Agents[1].Workspace = %q", cfg.Agents[1].Workspace)
+	if cfg.Agents[1].Dir != "agents/worker" {
+		t.Errorf("Agents[1].Dir = %q, want %q", cfg.Agents[1].Dir, "agents/worker")
 	}
 	if cfg.NATS.Listen != "0.0.0.0:4222" {
 		t.Errorf("NATS.Listen = %q", cfg.NATS.Listen)

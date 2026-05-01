@@ -53,13 +53,8 @@ func (f AgentFlags) resolveWorkspace() string {
 	if f.Workspace != "" {
 		return f.Workspace
 	}
-	// ZLAW_WORKSPACE is set by the hub supervisor as an absolute path.
-	// Use it if present — avoids re-resolving relative paths from zlaw.toml.
-	if ws := os.Getenv("ZLAW_WORKSPACE"); ws != "" {
-		return ws
-	}
-	if f.Agent != "" {
-		return filepath.Join(config.ZlawHome(), "workspaces", f.Agent)
+	if h := config.AgentHome(); h != "" {
+		return filepath.Join(h, "workspace")
 	}
 	return ""
 }
@@ -141,14 +136,14 @@ func (c *AgentStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── agent create ──────────────────────────────────────────────────────────────
 
 type AgentCreateCmd struct {
-	Name      string `arg:"true" help:"agent name"`
-	Workspace string `help:"agent workspace path (defaults to $ZLAW_HOME/workspaces/<name>)"`
+	Name string `arg:"true" help:"agent name"`
+	Dir  string `help:"absolute path to pre-scaffolded agent dir (ZLAW_AGENT_HOME)"`
 }
 
 func (c *AgentCreateCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	params := map[string]any{"name": c.Name}
-	if c.Workspace != "" {
-		params["workspace"] = c.Workspace
+	if c.Dir != "" {
+		params["dir"] = c.Dir
 	}
 	// agent.create returns a result payload, not just OK.
 	conn, err := socketConn()
@@ -273,7 +268,8 @@ func (c *AgentRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── Socket helpers ────────────────────────────────────────────────────────────
 
 func socketConn() (net.Conn, error) {
-	socketPath := hub.ControlSocketPath(config.ZlawHome())
+	runDir := filepath.Join(config.ZlawHome(), "run")
+	socketPath := hub.ControlSocketPath(runDir)
 	return net.DialTimeout("unix", socketPath, 2*time.Second)
 }
 

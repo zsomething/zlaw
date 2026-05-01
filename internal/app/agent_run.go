@@ -85,7 +85,7 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 
 	applyToolConfig(cfg, registry, logger)
 
-	history, err := buildHistory(cfg.Agent.ID, "cli", logger)
+	history, err := buildHistory("cli", logger)
 	if err != nil {
 		return fmt.Errorf("create session history: %w", err)
 	}
@@ -208,7 +208,7 @@ func buildAgent(
 }
 
 func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath string, logger *slog.Logger) agent.MemoryStore {
-	dir, err := agent.MemoryDir(cfg.Agent.ID)
+	dir, err := agent.MemoryDir()
 	if err != nil {
 		logger.Warn("cannot resolve memory dir, memory tools disabled", "error", err)
 		return nil
@@ -237,8 +237,8 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 	return agent.NewMarkdownFileStore(dir)
 }
 
-func buildHistory(agentName, channel string, logger *slog.Logger) (*agent.History, error) {
-	dir, err := agent.SessionDir(agentName)
+func buildHistory(channel string, logger *slog.Logger) (*agent.History, error) {
+	dir, err := agent.SessionDir()
 	if err != nil {
 		logger.Warn("cannot resolve session dir, using in-memory history", "error", err)
 		return agent.NewHistory(), nil

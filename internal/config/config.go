@@ -239,8 +239,8 @@ func (l *Loader) Load() (AgentConfig, Personality, error) {
 		return AgentConfig{}, Personality{}, err
 	}
 
-	// Use workspace dir for personality if set, otherwise fall back to agent dir.
-	personalityDir := l.workspace
+	// Use ZLAW_AGENT_HOME for personality if set, otherwise fall back to agent dir.
+	personalityDir := AgentHome()
 	if personalityDir == "" {
 		personalityDir = l.dir
 	}

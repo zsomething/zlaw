@@ -22,7 +22,11 @@ import (
 )
 
 // runHub loads the hub config and starts the hub process. It blocks until ctx is cancelled.
-func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+// runDir is the hub runtime directory for sockets and PIDs; defaults to $ZLAW_HOME/run if empty.
+func runHub(ctx context.Context, configPath, runDir, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+	if runDir == "" {
+		runDir = filepath.Join(config.ZlawHome(), "run")
+	}
 	cfg, err := config.LoadHubConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
@@ -115,7 +119,7 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	}()
 
 	// Start the control socket for CLI access.
-	controlPath := hub.ControlSocketPath(config.ZlawHome())
+	controlPath := hub.ControlSocketPath(runDir)
 	ctrlSock := hub.NewControlSocket(
 		controlPath,
 		sup,
@@ -211,7 +215,7 @@ const socketDialTimeout = 2 * time.Second
 
 // hubStatusFromSocket connects to the hub's control socket and requests hub.status.
 func hubStatusFromSocket(ctx context.Context) (*hubStatusSocketResponse, error) {
-	socketPath := hub.ControlSocketPath(config.ZlawHome())
+	socketPath := hub.ControlSocketPath(filepath.Join(config.ZlawHome(), "run"))
 
 	conn, err := net.DialTimeout("unix", socketPath, socketDialTimeout)
 	if err != nil {
