@@ -371,9 +371,7 @@ func (cs *ControlSocket) agentDisable(params json.RawMessage) error {
 		cs.logger.Warn("control: stop before disable failed", "name", p.Name, "err", err)
 	}
 
-	// Write disabled=true to agent.toml.
-	agentDir := filepath.Join(config.ZlawHome(), "agents", p.Name)
-	if err := config.WriteAgentDisabled(agentDir, true); err != nil {
+	if err := cs.cfg.SetAgentDisabled(p.Name, true); err != nil {
 		return fmt.Errorf("agent.disable: write disabled flag: %w", err)
 	}
 	return nil
@@ -390,8 +388,7 @@ func (cs *ControlSocket) agentEnable(params json.RawMessage) error {
 	if p.Name == "" {
 		return fmt.Errorf("param 'name' is required")
 	}
-	agentDir := filepath.Join(config.ZlawHome(), "agents", p.Name)
-	if err := config.WriteAgentDisabled(agentDir, false); err != nil {
+	if err := cs.cfg.SetAgentDisabled(p.Name, false); err != nil {
 		return fmt.Errorf("agent.enable: write disabled flag: %w", err)
 	}
 	return nil

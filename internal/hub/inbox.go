@@ -282,7 +282,6 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 	entry := config.AgentEntry{
 		Name:          name,
 		Dir:           agentDir,
-		Workspace:     workspaceDir,
 		RestartPolicy: config.RestartOnFailure,
 	}
 
@@ -296,7 +295,7 @@ func (h *ManagementHandler) opAgentCreate(ctx context.Context, params map[string
 		h.logger.Warn("hub inbox: agent spawned but not persisted to zlaw.toml", "name", name, "err", err)
 	}
 
-	h.logger.Info("hub inbox: agent created", "name", name, "dir", entry.Dir, "workspace", entry.Workspace)
+	h.logger.Info("hub inbox: agent created", "name", name, "dir", entry.Dir)
 	return nil
 }
 

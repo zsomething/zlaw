@@ -81,10 +81,12 @@ func TestControlSocket(t *testing.T) {
 		}
 	}
 
-	// Create a minimal zlaw.toml for agent.remove.
+	// Create zlaw.toml for agent.remove, agent.disable, and agent.enable.
 	zlawTOML := filepath.Join(dir, "zlaw.toml")
 	if err := os.WriteFile(zlawTOML, []byte(`[hub]
 name = "test"
+[[agents]]
+name = "alice"
 [[agents]]
 name = "bob"
 `), 0o600); err != nil {
@@ -284,10 +286,8 @@ name = "bob"
 	})
 
 	t.Run("agent.enable", func(t *testing.T) {
-		// agent.enable doesn't call supervisor, just writes to agent.toml.
-		// It still needs the agent dir to exist; we test the happy path via
-		// WriteAgentDisabled directly (covered by config tests). Here we just
-		// verify the socket round-trip returns OK.
+		// agent.enable clears the disabled flag in zlaw.toml for the named agent.
+		// "bob" is registered in the test zlaw.toml, so this should succeed.
 		req := map[string]any{"method": "agent.enable", "params": map[string]any{"name": "bob"}}
 		data, _ := json.Marshal(req)
 		conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck
