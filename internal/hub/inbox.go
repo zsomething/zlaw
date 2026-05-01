@@ -16,7 +16,6 @@ import (
 const (
 	// managementSubject is the NATS subject the hub listens on for management requests.
 	managementSubject = "zlaw.hub.inbox"
-
 )
 
 // ManagementRequest is the envelope for hub management requests.
