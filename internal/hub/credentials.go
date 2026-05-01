@@ -18,15 +18,6 @@ func resolveAgentDir(entry config.AgentEntry) string {
 	return filepath.Join(config.ZlawHome(), "agents", entry.Name)
 }
 
-// resolveWorkspaceDir returns the workspace directory for entry.
-// Falls back to $ZLAW_HOME/workspaces/<name> when entry.Workspace is empty.
-func resolveWorkspaceDir(entry config.AgentEntry) string {
-	if entry.Workspace != "" {
-		return entry.Workspace
-	}
-	return filepath.Join(config.ZlawHome(), "workspaces", entry.Name)
-}
-
 // BuildCredentialEnv reads the agent's agent.toml to discover required auth
 // profiles (LLM + memory embedder + adapters), validates them against the
 // user-maintained credentials file (agents/<name>/credentials.toml),

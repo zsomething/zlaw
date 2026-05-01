@@ -5,6 +5,13 @@ import (
 	"path/filepath"
 )
 
+// AgentHome returns the agent's self-contained root directory from ZLAW_AGENT_HOME.
+// All per-agent files (sessions/, memories/, workspace/, SOUL.md, IDENTITY.md) are
+// relative to this path. Returns empty string if ZLAW_AGENT_HOME is not set.
+func AgentHome() string {
+	return os.Getenv("ZLAW_AGENT_HOME")
+}
+
 // ZlawHome returns the root directory for all zlaw runtime data.
 // It respects the ZLAW_HOME environment variable; if unset, it defaults to
 // $HOME/.zlaw. The result is always an absolute path to avoid ambiguity

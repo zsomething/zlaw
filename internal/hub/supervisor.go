@@ -374,15 +374,11 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	}
 
 	agentDir := resolveAgentDir(entry)
-	workspaceDir := resolveWorkspaceDir(entry)
 
-	// Always resolve to absolute paths so ZLAW_AGENT_DIR and ZLAW_WORKSPACE
-	// are unambiguous regardless of the cwd at agent runtime.
+	// AgentEntry.Dir must always be absolute (written by ctl at create time).
+	// Fall back to ZlawHome()-relative path only for legacy entries without a dir.
 	if !filepath.IsAbs(agentDir) {
 		agentDir = filepath.Join(config.ZlawHome(), agentDir)
-	}
-	if !filepath.IsAbs(workspaceDir) {
-		workspaceDir = filepath.Join(config.ZlawHome(), workspaceDir)
 	}
 
 	var args []string
@@ -404,8 +400,7 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	env = SetEnv(env, "ZLAW_NATS_URL", s.natsURL)
 	env = SetEnv(env, "ZLAW_LOG_FORMAT", "json")
 	env = SetEnv(env, "ZLAW_NO_COLOR", "1") // colors applied by hub's PrettyHandler
-	env = SetEnv(env, "ZLAW_AGENT_DIR", agentDir)
-	env = SetEnv(env, "ZLAW_WORKSPACE", workspaceDir)
+	env = SetEnv(env, "ZLAW_AGENT_HOME", agentDir)
 
 	// Pipe agent stdout/stderr through JSON log reader for unified pretty output.
 	// If messenger is set, logs are also published to NATS for 'zlaw agent logs' clients.

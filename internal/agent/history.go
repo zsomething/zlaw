@@ -183,8 +183,7 @@ func (h *History) Clear(sessionID string) {
 	}
 }
 
-// SessionDir returns the session directory for a named agent.
-// Path: $ZLAW_HOME/sessions/<agentName>
-func SessionDir(agentName string) (string, error) {
-	return filepath.Join(config.ZlawHome(), "sessions", agentName), nil
+// SessionDir returns the session directory derived from ZLAW_AGENT_HOME.
+func SessionDir() (string, error) {
+	return filepath.Join(config.AgentHome(), "sessions"), nil
 }

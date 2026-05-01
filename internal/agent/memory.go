@@ -36,9 +36,9 @@ type MemoryStore interface {
 	List() ([]Memory, error)
 }
 
-// MemoryDir returns the directory where memories for agentName are stored.
-func MemoryDir(agentName string) (string, error) {
-	return filepath.Join(config.ZlawHome(), "memories", agentName), nil
+// MemoryDir returns the memory directory derived from ZLAW_AGENT_HOME.
+func MemoryDir() (string, error) {
+	return filepath.Join(config.AgentHome(), "memories"), nil
 }
 
 // MarkdownFileStore stores each memory as a Markdown file with YAML frontmatter.

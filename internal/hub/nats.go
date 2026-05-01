@@ -44,9 +44,9 @@ func DefaultJetStreamStoreDir() string {
 	return filepath.Join(config.ZlawHome(), defaultJetStreamDir)
 }
 
-// ControlSocketPath returns the path to the hub's control Unix socket.
-func ControlSocketPath(zlawHome string) string {
-	return filepath.Join(zlawHome, "run", controlSocketName)
+// ControlSocketPath returns the path to the hub's control Unix socket within runDir.
+func ControlSocketPath(runDir string) string {
+	return filepath.Join(runDir, controlSocketName)
 }
 
 // EnsureStoreDir creates the JetStream store directory if it does not exist.

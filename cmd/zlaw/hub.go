@@ -22,6 +22,7 @@ type HubCmd struct {
 // HubStartCmd starts the hub in the background (daemon mode).
 type HubStartCmd struct {
 	Config  string `help:"path to zlaw.toml"`
+	RunDir  string `name:"run-dir" help:"hub runtime directory for sockets and PIDs (default: $ZLAW_HOME/run)"`
 	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
 	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
 }
@@ -32,7 +33,7 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		configPath = config.DefaultHubConfigPath()
 	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor)
+	return app.StartHub(ctx, configPath, c.RunDir, c.NatsURL, logger, noColor)
 }
 
 // ── hub run ─────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ func (c *HubStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 // current "hub start" behavior — kept for clarity.
 type HubRunCmd struct {
 	Config  string `help:"path to zlaw.toml"`
+	RunDir  string `name:"run-dir" help:"hub runtime directory for sockets and PIDs (default: $ZLAW_HOME/run)"`
 	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
 	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
 }
@@ -51,27 +53,30 @@ func (c *HubRunCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		configPath = config.DefaultHubConfigPath()
 	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	return app.RunHub(ctx, configPath, c.NatsURL, logger, noColor)
+	return app.RunHub(ctx, configPath, c.RunDir, c.NatsURL, logger, noColor)
 }
 
 // ── hub stop ─────────────────────────────────────────────────────────────────
 
-type HubStopCmd struct{}
+type HubStopCmd struct {
+	RunDir string `name:"run-dir" help:"hub runtime directory (default: $ZLAW_HOME/run)"`
+}
 
 func (c *HubStopCmd) Run() error {
-	return app.StopHub()
+	return app.StopHub(c.RunDir)
 }
 
 // ── hub restart ───────────────────────────────────────────────────────────────
 
 type HubRestartCmd struct {
 	Config  string `help:"path to zlaw.toml"`
+	RunDir  string `name:"run-dir" help:"hub runtime directory for sockets and PIDs (default: $ZLAW_HOME/run)"`
 	NatsURL string `name:"nats-url" help:"connect to an external NATS server instead of embedding one"`
 	NoColor bool   `name:"no-color" help:"disable ANSI color output"`
 }
 
 func (c *HubRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
-	if err := app.StopHub(); err != nil {
+	if err := app.StopHub(c.RunDir); err != nil {
 		return err
 	}
 	configPath := c.Config
@@ -79,7 +84,7 @@ func (c *HubRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		configPath = config.DefaultHubConfigPath()
 	}
 	noColor := c.NoColor || hub.DefaultNoColor()
-	return app.StartHub(ctx, configPath, c.NatsURL, logger, noColor)
+	return app.StartHub(ctx, configPath, c.RunDir, c.NatsURL, logger, noColor)
 }
 
 // ── hub status ────────────────────────────────────────────────────────────────
@@ -91,4 +96,3 @@ type HubStatusCmd struct {
 func (c *HubStatusCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	return app.HubStatus(ctx, c.JSON)
 }
-

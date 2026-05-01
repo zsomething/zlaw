@@ -114,7 +114,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 
 	applyToolConfig(cfg, registry, logger)
 
-	history, err := buildHistory(cfg.Agent.ID, "daemon", logger)
+	history, err := buildHistory("daemon", logger)
 	if err != nil {
 		return fmt.Errorf("create session history: %w", err)
 	}
