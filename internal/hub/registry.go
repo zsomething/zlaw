@@ -48,6 +48,7 @@ type registrationMsg struct {
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
+	AuthProfiles []string `json:"auth_profiles"`
 }
 
 // Registry subscribes to zlaw.registry and maintains the live state of all
