@@ -89,34 +89,11 @@ $ZLAW_AGENT_HOME/            # agent's self-contained root
 
 ## Current Violations
 
-See [SEPARATION.md](./SEPARATION.md) for detailed violations.
-
-| Violation | Location | Severity |
-|-----------|----------|----------|
-| Hub reads `agent.toml` | `BuildCredentialEnv` | HIGH |
-| Hub reads `credentials.toml` | `BuildCredentialEnv` | HIGH |
-| Hub writes `runtime.toml` | `agentConfigure` | HIGH |
-| Hub uses `ZlawHome()` fallback | `supervisor.go:379-381` | HIGH |
-| Hub uses `ZlawHome()` to resolve dirs | `credentials.go:18`, `control.go:411` | HIGH |
+See [separation.md](../plans/separation.md) for detailed violations tracking.
 
 ## Implementation Status
 
-### Completed ✅
-- `AgentHome()` function in `internal/config/home.go`
-- Agent uses `AgentHome()` for sessions, memories, personality
-- Hub injects `ZLAW_AGENT_HOME` when spawning
-- Hub no longer scaffolds SOUL.md, IDENTITY.md
-- Hub no longer creates workspace directories
-- `Disabled` flag in `zlaw.toml` registry (not `agent.toml`)
-- `ctl create agent` owns all scaffolding
-- `ctl` registered in `main.go`
-- All non-TUI `ctl` commands implemented
-
-### Not Yet Implemented ❌
-- Hub does NOT read agent config files directly (planned: agent provides auth profile at registration)
-- Hub does NOT write runtime.toml directly (planned: agent handles its own config)
-- Hub never calls `ZlawHome()` at runtime (partial: fallback still exists)
-- All `AgentEntry.Dir` must be absolute (partial: fallback for relative paths exists)
+See [separation.md](../plans/separation.md) for completion tracking.
 
 ## References
 
