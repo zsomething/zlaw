@@ -11,9 +11,9 @@ Doc: full target architecture. Phase 1 = standalone agent. Phase 2 = zlaw-hub + 
 ## Design Principles
 
 - **Hub is broker + process manager, not task orchestrator** — routes msgs, verifies identity, supervises agents, logs. No planning.
-- **Agents are autonomous** — each runs own agentic loop independently.
-- **One manager agent** — receives user input first, delegates to peers. Routing logic in manager, not hub.
-- **Adapters live in agents** — Telegram, CLI, etc. owned by agent (typically manager). Hub owns no adapters.
+- **Agents are autonomous** — each runs own agentic loop independently. Any agent can receive user input if it has an adapter.
+- **Adapters live in agents** — Telegram, CLI, etc. owned by agent. Hub owns no adapters.
+- **Peer-to-peer delegation** — agents communicate directly over NATS. Hub provides routing + ACL only.
 - **Secure by design** — agents verify identity via keypairs. Prompt injection mitigated at transport layer.
 - **Simple ops** — single `zlaw` binary with subcommands. NATS embedded in hub by default.
 - **Pluggable everywhere** — LLM backends + tool plugins swappable via config or binary plugins over IPC.
@@ -23,9 +23,12 @@ Doc: full target architecture. Phase 1 = standalone agent. Phase 2 = zlaw-hub + 
 ## System Topology
 
 ```
-[Telegram / CLI / HTTP]
+[Telegram / CLI / HTTP adapters]
          │
-    manager-agent   ◄── owns adapters; receives all user input
+    ┌────┴─────────────┐
+  agent-a           agent-b
+ (has adapter)     (headless)
+ own process       own process
          │
     NATS message bus  ◄── embedded in zlaw-hub
          │
@@ -36,12 +39,6 @@ Doc: full target architecture. Phase 1 = standalone agent. Phase 2 = zlaw-hub + 
     ├── NATS ACL enforcement (per-agent publish permissions)
     ├── Identity verifier (NKeys / token per agent)
     └── Audit logger (append-only, subscribes to all subjects)
-         │
-    ┌────┴─────────────┐
-  agent-a           agent-b
- (specialist)     (specialist)
- own process     own process
- connect to hub's NATS via TCP / Unix socket
 ```
 
 ---
@@ -144,28 +141,21 @@ Hub internals partially implemented (`internal/hub/`). Hub CLI bootstrap not yet
 | Identity verification | Each agent has keypair (NKeys); hub verifies on connect |
 | Audit logger | Append-only structured log of all messages, tool calls, delegations |
 
-Hub owns no interface adapters — agents (typically manager) own Telegram, CLI, HTTP.
+Hub owns no interface adapters — agents own Telegram, CLI, HTTP adapters.
 
-### Manager Agent
+### Agent Lifecycle Tools
+
+Lifecycle tools are CLI-only (via `ctl`). All agents are equal peers.
+| Tool | Scope | Notes |
+|------|--------|-------|
+| `agent_create(id, role)` | CLI via ctl | Scaffolds agent dir, registers with hub |
+| `agent_list()` | All agents | List registered agents and status |
+| `agent_configure(id, key, value)` | CLI via ctl | Update agent runtime config |
+| `agent_stop(id)` / `agent_restart(id)` | CLI via ctl | Process lifecycle control |
+| `agent_delegate(id, task, context)` | All agents | P2P delegation over NATS |
 
 Regular agent with two differences:
 
-1. **Extra tool set** — hub-management tools available only to `manager: true` agents (enforced by hub ACL).
-2. **Self-protection** — `agent_remove` refuses to target itself; hub enforces.
-
-Otherwise identical: personality, long-term memory, own agentic loop, owns Telegram/CLI adapters.
-
-| Hub-management tool | What it does |
-|---|---|
-| `agent_create(id, role, description)` | Scaffold agent dir + files, register with hub, spawn process |
-| `agent_list()` | All registered agents and their status |
-| `agent_configure(id, key, value)` | Write to agent's `runtime.toml`, triggers hot-reload |
-| `agent_stop(id)` / `agent_restart(id)` | Process lifecycle control |
-| `agent_delegate(id, task, context)` | Publish task envelope to `agent.<id>.inbox` via NATS |
-
-### Agent-to-Agent Communication
-
-`agent_delegate` = thin NATS publish wrapper. Constructs structured envelope, publishes to `agent.<id>.inbox`. Hub ACL enforces which agents can publish to which subjects. No hub business logic in path.
 
 Hub middleware (composable):
 - **ACL** — verify source agent has publish permission for target subject
@@ -176,11 +166,11 @@ Hub middleware (composable):
 Message envelope:
 ```json
 {
-  "from": "manager",
-  "to": "agent-b",
+  "from": "alice",
+  "to": "bob",
   "task": "fetch_weather",
   "context": { "location": "..." },
-  "reply_to": "agent.manager.inbox",
+  "reply_to": "agent.alice.inbox",
   "session_id": "abc123",
   "trace_id": "xyz789"
 }
@@ -193,18 +183,16 @@ Async by default: fire-and-forget with reply inbox. Agents advertise capabilitie
 ```
 agent.<id>.inbox       ← inbound tasks/messages for a specific agent
 agent.<id>.outbox      ← responses/events from a specific agent
-zlaw.hub.inbox           ← hub management requests (agent_create etc. reach hub here)
-zlaw.audit               ← hub subscribes; logs everything
-zlaw.registry            ← agent registration/heartbeat
+zlaw.hub.inbox        ← hub management requests (ctl only via control socket)
+zlaw.audit            ← hub subscribes; logs everything
+zlaw.registry         ← agent registration/heartbeat
 ```
 
-### Default ACL by Agent Type
+### Default ACL
 
-| Agent type | Can publish to | Can subscribe to |
-|---|---|---|
-| Manager | `agent.*.inbox`, `zlaw.hub.inbox` | `agent.manager.inbox`, `zlaw.registry` |
-| Specialist | `agent.manager.inbox` (reply only) | `agent.<own-name>.inbox` |
-| Hub | `zlaw.audit`, `zlaw.registry` | all |
+All agents have equal P2P permissions:
+- Subscribe: `zlaw.registry`, `agent.<id>.inbox` (own only), `_INBOX.>`, `$JS.API.>`
+- Publish: `agent.*.inbox` (delegate to any), `zlaw.registry`, `_INBOX.>`, `$JS.API.>`
 
 ---
 
@@ -212,9 +200,9 @@ zlaw.registry            ← agent registration/heartbeat
 
 | File | Owned by | Read by | Contents |
 |------|----------|---------|----------|
-| `zlaw.toml` | Hub | Hub only | NATS settings, agent registry (name → dir), hub keypair path, audit log path |
-| `credentials.toml` | Hub | Hub only at spawn time | LLM API keys, Telegram bot token, OAuth2 profiles — injected into agents as env vars |
-| `agents/<id>/agent.toml` | Agent | Hub (to spawn) + Agent (to run) | LLM backend, auth profile ref, tool ACL, context budget, isolation level, `manager: true/false` |
+| `zlaw.toml` | Hub | Hub + ctl | NATS settings, agent registry (id → dir), hub keypair path, audit log path |
+| `credentials.toml` | Hub | Hub at spawn time | LLM API keys, adapter tokens — injected into agents as env vars |
+| `agents/<id>/agent.toml` | Agent | Hub (to spawn) + Agent | LLM backend, auth profile ref, tool ACL, context budget, isolation level |
 | `agents/<id>/runtime.toml` | Agent (writes) | Agent + Hub watches | Dynamic overrides: model switching, flag toggles |
 | `agents/<id>/cron.toml` | Agent | Agent only | Scheduled tasks |
 | `agents/<id>/SOUL.md` | Agent | Agent only | Personality |
@@ -232,24 +220,24 @@ zlaw.registry            ← agent registration/heartbeat
 
 ```
 zlaw init
-# Generates: $ZLAW_HOME/zlaw.toml (skeleton with one manager agent entry)
+# Generates: $ZLAW_HOME/zlaw.toml (skeleton with first agent entry)
 #            $ZLAW_HOME/credentials.toml (empty template, 0600)
-#            $ZLAW_HOME/agents/manager/ (full agent scaffold)
+#            $ZLAW_HOME/agents/<id> (full agent scaffold)
 
 zlaw auth login --profile anthropic --type apikey
 # Prompts for API key → saves to credentials.toml
 
 zlaw hub start
-# Starts hub, spawns manager agent
+# Starts hub, spawns registered agents
 # Telegram is live. User can chat immediately.
 ```
 
 ### Day 1 — Growing the agent team
 
-User messages manager via Telegram:
+User messages agent via Telegram (has adapter):
 > "Create a coding assistant for me"
 
-Manager calls `agent_create(id="coding", role="Go developer")`:
+Agent calls `agent_create(id="coding", role="Go developer")`:
 - Hub scaffolds `$ZLAW_HOME/agents/coding/` with agent.toml + personality files
 - Hub spawns process, registers in registry
 - Manager confirms: "Done. I can delegate coding work to it now."
@@ -290,7 +278,7 @@ Configurable per agent in `agent.toml`. Low to high:
 
 ## Configuration
 
-- Per-agent: `agent.toml` — model, personality files, tools, isolation level, session config, `manager` flag
+- Per-agent: `agent.toml` — model, personality files, tools, isolation level, session config
 - Global (hub): `zlaw.toml` — NATS settings, agent registry, audit log path
 - Credentials: `credentials.toml` — hub-owned, injected as env vars at spawn time
 - Hot-reload: fsnotify-watched; changes applied without restart
@@ -306,4 +294,4 @@ Configurable per agent in `agent.toml`. Low to high:
 - **Prompt injection mitigation**: Cross-agent messages verified at transport layer before reaching LLM context.
 - **No ambient authority**: Agents cannot publish outside ACL, cannot impersonate others.
 - **Credential isolation**: Agents never read `credentials.toml`; hub injects only referenced profile as env vars.
-- **Manager self-protection**: Hub rejects `agent_remove` targeting manager agent itself.
+- **Self-protection**: Hub rejects lifecycle requests (stop/delete) from the target agent itself.
