@@ -35,6 +35,8 @@ $ZLAW_AGENT_HOME/           # set by ZLAW_AGENT_HOME env var
 └── workspace/            # agent's working directory
 ```
 
+Agent only knows `ZLAW_AGENT_HOME`, not `ZLAW_HOME` (hub's home).
+
 ## Configuration (agent.toml)
 
 See [docs/users/configuration.md](../users/configuration.md) for full reference.
@@ -58,6 +60,7 @@ System Prompt =
   + Sticky blocks (self-identity, allowed-tools)
   + Tool definitions
   + Memory recall (semantic search if enabled)
+  + Active skills (on-demand)
 
 History Window =
     Last N turns (token-limited via pruning)
@@ -91,13 +94,15 @@ See [agent_tools.md](./agent_tools.md) and [agent_skills.md](./agent_skills.md).
 | Var | Source | Purpose |
 |-----|--------|---------|
 | `ZLAW_AGENT_HOME` | Hub injects at spawn | Root for all agent files |
+| `ZLAW_AGENT_ID` | Hub injects | Agent ID |
 | `ZLAW_NATS_URL` | Hub injects | NATS connection (standalone: not set) |
-| `ZLAW_CREDENTIALS_FILE` | Hub injects | Path to credentials profile |
-| `ZLAW_AGENT` | Hub injects | Agent ID |
-| `ZLAW_HOME` | ctl sets | Hub's home (agent should not use) |
+| `MINIMAX_DEFAULT_API_KEY` | Hub injects | Credential env vars |
+| `...` | Hub injects | Per-profile credentials |
+
+Agent does NOT know about `ZLAW_HOME`.
 
 ## See Also
 
 - [agent_contexts.md](./agent_contexts.md) — context engineering details
-- [tools.md](./tools.md) — built-in tools reference
-- [skills.md](./skills.md) — markdown-based skills
+- [agent_tools.md](./agent_tools.md) — built-in tools reference
+- [agent_skills.md](./agent_skills.md) — markdown-based skills
