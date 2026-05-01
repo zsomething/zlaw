@@ -94,19 +94,20 @@ zlaw/
 plans/                    # Living plans — implementation tracking, evolves fast
 ├── planning.md           # Feature checklist, prioritized
 ├── agent_portability.md # ZLAW_AGENT_HOME consolidation design
-├── ctl_plan.md          # ctl subcommand implementation
+├── ctl_plan.md           # ctl subcommand implementation
+├── separation.md         # Separation of concerns violations + fixes
 └── web_ui_plan.md       # Web UI implementation plan
 
 docs/design/              # Architecture & design — the goal state
 ├── architecture.md      # Full system design, topology, security model
-└── architecture_principles.md # Hard rules, violations, separation of concerns
+└── architecture_principles.md # Hard rules, violation tracking
 
 docs/users/               # User-facing documentation
 ├── configuration.md     # Configuration guide
 └── tools.md              # Built-in tools reference
-
-SEPARATION.md            # Current separation of concerns violations (internal)
 ```
+
+**Note:** `docs/design/` describes the goal architecture. Implementation details, trackers, and working documents live in `plans/`.
 
 ---
 

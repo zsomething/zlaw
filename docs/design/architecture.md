@@ -146,16 +146,13 @@ Hub owns no interface adapters — agents own Telegram, CLI, HTTP adapters.
 ### Agent Lifecycle Tools
 
 Lifecycle tools are CLI-only (via `ctl`). All agents are equal peers.
-| Tool | Scope | Notes |
-|------|--------|-------|
-| `agent_create(id, role)` | CLI via ctl | Scaffolds agent dir, registers with hub |
-| `agent_list()` | All agents | List registered agents and status |
-| `agent_configure(id, key, value)` | CLI via ctl | Update agent runtime config |
-| `agent_stop(id)` / `agent_restart(id)` | CLI via ctl | Process lifecycle control |
-| `agent_delegate(id, task, context)` | All agents | P2P delegation over NATS |
-
-Regular agent with two differences:
-
+| Tool | Notes |
+|------|-------|
+| `agent_create(id, role)` | CLI: scaffolds agent dir, registers with hub |
+| `agent_list()` | All agents: list registered agents and status |
+| `agent_configure(id, key, value)` | CLI: update agent runtime config |
+| `agent_stop(id)` / `agent_restart(id)` | CLI: process lifecycle control |
+| `agent_delegate(id, task, context)` | All agents: P2P delegation over NATS |
 
 Hub middleware (composable):
 - **ACL** — verify source agent has publish permission for target subject
@@ -234,22 +231,22 @@ zlaw hub start
 
 ### Day 1 — Growing the agent team
 
-User messages agent via Telegram (has adapter):
-> "Create a coding assistant for me"
-
-Agent calls `agent_create(id="coding", role="Go developer")`:
-- Hub scaffolds `$ZLAW_HOME/agents/coding/` with agent.toml + personality files
-- Hub spawns process, registers in registry
-- Manager confirms: "Done. I can delegate coding work to it now."
+User runs `zlaw ctl create agent id=coding role="Go developer"`:
+- ctl scaffolds `$ZLAW_HOME/agents/coding/` with agent.toml + personality files
+- ctl registers with hub, hub spawns process
+- User: "Done. I can delegate coding work to it now."
 
 ### Day N — Operations
 
 ```bash
-zlaw hub status                   # hub health + per-agent status (implemented)
-zlaw hub agent list               # all agents, status, last heartbeat (planned)
-zlaw hub agent logs coding        # stream agent logs (planned)
-zlaw hub agent restart coding     # restart agent process (planned)
-zlaw hub agent remove coding      # stop process + deregister (planned)
+zlaw ctl get agents                # list all agents, status, last heartbeat
+zlaw ctl get agent <id>           # get agent details
+zlaw ctl get hub                  # hub health + per-agent status
+zlaw ctl logs <id> [--follow]     # stream agent logs
+zlaw ctl stop <id>                # stop agent process
+zlaw ctl restart <id>             # restart agent process
+zlaw ctl delete <id>              # stop + deregister
+zlaw ctl configure <id> <key> <value>  # update runtime config
 ```
 
 ---
