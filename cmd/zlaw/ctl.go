@@ -15,6 +15,28 @@ import (
 	"github.com/zsomething/zlaw/internal/hub"
 )
 
+// Types shared between ctl and agent commands
+
+type agentListEntry struct {
+	Name          string   `json:"name"`
+	Version       string   `json:"version"`
+	Capabilities  []string `json:"capabilities"`
+	Roles         []string `json:"roles"`
+	Status        string   `json:"status"`
+	LastHeartbeat string   `json:"last_heartbeat"`
+}
+
+type agentStatusEntry struct {
+	Name          string   `json:"name"`
+	Running       bool     `json:"running"`
+	PID           int      `json:"pid"`
+	LastErr       string   `json:"last_err,omitempty"`
+	ConnStatus    string   `json:"conn_status"`
+	LastHeartbeat string   `json:"last_heartbeat,omitempty"`
+	Capabilities  []string `json:"capabilities,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
+}
+
 // ── Templates ────────────────────────────────────────────────────────────────
 
 // agentTOMLTemplate has agent name substituted for %s.
