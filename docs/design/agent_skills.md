@@ -2,7 +2,7 @@
 
 ## Overview
 
-Skills are markdown files that extend an agent's capabilities. They provide context, guidelines, and examples that get injected into the system prompt.
+Skills are markdown files that extend agent capabilities. They provide context, guidelines, and examples on-demand.
 
 ## Skill File Format
 
@@ -22,10 +22,10 @@ description: <when should this skill be activated?>
 ```
 
 **Frontmatter** (YAML):
-- `name` — skill identifier
-- `description` — when to activate (used by agent to decide)
+- `name` — skill identifier, used for matching
+- `description` — trigger condition; agent uses this to decide when to activate
 
-**Body** — markdown content injected into system prompt when relevant.
+**Body** — full content loaded into context only when skill is activated.
 
 ## Discovery
 
@@ -40,12 +40,20 @@ Agent-local wins on name conflict.
 
 ## How Skills Are Used
 
-When agent decides to use a skill:
-1. Load SKILL.md file
-2. Parse frontmatter for name/description
-3. Inject body content into system prompt
+Skills are **not** pre-loaded into context. Only name + description are registered.
 
-Skill activation is agent-driven (based on description matching).
+When agent decides to activate a skill:
+1. Agent matches task against registered skill descriptions
+2. If matched, loads full SKILL.md body content
+3. Injects body into system prompt or relevant context
+
+```
+Skill Discovery (at startup):
+  name + description → registered in agent
+
+Skill Activation (per task):
+  task → match description → load body → inject into context
+```
 
 ## Example: `debug-go`
 
@@ -71,9 +79,9 @@ description: Use when user asks about Go debugging, panics, or runtime errors
 | Aspect | Skills | Built-in Tools |
 |--------|--------|----------------|
 | Format | Markdown | Go code |
-| Execution | Injected into prompt | Executed by agent |
-| Activation | Agent-driven | Tool call |
-| Location | Filesystem | Compiled |
+| Context loading | On-demand (triggered by description) | Always available |
+| Content | Guidelines/examples injected into prompt | Tool schema injected |
+| Activation | Agent-driven (description matching) | Tool call |
 
 ## See Also
 

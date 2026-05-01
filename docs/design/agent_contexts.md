@@ -17,6 +17,7 @@ System Prompt =
   + Sticky blocks             # framework-level injections
   + Tool definitions          # available tools + schemas
   + Memory recall             # relevant memories (if semantic search enabled)
+  + Active skills             # triggered skills (on-demand)
 ```
 
 ### 2. Sticky Blocks
@@ -27,7 +28,19 @@ Current sticky blocks:
 - **self-identity** — "You are agent {agent_id} with roles {agent_roles}"
 - **allowed-tools** — list of permitted tools based on config
 
-### 3. Conversation History
+### 3. Skills (On-Demand)
+
+Skills are registered by name + description at startup. Body content is loaded into context only when activated by the agent.
+
+```
+At startup:
+  skill name + description → registered
+
+Per task:
+  task → match skill description → load body → inject into context
+```
+
+### 4. Conversation History
 
 Token-limited window of recent turns. Pruned when it exceeds `context_token_budget`.
 
@@ -40,7 +53,7 @@ Pruning strategy:
 2. If still over budget, apply summarization to remaining turns
 3. If summarization also exceeds, apply aggressive pruning (strip tool results, thinking blocks)
 
-### 4. Prefill
+### 5. Prefill
 
 Context injected at session start based on `context.prefill` config:
 
@@ -50,7 +63,7 @@ Context injected at session start based on `context.prefill` config:
 | `datetime` | Current date/time (RFC3339) |
 | `file:<path>` | Contents of file relative to agent home |
 
-### 5. Memory Recall
+### 6. Memory Recall
 
 When semantic memory is enabled:
 1. Query vector store with session context
@@ -62,7 +75,7 @@ When semantic memory is enabled:
 The agent tracks token counts to stay within LLM context limits:
 
 ```
-context_token_budget = max tokens for history + tools + memories
+context_token_budget = max tokens for history + tools + memories + skills
 
 Pruning triggers:
 - History exceeds budget → prune oldest turns
@@ -97,4 +110,5 @@ Injected into system prompt as JSON schema. Only tools in `tools.allowed` are in
 ## See Also
 
 - [agent_standalone.md](./agent_standalone.md) — standalone agent overview
+- [agent_skills.md](./agent_skills.md) — skill activation details
 - [agent_tools.md](./agent_tools.md) — tool reference
