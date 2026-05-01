@@ -17,42 +17,6 @@ const (
 	// managementSubject is the NATS subject the hub listens on for management requests.
 	managementSubject = "zlaw.hub.inbox"
 
-	// scaffoldAgentTOML is the minimal agent.toml written when creating a new agent.
-	scaffoldAgentTOML = `[agent]
-id = %q
-description = ""
-
-[llm]
-backend = "anthropic"
-model = "claude-sonnet-4-5"
-auth_profile = "anthropic"
-max_tokens = 4096
-timeout_sec = 60
-
-[tools]
-allowed = []
-
-# Uncomment and configure adapters after setting up credentials:
-# [[adapter]]
-# type = "telegram"
-# auth_profile = "telegram"
-`
-
-	// scaffoldCredentialsTOML is the initial credentials file for a new agent.
-	// Values use ${ENV_VAR} expansion so the hub can inject real values.
-	scaffoldCredentialsTOML = `[profiles.anthropic]
-name = "anthropic"
-data = { api_key = "${ANTHROPIC_API_KEY}" }
-
-[profiles.telegram]
-name = "telegram"
-data = { telegram_bot_token = "${TELEGRAM_BOT_TOKEN}" }
-
-[profiles.fizzy]
-name = "fizzy"
-data = { fizzy_api_key = "${FIZZY_API_KEY}" }
-`
-
 )
 
 // ManagementRequest is the envelope for hub management requests.

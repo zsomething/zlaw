@@ -17,6 +17,7 @@ var cli struct {
 	Init  InitCmd  `cmd:"" help:"bootstrap $ZLAW_HOME or create a named agent workspace"`
 	Hub   HubCmd   `cmd:"" help:"manage the zlaw hub"`
 	Agent AgentCmd `cmd:"" help:"manage and run agents"`
+	Ctl   CtlCmd   `cmd:"" help:"operational commands (hub must be running)"`
 }
 
 func main() {
