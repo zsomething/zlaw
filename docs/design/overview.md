@@ -2,7 +2,7 @@
 
 ## Design Principles
 
-- **Hub is broker + process manager, not task orchestrator** — routes messages, verifies identity, supervises agents, logs. No planning.
+- **Hub is communication broker** — routes messages, enforces ACL. No task planning or agent management.
 - **Agents are autonomous** — each runs own agentic loop independently. Any agent can receive user input if it has an adapter.
 - **Adapters live in agents** — Telegram, CLI, etc. owned by agent. Hub owns no adapters.
 - **Peer-to-peer delegation** — agents communicate directly over NATS. Hub provides routing + ACL only.
@@ -15,7 +15,7 @@
 | Component | Role | Key Responsibility |
 |-----------|------|---------------------|
 | **Agent** | Autonomous executor | Runs agentic loop, owns its own filesystem, communicates via NATS |
-| **Hub** | Message broker + process manager | Routes messages, enforces ACL, supervises agent processes |
+| **Hub** | Communication broker | Routes agent-to-agent messages, external webhooks; enforces ACL
 | **ctl** | Human operator CLI | Scaffolds agent directories, talks to hub via control socket |
 
 ## Separation of Concerns
@@ -28,10 +28,10 @@
 - Communicates with other agents via NATS only
 
 ### Hub
-- Routing + ACL only
-- Knows only: agent ID, dir, binary, restart policy, disabled flag
-- Injects `ZLAW_AGENT_HOME` env var when spawning
-- Provides ACL at NATS layer
+- Communication broker only
+- Routes agent-to-agent and external-to-agent messages
+- Enforces ACL at NATS layer
+- Does NOT spawn or manage agent processes
 
 ### ctl
 - Scaffolds agent directories and files
@@ -70,6 +70,7 @@ Agent → Agent (P2P)
 │
 Agent ← Hub (spawn context)
 │   └── Via env vars: ZLAW_AGENT_HOME, ZLAW_NATS_URL, ZLAW_CREDENTIALS_FILE
+│   Note: Hub does not spawn agents — that's ctl's responsibility.
 │
 ctl → Hub (control socket)
 │   └── Via Unix socket at $ZLAW_HOME/run/control.sock
@@ -81,7 +82,7 @@ ctl → Hub (control socket)
 |---------|-----------|---------|
 | `agent.<id>.inbox` | inbound | Tasks/messages for specific agent |
 | `agent.<id>.outbox` | outbound | Responses/events (future) |
-| `zlaw.hub.inbox` | inbound | Hub management requests (ctl only) |
+| `zlaw.webhook` | inbound | External webhook messages |
 | `zlaw.registry` | bidirectional | Agent registration/heartbeat |
 | `zlaw.audit` | inbound | Audit log (hub subscribes) |
 
