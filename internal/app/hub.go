@@ -32,6 +32,16 @@ func runHub(ctx context.Context, configPath, runDir, externalNATSURL string, log
 		return fmt.Errorf("load hub config: %w", err)
 	}
 
+	// Validate agent dirs are absolute paths.
+	for _, entry := range cfg.Agents {
+		if entry.Dir == "" {
+			return fmt.Errorf("agent %q has no dir set; absolute path required", entry.ID)
+		}
+		if !filepath.IsAbs(entry.Dir) {
+			return fmt.Errorf("agent %q dir must be absolute, got %q", entry.ID, entry.Dir)
+		}
+	}
+
 	// Wrap logger with hub prefix and color.
 	logger = setupHubLogger(logger, noColor)
 

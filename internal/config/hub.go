@@ -175,6 +175,70 @@ func (c HubConfig) FindAgent(id string) (AgentEntry, bool) {
 	return AgentEntry{}, false
 }
 
+// Save writes the HubConfig back to the default path.
+// It preserves any comments and ordering in the existing file where possible.
+func (c HubConfig) Save() error {
+	path := DefaultHubConfigPath()
+	return c.SaveTo(path)
+}
+
+// SaveTo writes the HubConfig to the specified path.
+func (c HubConfig) SaveTo(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if _, err := toml.Decode(string(data), &raw); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	// Update agents section.
+	agents := make([]map[string]any, len(c.Agents))
+	for i, a := range c.Agents {
+		entry := map[string]any{"id": a.ID}
+		if a.Dir != "" {
+			entry["dir"] = a.Dir
+		}
+		if a.Binary != "" {
+			entry["binary"] = a.Binary
+		}
+		if a.RestartPolicy != "" {
+			entry["restart_policy"] = string(a.RestartPolicy)
+		}
+		if a.Disabled {
+			entry["disabled"] = true
+		}
+		if len(a.AuthProfiles) > 0 {
+			entry["auth_profiles"] = a.AuthProfiles
+		}
+		agents[i] = entry
+	}
+	raw["agents"] = agents
+
+	// Update hub section.
+	if raw["hub"] == nil {
+		raw["hub"] = map[string]any{}
+	}
+	if hub, ok := raw["hub"].(map[string]any); ok {
+		if c.Hub.Name != "" {
+			hub["name"] = c.Hub.Name
+		}
+		if c.Hub.Description != "" {
+			hub["description"] = c.Hub.Description
+		}
+		if c.Hub.KeypairPath != "" {
+			hub["keypair_path"] = c.Hub.KeypairPath
+		}
+		if c.Hub.AuditLogPath != "" {
+			hub["audit_log_path"] = c.Hub.AuditLogPath
+		}
+	}
+
+	return writeHubConfig(path, raw)
+}
+
 // writeHubConfig writes raw config back to path.
 func writeHubConfig(path string, raw map[string]any) error {
 	// Use toml.Canonicalize to preserve key order.
