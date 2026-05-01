@@ -11,7 +11,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/nats.go"
 
@@ -101,9 +100,8 @@ func runHub(ctx context.Context, configPath, runDir, externalNATSURL string, log
 	}
 
 	sup := hub.NewSupervisorWithMessenger(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor, messenger, reg)
-	if err := sup.Start(ctx); err != nil {
-		return fmt.Errorf("start supervisor: %w", err)
-	}
+	// Note: sup.Start(ctx) removed - agent spawning is handled by ctl via executor
+	// Hub supervisor is retained for control socket methods (stop, restart, remove)
 
 	mgmtHandler := hub.NewManagementHandler(
 		result.Conn,
@@ -446,56 +444,22 @@ func reloadConfig(
 	for _, name := range sortedKeys(currentNames) {
 		if !newNames[name] {
 			logger.Info("zlaw.toml watcher: removing agent", "name", name)
-			if err := sup.Remove(name); err != nil {
-				logger.Warn("zlaw.toml watcher: remove failed", "name", name, "err", err)
-			}
 			reg.Deregister(name)
 		}
 	}
 
-	// Add new agents from the config.
+	// Create JetStream consumers for new agents.
+	// Note: agent spawning is handled by ctl via executor, not hub.
 	for _, entry := range newCfg.Agents {
 		if currentNames[entry.ID] {
-			continue // already supervised
+			continue // already have consumer
 		}
 
-		// Skip disabled agents.
-		if agentDisabled(entry.Dir) {
-			logger.Info("zlaw.toml watcher: skipping disabled agent", "id", entry.ID)
-			continue
-		}
-
-		logger.Info("zlaw.toml watcher: spawning agent", "id", entry.ID)
-		// Ensure JetStream consumer exists.
+		logger.Info("zlaw.toml watcher: ensuring consumer", "id", entry.ID)
 		if err := sm.EnsureAgentConsumers(ctx, []string{entry.ID}); err != nil {
 			logger.Warn("zlaw.toml watcher: create consumer failed", "id", entry.ID, "err", err)
 		}
-		if err := sup.Spawn(ctx, entry); err != nil {
-			logger.Warn("zlaw.toml watcher: spawn failed", "id", entry.ID, "err", err)
-		}
 	}
-}
-
-// agentDisabled returns true if the agent's agent.toml has disabled = true.
-func agentDisabled(agentDir string) bool {
-	if agentDir == "" {
-		return false
-	}
-	if !filepath.IsAbs(agentDir) {
-		agentDir = filepath.Join(config.ZlawHome(), agentDir)
-	}
-	path := filepath.Join(agentDir, "agent.toml")
-	var raw map[string]any
-	_, err := toml.DecodeFile(path, &raw)
-	if err != nil {
-		return false
-	}
-	if v, ok := raw["agent"].(map[string]any); ok {
-		if b, ok := v["disabled"].(bool); ok {
-			return b
-		}
-	}
-	return false
 }
 
 func sortedKeys(m map[string]bool) []string {

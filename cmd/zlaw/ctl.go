@@ -13,6 +13,7 @@ import (
 
 	"github.com/zsomething/zlaw/internal/app"
 	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/executor"
 	"github.com/zsomething/zlaw/internal/hub"
 )
 
@@ -445,11 +446,36 @@ func (c *CtlStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}
+
+		// Get NATS URL from hub status
+		natsURL := "nats://127.0.0.1:4222" // Default, should get from hub
+
 		for _, agent := range cfg.Agents {
 			if agent.Disabled {
 				continue
 			}
-			if err := ctlAgentAction("agent.start", map[string]any{"id": agent.ID}); err != nil {
+
+			// Get executor for this agent
+			execType := agent.Executor
+			if execType == "" {
+				execType = "subprocess"
+			}
+			exec := executor.NewExecutor(execType)
+
+			// Build agent config for executor
+			agentCfg := executor.AgentConfig{
+				ID:            agent.ID,
+				Dir:           agent.Dir,
+				Binary:        agent.Binary,
+				Executor:      agent.Executor,
+				Target:        agent.Target,
+				TargetSSH:     agent.TargetSSH,
+				RestartPolicy: string(agent.RestartPolicy),
+				NATSURL:       natsURL,
+				AuthProfiles:  agent.AuthProfiles,
+			}
+
+			if err := exec.Start(ctx, agentCfg); err != nil {
 				logger.Warn("failed to start agent", "id", agent.ID, "err", err)
 			} else {
 				fmt.Printf("  agent %q started\n", agent.ID)
@@ -486,11 +512,41 @@ func (c *CtlStopCmd) Run(ctx context.Context, logger *slog.Logger) error {
 	return nil
 }
 
-// ── ctl agent start ────────────────────────────────────────────────────────────
+// ── ctl agent start ──────────────────────────────────────────────────────────────
 
-func (c *CtlAgentStartCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.start", map[string]any{"id": c.ID}); err != nil {
-		return err
+func (c *CtlAgentStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	// Load agent config
+	cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	agent, ok := cfg.FindAgent(c.ID)
+	if !ok {
+		return fmt.Errorf("agent %q not found", c.ID)
+	}
+
+	// Get executor
+	execType := agent.Executor
+	if execType == "" {
+		execType = "subprocess"
+	}
+	exec := executor.NewExecutor(execType)
+
+	// Build agent config
+	agentCfg := executor.AgentConfig{
+		ID:            agent.ID,
+		Dir:           agent.Dir,
+		Binary:        agent.Binary,
+		Executor:      agent.Executor,
+		Target:        agent.Target,
+		TargetSSH:     agent.TargetSSH,
+		RestartPolicy: string(agent.RestartPolicy),
+		NATSURL:       "nats://127.0.0.1:4222",
+		AuthProfiles:  agent.AuthProfiles,
+	}
+
+	if err := exec.Start(ctx, agentCfg); err != nil {
+		return fmt.Errorf("start agent: %w", err)
 	}
 	fmt.Printf("agent %q started\n", c.ID)
 	return nil
@@ -499,8 +555,25 @@ func (c *CtlAgentStartCmd) Run(ctx context.Context, _ *slog.Logger) error {
 // ── ctl agent stop ────────────────────────────────────────────────────────────
 
 func (c *CtlAgentStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.stop", map[string]any{"id": c.ID}); err != nil {
-		return err
+	// Load agent config to get executor type
+	cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	agent, ok := cfg.FindAgent(c.ID)
+	if !ok {
+		return fmt.Errorf("agent %q not found", c.ID)
+	}
+
+	// Get executor
+	execType := agent.Executor
+	if execType == "" {
+		execType = "subprocess"
+	}
+	exec := executor.NewExecutor(execType)
+
+	if err := exec.Stop(ctx, c.ID); err != nil {
+		return fmt.Errorf("stop agent: %w", err)
 	}
 	fmt.Printf("agent %q stopped\n", c.ID)
 	return nil
@@ -508,25 +581,39 @@ func (c *CtlAgentStopCmd) Run(ctx context.Context, _ *slog.Logger) error {
 
 // ── ctl agent restart ──────────────────────────────────────────────────────────
 
-func (c *CtlAgentRestartCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	if err := ctlAgentAction("agent.restart", map[string]any{"id": c.ID}); err != nil {
+func (c *CtlAgentRestartCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	// Stop first
+	stop := CtlAgentStopCmd{ID: c.ID}
+	if err := stop.Run(ctx, logger); err != nil {
 		return err
 	}
-	fmt.Printf("agent %q restarted\n", c.ID)
-	return nil
+	// Start again
+	start := CtlAgentStartCmd{ID: c.ID}
+	return start.Run(ctx, logger)
 }
 
 // ── ctl agent delete ────────────────────────────────────────────────────────────
 
-func (c *CtlAgentDeleteCmd) Run(ctx context.Context, _ *slog.Logger) error {
-	// Stop agent first (ignore if not running)
-	_ = ctlAgentAction("agent.stop", map[string]any{"id": c.ID})
-
-	// Remove from zlaw.toml
+func (c *CtlAgentDeleteCmd) Run(ctx context.Context, logger *slog.Logger) error {
+	// Load agent config to get executor type
 	cfg, err := config.LoadHubConfig(config.DefaultHubConfigPath())
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	agent, ok := cfg.FindAgent(c.ID)
+	if !ok {
+		return fmt.Errorf("agent %q not found", c.ID)
+	}
+
+	// Stop agent via executor
+	execType := agent.Executor
+	if execType == "" {
+		execType = "subprocess"
+	}
+	exec := executor.NewExecutor(execType)
+	_ = exec.Stop(ctx, c.ID)
+
+	// Remove from zlaw.toml
 	if err := cfg.RemoveAgent(c.ID); err != nil {
 		return fmt.Errorf("remove agent from config: %w", err)
 	}

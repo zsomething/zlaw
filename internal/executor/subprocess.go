@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/zsomething/zlaw/internal/config"
+	"github.com/zsomething/zlaw/internal/credentials"
 )
 
 const (
@@ -190,7 +193,7 @@ func (s *SubprocessExecutor) monitor(ctx context.Context, ag *subprocessAgent) {
 func (s *SubprocessExecutor) buildCmd(cfg AgentConfig) (*exec.Cmd, error) {
 	bin := cfg.Binary
 	if bin == "" {
-		bin = os.Args[0] // use own binary
+		bin = os.Args[0]
 	}
 	if bin == "" {
 		return nil, fmt.Errorf("no binary configured for agent %q", cfg.ID)
@@ -204,10 +207,27 @@ func (s *SubprocessExecutor) buildCmd(cfg AgentConfig) (*exec.Cmd, error) {
 	args := []string{"agent", "serve", "--agent", cfg.ID}
 	cmd := exec.Command(bin, args...) //nolint:gosec
 
+	// Build environment.
 	env := os.Environ()
 	env = setEnv(env, "ZLAW_AGENT", cfg.ID)
 	env = setEnv(env, "ZLAW_NATS_URL", cfg.NATSURL)
+	env = setEnv(env, "ZLAW_LOG_FORMAT", "json")
 	env = setEnv(env, "ZLAW_AGENT_HOME", agentDir)
+
+	// Inject credentials.
+	if len(cfg.AuthProfiles) > 0 {
+		runtimeCredsPath := filepath.Join(config.ZlawHome(), "run", "credentials", cfg.ID+".toml")
+		if err := injectCredentials(cfg.AuthProfiles, runtimeCredsPath); err != nil {
+			return nil, fmt.Errorf("credential injection for agent %q: %w", cfg.ID, err)
+		}
+		env = setEnv(env, "ZLAW_CREDENTIALS_FILE", runtimeCredsPath)
+	}
+
+	// Inject NATS token if provided.
+	if cfg.NATSToken != "" {
+		env = setEnv(env, "ZLAW_NATS_CREDS", cfg.NATSToken)
+	}
+
 	cmd.Env = env
 
 	return cmd, nil
@@ -235,11 +255,40 @@ func backoffDelay(attempt int) time.Duration {
 }
 
 func setEnv(env []string, key, value string) []string {
+	prefix := key + "="
 	for i, e := range env {
-		if len(e) >= len(key) && e[:len(key)] == key {
-			env[i] = key + "=" + value
+		if len(e) >= len(prefix) && e[:len(prefix)] == prefix {
+			env[i] = prefix + value
 			return env
 		}
 	}
-	return append(env, key+"="+value)
+	return append(env, prefix+value)
+}
+
+func injectCredentials(profiles []string, runtimeCredsPath string) error {
+	globalCredsPath := filepath.Join(config.ZlawHome(), "credentials.toml")
+	store, err := credentials.LoadStore(globalCredsPath)
+	if err != nil {
+		return fmt.Errorf("load global credentials: %w", err)
+	}
+
+	// Filter to only needed profiles.
+	filtered := credentials.CredentialStore{
+		Profiles: make(map[string]credentials.CredentialProfile, len(profiles)),
+	}
+	for _, name := range profiles {
+		profile, ok := store.Profiles[name]
+		if !ok {
+			return fmt.Errorf("auth profile %q not found in global credentials", name)
+		}
+		filtered.Profiles[name] = profile
+	}
+
+	// Write filtered credentials to runtime dir.
+	runDir := filepath.Join(config.ZlawHome(), "run", "credentials")
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
+		return fmt.Errorf("create runtime credentials dir: %w", err)
+	}
+
+	return credentials.SaveStore(runtimeCredsPath, filtered)
 }

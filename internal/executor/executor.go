@@ -20,11 +20,13 @@ type AgentConfig struct {
 	ID            string
 	Dir           string
 	Binary        string
-	Executor      string // "subprocess", "systemd", "docker"
-	Target        string // "local", "ssh"
-	TargetSSH     string // SSH connection string
-	RestartPolicy string // "always", "on-failure", "never"
-	NATSURL       string
+	Executor      string   // "subprocess", "systemd", "docker"
+	Target        string   // "local", "ssh"
+	TargetSSH     string   // SSH connection string
+	RestartPolicy string   // "always", "on-failure", "never"
+	NATSURL       string   // NATS server URL (e.g., nats://127.0.0.1:4222)
+	NATSToken     string   // NATS credentials token (optional)
+	AuthProfiles  []string // Credential profiles to inject
 }
 
 // Executor is the interface for spawning and managing agent processes.
