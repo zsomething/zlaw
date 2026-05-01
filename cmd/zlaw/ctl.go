@@ -100,8 +100,8 @@ type CtlCmd struct {
 
 type CtlGetCmd struct {
 	Agents CtlGetAgentsCmd `cmd:"" help:"list all agents"`
-	Agent  CtlGetAgentCmd   `cmd:"" help:"show agent detail"`
-	Hub    CtlGetHubCmd     `cmd:"" help:"show hub status"`
+	Agent  CtlGetAgentCmd  `cmd:"" help:"show agent detail"`
+	Hub    CtlGetHubCmd    `cmd:"" help:"show hub status"`
 }
 
 // ctl get agents
@@ -296,9 +296,9 @@ func (c *CtlGetHubCmd) Run(ctx context.Context, _ *slog.Logger) error {
 }
 
 type hubStatusDisplay struct {
-	Name       string       `json:"name"`
-	AgentCount int          `json:"agent_count"`
-	NATS       *natsStatus  `json:"nats,omitempty"`
+	Name       string      `json:"name"`
+	AgentCount int         `json:"agent_count"`
+	NATS       *natsStatus `json:"nats,omitempty"`
 }
 
 type natsStatus struct {

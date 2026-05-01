@@ -13,8 +13,8 @@ type AgentCmd struct {
 	Run    AgentRunCmd    `cmd:"" help:"start the agent (interactive or stdin)"`
 	Serve  AgentServeCmd  `cmd:"" help:"start the agent in daemon mode"`
 	Attach AgentAttachCmd `cmd:"" help:"attach a terminal to a running daemon"`
-	Logs   AgentLogsCmd  `cmd:"" help:"stream agent logs in pretty format"`
-	Auth   AgentAuthCmd  `cmd:"" help:"manage agent credentials"`
+	Logs   AgentLogsCmd   `cmd:"" help:"stream agent logs in pretty format"`
+	Auth   AgentAuthCmd   `cmd:"" help:"manage agent credentials"`
 }
 
 // AgentFlags are embedded by commands that need to resolve an agent directory.
