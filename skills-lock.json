@@ -30,6 +30,11 @@
       "source": "akhy/agent-skills",
       "sourceType": "github",
       "computedHash": "468b9f4afcd5cf44f9b42c52893a5a843b6f18e7d69af6bd8b28914c08be0fc3"
+    },
+    "htmx-skill": {
+      "source": "DrZoot/htmx-skill",
+      "sourceType": "github",
+      "computedHash": "14e4eb911a6fd7a0c74420b85d77dbcc58623a87135ae337869a043e9b8b316e"
     }
   }
 }

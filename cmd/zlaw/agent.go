@@ -29,6 +29,7 @@ type AgentCmd struct {
 	Delete    AgentDeleteCmd    `cmd:"" help:"stop and remove an agent (deletes dirs + removes from zlaw.toml)"`
 	Stop      AgentStopCmd      `cmd:"" help:"stop a running agent"`
 	Restart   AgentRestartCmd   `cmd:"" help:"restart a stopped or running agent"`
+	Auth      AgentAuthCmd      `cmd:"" help:"manage agent credentials"`
 }
 
 // AgentFlags are embedded by commands that need to resolve an agent directory.

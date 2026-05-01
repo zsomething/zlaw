@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -15,14 +17,18 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/nats-io/nats.go"
 
+	"github.com/zsomething/zlaw/internal/agent"
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/hub"
+	"github.com/zsomething/zlaw/internal/hub/web"
 	"github.com/zsomething/zlaw/internal/logging"
 	"github.com/zsomething/zlaw/internal/messaging"
+	"github.com/zsomething/zlaw/internal/skills"
+	"github.com/zsomething/zlaw/internal/tools"
 )
 
 // runHub loads the hub config and starts the hub process. It blocks until ctx is cancelled.
-func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool) error {
+func runHub(ctx context.Context, configPath string, externalNATSURL string, logger *slog.Logger, noColor bool, dashboardAddr string) error {
 	cfg, err := config.LoadHubConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
@@ -68,6 +74,24 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	// Create a messenger from the NATS connection for log publishing.
 	messenger := &natsMessengerAdapter{conn: result.Conn}
 
+	// Start audit logger if configured.
+	var auditLogger *hub.AuditLogger
+	if cfg.Hub.AuditLogPath != "" {
+		auditLogger, err = hub.NewAuditLogger(cfg.Hub.AuditLogPath, messenger, logger)
+		if err != nil {
+			return fmt.Errorf("start audit logger: %w", err)
+		}
+		if auditLogger != nil {
+			auditLogger.SetSubjects(hub.DefaultAuditSubjects)
+			go func() {
+				if err := auditLogger.Start(); err != nil {
+					logger.Error("audit logger stopped", "err", err)
+				}
+			}()
+			logger.Info("audit logger started", "path", cfg.Hub.AuditLogPath)
+		}
+	}
+
 	sup := hub.NewSupervisorWithMessenger(cfg, result.Conn.ConnectedUrl(), selfBin, "", result.ACL.AgentTokens, logger, noColor, messenger)
 	if err := sup.Start(ctx); err != nil {
 		return fmt.Errorf("start supervisor: %w", err)
@@ -110,11 +134,35 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 		return fmt.Errorf("start control socket: %w", err)
 	}
 
+	// Start the web UI if an address was provided.
+	var webUI *web.Server
+	if dashboardAddr != "" {
+		ws := hubWebState{
+			cfg:       cfg,
+			natsAddr:  result.Conn.ConnectedUrl(),
+			sup:       sup,
+			reg:       reg,
+			auditPath: cfg.Hub.AuditLogPath,
+		}
+		webUI = web.NewServer(dashboardAddr, ws, logger)
+		if err := webUI.Start(ctx); err != nil {
+			return fmt.Errorf("start web: %w", err)
+		}
+	}
+
 	logger.Info("hub started",
 		"name", cfg.Hub.Name,
 		"agents", len(cfg.Agents),
 		"control", controlPath,
+		"web", dashboardAddr,
 	)
+
+	if auditLogger != nil {
+		auditLogger.LogEvent(hub.AuditEntry{
+			Type:  hub.AuditEventMgmt,
+			Extra: map[string]any{"event": "hub_start", "name": cfg.Hub.Name},
+		})
+	}
 
 	// Watch zlaw.toml for agent list changes.
 	go watchAgentList(ctx, configPath, sup, reg, sm, result.Conn, selfBin, result.ACL.AgentTokens, logger)
@@ -123,10 +171,321 @@ func runHub(ctx context.Context, configPath string, externalNATSURL string, logg
 	<-ctx.Done()
 	logger.Info("hub shutting down")
 	ctrlSock.Stop() //nolint:errcheck
+	if webUI != nil {
+		webUI.Stop(ctx) //nolint:errcheck
+	}
+	if auditLogger != nil {
+		auditLogger.LogEvent(hub.AuditEntry{
+			Type:  hub.AuditEventMgmt,
+			Extra: map[string]any{"event": "hub_stop"},
+		})
+		auditLogger.Close() //nolint:errcheck
+	}
 	return nil
 }
 
-// hubConfigAdapter adapts config.HubConfig to hub.ToolHubConfig.
+// hubWebState adapts hub components to [web.State].
+type hubWebState struct {
+	cfg       config.HubConfig
+	natsAddr  string
+	sup       *hub.Supervisor
+	reg       *hub.Registry
+	auditPath string
+}
+
+func (s hubWebState) HubConfig() config.HubConfig { return s.cfg }
+func (s hubWebState) NATSAddr() string            { return s.natsAddr }
+func (s hubWebState) Agents() []web.AgentInfo {
+	// Start with configured agents from config
+	configured := make(map[string]bool)
+	for _, a := range s.cfg.Agents {
+		configured[a.Name] = true
+	}
+
+	// Get running agent statuses from supervisor
+	statuses := s.sup.Statuses()
+	statusMap := make(map[string]hub.AgentStatus, len(statuses))
+	for _, st := range statuses {
+		statusMap[st.Name] = st
+	}
+
+	// Get connected agents from registry
+	regEntries := s.reg.List()
+	regMap := make(map[string]hub.RegistryEntry, len(regEntries))
+	for _, e := range regEntries {
+		regMap[e.Name] = e
+	}
+
+	// First, add all configured agents
+	out := make([]web.AgentInfo, 0, len(s.cfg.Agents)+len(regEntries))
+	for _, entry := range s.cfg.Agents {
+		info := web.AgentInfo{
+			ID:   entry.Name,
+			Name: entry.Name,
+		}
+
+		// Add registry info if connected
+		if regEntry, ok := regMap[entry.Name]; ok {
+			info.Version = regEntry.Version
+			info.Capabilities = regEntry.Capabilities
+			info.Roles = regEntry.Roles
+			info.Status = regEntry.Status
+			info.LastHeartbeat = regEntry.LastHeartbeat
+		}
+
+		// Add supervisor status
+		if st, ok := statusMap[entry.Name]; ok {
+			info.PID = st.PID
+			info.Running = st.Running
+			if st.LastErr != nil {
+				info.LastErr = st.LastErr.Error()
+			}
+		}
+
+		// Sort capabilities alphabetically
+		sort.Strings(info.Capabilities)
+		out = append(out, info)
+	}
+
+	// Add connected agents not in config (dynamic/remote agents)
+	for name, regEntry := range regMap {
+		if configured[name] {
+			continue // already added
+		}
+		info := web.AgentInfo{
+			ID:            regEntry.Name,
+			Name:          regEntry.Name,
+			Version:       regEntry.Version,
+			Capabilities:  regEntry.Capabilities,
+			Roles:         regEntry.Roles,
+			Status:        regEntry.Status,
+			LastHeartbeat: regEntry.LastHeartbeat,
+		}
+		sort.Strings(info.Capabilities)
+		if st, ok := statusMap[regEntry.Name]; ok {
+			info.PID = st.PID
+			info.Running = st.Running
+			if st.LastErr != nil {
+				info.LastErr = st.LastErr.Error()
+			}
+		}
+		out = append(out, info)
+	}
+
+	return out
+}
+
+func (s hubWebState) AuditEntries(limit int, eventType string) ([]hub.AuditEntry, error) {
+	return hub.ReadAuditLog(s.auditPath, limit, eventType)
+}
+
+func (s hubWebState) Tools() []tools.Definition {
+	return hub.Tools()
+}
+
+func (s hubWebState) Sessions(agentName string) ([]web.SessionInfo, error) {
+	// Get workspace path for agent
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var sessions []web.SessionInfo
+	store := agent.NewJSONLFileStore(sessionsDir)
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		sessionID := strings.TrimSuffix(e.Name(), ".jsonl")
+		meta, err := store.LoadMeta(sessionID)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, web.SessionInfo{
+			SessionID:    meta.SessionID,
+			AgentID:      meta.AgentName,
+			Channel:      meta.Channel,
+			CreatedAt:    meta.CreatedAt,
+			UpdatedAt:    meta.UpdatedAt,
+			MessageCount: meta.MessageCount,
+			Title:        meta.Title,
+			Active:       meta.UpdatedAt.After(time.Now().Add(-5 * time.Minute)),
+		})
+	}
+	return sessions, nil
+}
+
+func (s hubWebState) SessionMessages(agentName, sessionID string) ([]web.MessageInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	store := agent.NewJSONLFileStore(sessionsDir)
+	msgs, err := store.Load(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []web.MessageInfo
+	for _, m := range msgs {
+		result = append(result, web.MessageInfo{
+			Role:    string(m.Role),
+			Content: m.TextContent(),
+		})
+	}
+	return result, nil
+}
+
+func (s hubWebState) CompiledContext(agentName, sessionID string) (web.ContextInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return web.ContextInfo{}, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+	sessionsDir := filepath.Join(wsPath, "sessions", agentName)
+
+	store := agent.NewJSONLFileStore(sessionsDir)
+	msgs, err := store.Load(sessionID)
+	if err != nil {
+		return web.ContextInfo{}, err
+	}
+
+	// Build system prompt from workspace files
+	var systemPrompt strings.Builder
+
+	// Read SOUL.md
+	soulPath := filepath.Join(wsPath, "SOUL.md")
+	if data, err := os.ReadFile(soulPath); err == nil {
+		systemPrompt.WriteString("# SOUL.md\n\n")
+		systemPrompt.Write(data)
+		systemPrompt.WriteString("\n\n")
+	}
+
+	// Read IDENTITY.md
+	identityPath := filepath.Join(wsPath, "IDENTITY.md")
+	if data, err := os.ReadFile(identityPath); err == nil {
+		systemPrompt.WriteString("# IDENTITY.md\n\n")
+		systemPrompt.Write(data)
+		systemPrompt.WriteString("\n\n")
+	}
+
+	// Get tool definitions
+	toolDefs := make([]string, 0)
+	for _, t := range s.Tools() {
+		toolDefs = append(toolDefs, t.Name)
+	}
+
+	return web.ContextInfo{
+		SystemPrompt: systemPrompt.String(),
+		ToolDefs:     toolDefs,
+		RecentMsgs:   len(msgs),
+	}, nil
+}
+
+func (s hubWebState) WorkspaceFiles(agentName string) ([]web.FileInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	wsPath := agentEntry.Workspace
+	if wsPath == "" {
+		wsPath = filepath.Join(config.ZlawHome(), "workspaces", agentName)
+	}
+
+	return listWorkspaceFiles(wsPath)
+}
+
+func (s hubWebState) AgentSkills(agentName string) ([]web.SkillInfo, error) {
+	agentEntry, ok := s.cfg.FindAgent(agentName)
+	if !ok {
+		return nil, nil
+	}
+	_ = agentEntry.Workspace // workspace path resolved by skills.Discover via zlawHome
+
+	zlawHome := config.ZlawHome()
+	skills, err := skills.Discover(zlawHome, agentName, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []web.SkillInfo
+	for _, skill := range skills {
+		result = append(result, web.SkillInfo{
+			Name:        skill.Name,
+			Description: skill.Description,
+			Path:        skill.Path,
+			Type:        "file",
+			Enabled:     true,
+		})
+	}
+	return result, nil
+}
+
+// listWorkspaceFiles recursively lists files in dir with metadata.
+func listWorkspaceFiles(dir string) ([]web.FileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var result []web.FileInfo
+	keyFiles := map[string]bool{
+		"SOUL.md":          true,
+		"IDENTITY.md":      true,
+		"agent.toml":       true,
+		"cron.toml":        true,
+		"credentials.toml": true,
+	}
+
+	for _, e := range entries {
+		if e.Name() == "sessions" || e.Name() == "memories" {
+			continue // skip runtime dirs
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		fi := web.FileInfo{
+			Name:     e.Name(),
+			Path:     path,
+			IsDir:    e.IsDir(),
+			Modified: info.ModTime(),
+		}
+		if !e.IsDir() {
+			fi.Size = info.Size()
+			fi.Masked = keyFiles[e.Name()]
+		}
+		result = append(result, fi)
+	}
+	return result, nil
+}
+
 type hubConfigAdapter struct{ cfg config.HubConfig }
 
 func (a hubConfigAdapter) HubName() string { return a.cfg.Hub.Name }

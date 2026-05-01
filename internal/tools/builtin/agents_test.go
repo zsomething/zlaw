@@ -78,7 +78,7 @@ func TestAgentGet_Execute(t *testing.T) {
 	}
 	tool := &AgentGet{Registry: mock}
 
-	result, err := tool.Execute(context.Background(), json.RawMessage(`{"name":"coding"}`))
+	result, err := tool.Execute(context.Background(), json.RawMessage(`{"id":"coding"}`))
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -94,11 +94,11 @@ func TestAgentGet_Execute(t *testing.T) {
 	}
 }
 
-func TestAgentGet_ExecuteMissingName(t *testing.T) {
+func TestAgentGet_ExecuteMissingID(t *testing.T) {
 	tool := &AgentGet{Registry: &mockAgentRegistry{}}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err == nil {
-		t.Fatal("expected error for missing name")
+		t.Fatal("expected error for missing id")
 	}
 }
 

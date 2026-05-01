@@ -201,6 +201,21 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 			}
 		}
 
+		// Register lifecycle tools with hub messenger injected.
+		// These forward requests to the hub inbox for execution.
+		registry.Register(&builtin.AgentStop{
+			SelfID: id,
+			Messenger: builtin.HubMessengerFunc(func(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error) {
+				return nm.Request(ctx, subject, payload, timeout)
+			}),
+		})
+		registry.Register(&builtin.AgentRestart{
+			SelfID: id,
+			Messenger: builtin.HubMessengerFunc(func(ctx context.Context, subject string, payload []byte, timeout time.Duration) ([]byte, error) {
+				return nm.Request(ctx, subject, payload, timeout)
+			}),
+		})
+
 		go func() {
 			if err := regCache.Start(ctx, nm); err != nil && ctx.Err() == nil {
 				logger.Warn("registry cache stopped unexpectedly", "err", err)

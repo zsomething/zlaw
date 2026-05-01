@@ -56,7 +56,7 @@ Input → Build context → LLM call
 ```
 zlaw/
 ├── cmd/
-│   └── zlaw/         # single binary: run/serve/attach/auth/init/hub subcommands
+│   └── zlaw/         # single binary: init/hub/agent subcommands
 ├── internal/
 │   ├── agent/        # agentic loop, history, context builder, memory, optimizer
 │   ├── app/          # wiring for agent-run/serve/attach/hub modes
@@ -103,7 +103,7 @@ Active work: hub bootstrap CLI + hub core.
 
 Next tasks (from PLANNING.md):
 - `zlaw hub init` — generate `zlaw.toml`, `credentials.toml`, default manager agent scaffold
-- `zlaw hub auth add` — add credential profiles
+- `zlaw agent auth set/list/remove` — manage per-agent credentials in `agents/<name>/credentials.toml`
 - `zlaw hub start` — start hub, embed NATS, spawn agents
 - `zlaw hub status` — hub health + per-agent status
 - `zlaw hub agent` subcommands — list/logs/restart/stop/remove

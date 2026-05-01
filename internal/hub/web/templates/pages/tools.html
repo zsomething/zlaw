@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Hub Tools — zlaw{% endblock %}
+
+{% block content %}
+<div id="page-content">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">Hub Tools</h1>
+    <p class="opacity-60 mt-1">Built-in tools available to agents</p>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    {% if tools %}
+      {% for tool in tools %}
+      <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+          <div class="flex justify-between items-start">
+            <h2 class="card-title font-mono text-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              {{ tool.Name }}
+            </h2>
+          </div>
+          
+          <p class="text-sm opacity-70 mt-2">{{ tool.Description }}</p>
+          
+          {% if tool.Parameters %}
+          <div class="mt-4">
+            <details class="collapse collapse-arrow bg-base-200">
+              <summary class="collapse-title text-sm font-semibold px-2 py-1">
+                Parameters ({{ tool.Parameters|length }})
+              </summary>
+              <div class="collapse-content">
+                <table class="table table-sm table-zebra">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Required</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for param in tool.Parameters %}
+                    <tr>
+                      <td class="font-mono text-sm">{{ param.name }}</td>
+                      <td><span class="badge badge-sm badge-ghost">{{ param.type|default:"—" }}</span></td>
+                      <td class="text-sm">{{ param.description|default:"—" }}</td>
+                      <td>
+                        {% if param.required %}
+                          <span class="badge badge-sm badge-error">required</span>
+                        {% else %}
+                          <span class="badge badge-sm badge-ghost">optional</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="col-span-full text-center py-12">
+        <div class="text-5xl mb-3">🔧</div>
+        <p class="text-lg opacity-60">No tools available</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Summary stats -->
+  <div class="card bg-base-100 shadow-sm mt-6">
+    <div class="card-body">
+      <div class="flex items-center gap-4">
+        <div class="stat py-2">
+          <div class="stat-value text-primary">{{ tools|length }}</div>
+          <div class="stat-title">Total Tools</div>
+        </div>
+        <div class="divider divider-horizontal mx-0"></div>
+        <div class="text-sm opacity-60">
+          Tools are defined in the agent configuration and granted based on agent capabilities.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

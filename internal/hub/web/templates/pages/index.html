@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Overview — zlaw{% endblock %}
+
+{% block content %}
+<div id="page-content">
+  <!-- Hub Stats -->
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        Hub Overview
+      </h2>
+      
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-title">Hub Name</div>
+            <div class="stat-value text-primary text-xl">{{ HubName|default:"—" }}</div>
+            <div class="stat-desc">{{ HubDescription|default:"No description" }}</div>
+          </div>
+        </div>
+        
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-title">NATS Address</div>
+            <div class="stat-value text-secondary text-lg font-mono">{{ NATSAddr|default:"—" }}</div>
+            <div class="stat-desc">Message broker</div>
+          </div>
+        </div>
+        
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-title">Agents</div>
+            <div class="stat-value text-accent text-3xl">{% if agents %}{{ agents|length }}{% else %}0{% endif %}</div>
+            <div class="stat-desc">configured</div>
+          </div>
+        </div>
+        
+        <div class="stats shadow">
+          <div class="stat">
+            <div class="stat-title">Online</div>
+            <div class="stat-value text-lg">
+              {% if agents %}
+                {% with online=0 %}
+                  {% for a in agents %}
+                    {% if a.Running or a.Status == "connected" %}
+                      {% with online=online|add:1 %}{% endwith %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ online }}
+                {% endwith %}
+              {% else %}0{% endif %}
+            </div>
+            <div class="stat-desc">connected</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agents Overview -->
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="card-title text-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          Agents
+          <span class="badge badge-ghost ml-2">{% if agents %}{{ agents|length }}{% else %}0{% endif %}</span>
+        </h2>
+        <a href="/agents" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="btn btn-sm btn-ghost">View all →</a>
+      </div>
+      
+      <!-- Agents grid -->
+      <div id="agents-grid" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% if agents %}
+          {% for agent in agents %}
+          <div class="card bg-base-200 hover:bg-base-300 transition-colors">
+            <div class="card-body p-4">
+              <div class="flex justify-between items-start">
+                <div>
+                  <h3 class="font-semibold">
+                    <a href="/agents/{{ agent.ID|urlencode }}" hx-boost="true" hx-target="#page-content" hx-push-url="true" class="hover:link link-primary">
+                      {{ agent.Name|default:agent.ID }}
+                    </a>
+                  </h3>
+                  <div class="text-xs opacity-50 font-mono mt-1">ID: {{ agent.ID }}</div>
+                </div>
+                {% if agent.Running %}
+                  <div class="badge badge-success gap-1">
+                    <span class="w-2 h-2 bg-success-content rounded-full animate-pulse"></span>
+                    running
+                  </div>
+                {% elif agent.Status == "connected" %}
+                  <div class="badge badge-info gap-1">
+                    <span class="w-2 h-2 bg-info-content rounded-full animate-pulse"></span>
+                    connected
+                  </div>
+                {% elif agent.Status == "disconnected" %}
+                  <div class="badge badge-ghost">offline</div>
+                {% else %}
+                  <div class="badge badge-warning">{{ agent.Status|default:"unknown" }}</div>
+                {% endif %}
+              </div>
+              <div class="mt-2 text-sm space-y-1">
+                {% if agent.PID %}
+                <div class="flex justify-between">
+                  <span class="opacity-60">PID</span>
+                  <code class="text-xs">{{ agent.PID }}</code>
+                </div>
+                {% endif %}
+                {% if agent.LastHeartbeat %}
+                <div class="flex justify-between">
+                  <span class="opacity-60">Last seen</span>
+                  <span class="text-xs">{{ agent.LastHeartbeat|date:"H:i:s" }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="col-span-full text-center py-12">
+            <div class="text-5xl mb-3">🤖</div>
+            <p class="text-lg opacity-60">No agents configured</p>
+            <p class="text-sm opacity-40 mt-1">Add agents to zlaw.toml to see them here</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
