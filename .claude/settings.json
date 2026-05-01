@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(fizzy board list *)",
+      "Bash(fizzy tag list *)",
+      "Bash(fizzy column list *)",
+      "Bash(fizzy card show *)",
+      "Bash(bun run typecheck*)",
+      "Bash(chezmoi cat *)",
+      "Bash(chezmoi diff*)"
+    ]
+  }
+}

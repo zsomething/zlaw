@@ -1,16 +1,16 @@
 ---
 name: fizzy-workflow
 description: High-level workflows for managing work using Fizzy cards — start, work on, complete, and delegate cards using the Fizzy CLI.
-compatibility: Requires fizzy and jq in PATH. Install fizzy from https://github.com/basecamp/fizzy-cli/releases (single-file binary). Install jq via package manager (brew install jq / apt install jq).
+compatibility: Requires fizzy in PATH. Install fizzy from https://github.com/basecamp/fizzy-cli/releases (single-file binary).
 metadata:
   {
     "author": "akhy",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "openclaw":
       {
         "emoji": "🃏",
         "homepage": "https://github.com/basecamp/fizzy-cli",
-        "requires": { "bins": ["fizzy", "jq"] },
+        "requires": { "bins": ["fizzy"] },
         "install":
           [
             {
@@ -19,13 +19,6 @@ metadata:
               "url": "https://github.com/basecamp/fizzy-cli/releases",
               "bins": ["fizzy"],
               "label": "Download Fizzy CLI",
-            },
-            {
-              "id": "brew-jq",
-              "kind": "brew",
-              "formula": "jq",
-              "bins": ["jq"],
-              "label": "Install jq (brew)",
             },
           ],
       },
@@ -38,12 +31,12 @@ High-level workflows for managing work using Fizzy cards. This skill builds on t
 
 ## Prerequisites
 
-The following must be available in `PATH`:
-
 - **`fizzy`** — Fizzy CLI binary. Download from [github.com/basecamp/fizzy-cli/releases](https://github.com/basecamp/fizzy-cli/releases) and place in your PATH.
-- **`jq`** — JSON processor. Install via `brew install jq` or `apt install jq`.
+- **`jq`** (optional) — Required as fallback if fizzy's built-in `--jq` flag is unavailable (currently unreleased). Install via `brew install jq` or `apt install jq`.
 
 This skill also depends on the **base `fizzy` skill** for raw Fizzy CLI operations. If not already installed, install it from [github.com/basecamp/fizzy-cli/tree/master/skills/fizzy](https://github.com/basecamp/fizzy-cli/tree/master/skills/fizzy).
+
+> **Note on `--jq` flag:** Examples in this skill use fizzy's built-in `--jq` filter flag, which is currently unreleased. Helper scripts fall back to external `jq` automatically. The fizzy CLI outputs JSON by default — no output format flag is needed. For inline patterns, replace `fizzy ... --jq 'EXPR'` with `fizzy ... | jq 'EXPR'` if needed.
 
 ---
 
@@ -60,26 +53,109 @@ This skill also depends on the **base `fizzy` skill** for raw Fizzy CLI operatio
 
 ## Workflows
 
+### 0. Planning Cards (optional)
+
+**When:** Breaking down a larger task into multiple cards before starting work
+
+**Steps:**
+1. Write a JSON plan file describing all cards and their steps
+2. Validate with `--dry-run` before creating
+3. Run the plan to create all cards in one invocation
+4. Then pick a card and follow the Start Card workflow
+
+**Plan file format:**
+```json
+{
+  "board_id": "<board_id>",
+  "cards": [
+    {
+      "title": "Card title",
+      "description": "Optional description (markdown or HTML)",
+      "tags": ["backend", "urgent"],
+      "steps": [
+        "Step one",
+        "Step two"
+      ]
+    }
+  ]
+}
+```
+
+`description`, `tags`, and `steps` are optional per card. Before assigning tags, run `fizzy tag list` to see existing ones — **prefer reusing existing tags** over creating new ones to avoid duplicates.
+
+If a card depends on another card, note it clearly in the description, e.g.:
+```
+Depends on: #42 (Set up authentication)
+```
+
+**Example:**
+```bash
+# Dry-run first to verify
+python3 fizzy-workflow/scripts/fizzy-plan-create.py plan.json --dry-run
+
+# Create all cards
+python3 fizzy-workflow/scripts/fizzy-plan-create.py plan.json
+```
+
+**Output (agent-friendly JSON):**
+```json
+{
+  "ok": true,
+  "dry_run": false,
+  "created": [
+    {"number": 42, "title": "Card title", "tags": ["backend"], "steps_created": 2}
+  ]
+}
+```
+
+On failure (e.g. mid-way through), `partial` is included so the agent knows what was already created:
+```json
+{
+  "ok": false,
+  "error": "step create failed: ...",
+  "partial": {"number": 42, "title": "Card title", "steps_created": 1}
+}
+```
+
+---
+
 ### 1. Starting a Card
 
 **When:** Beginning work on a new card
 
 **Steps:**
-1. Get card details: `fizzy card show CARD_NUMBER`
-2. Find "Doing" column ID: `fizzy column list --board BOARD_ID`
-3. Move to "Doing" column: `fizzy card column CARD_NUMBER --column <doing_column_id>`
-4. Assign to bot/self: `fizzy card assign CARD_NUMBER --user <bot_user_id>`
+1. Read the card thoroughly:
+   - `fizzy card show CARD_NUMBER` — title, description, tags, steps
+   - `fizzy comment list --card CARD_NUMBER` — full comment history
+   - Understand all requirements, context, and prior discussion before doing anything else
+2. Check current git branch:
+   - If on `main`/`master`: checkout a new feature branch named after the feature (e.g. `feat/short-description`) — **never include card/fizzy numbers in branch names**
+   - If on an existing feature branch: confirm with the user whether this branch is relevant to the card before continuing
+   - It's acceptable to work on multiple cards in the same branch, but each card **must be committed separately**
+3. Find "Doing" column ID: `fizzy column list --board BOARD_ID`
+4. Move to "Doing" column: `fizzy card column CARD_NUMBER --column <doing_column_id>`
+5. Assign to self: `fizzy card self-assign CARD_NUMBER`
 
 **Example:**
 ```bash
+# Read card thoroughly
+fizzy card show 15
+fizzy comment list --card 15
+
+# Check branch and prepare
+git branch --show-current
+# If on main/master:
+git checkout -b feat/short-description
+# If on a feature branch that may not be relevant: STOP and confirm with user
+
 # Get column IDs
-fizzy column list --board BOARD_ID | jq '.data[] | {id: .id, name: .name}'
+fizzy column list --board BOARD_ID --jq '[.data[] | {id, name}]'
 
 # Move to Doing
 fizzy card column 15 --column <doing_column_id>
 
-# Assign to bot
-fizzy card assign 15 --user <bot_user_id>
+# Assign to self
+fizzy card self-assign 15
 ```
 
 **What to tell the user:**
@@ -151,16 +227,35 @@ EOF
 - `test`: Adding tests
 - `chore`: Maintenance tasks
 
-#### Step 2: Get Commit Hash and Repo URL
+#### Step 2: Land changes into main branch
+
+**The card must only be closed after changes are in `main`/`master`.** Infer the right approach from context, or ask the user if unclear:
+
+**Option A — Create PR/MR for review** (preferred for team projects or when changes need review):
+```bash
+git push origin <branch>
+# Then create a PR/MR via gh, glab, or the platform's CLI
+gh pr create --title "feat: short description" --body "..."
+```
+Wait for the PR/MR to be merged before proceeding to close the card.
+
+**Option B — Merge directly to main** (for solo projects or pre-approved changes):
+```bash
+git checkout main
+git merge --no-ff <branch>   # NEVER fast-forward
+git push origin main
+```
+
+#### Step 3: Get Commit Hash and Repo URL
 ```bash
 COMMIT_HASH=$(git log -1 --format="%H")
 REPO_URL=$(git remote get-url origin | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
 ```
 
-#### Step 3: Post Completion Comment
+#### Step 4: Post Completion Comment
 ```bash
 fizzy comment create --card NUMBER --body "$(cat <<'EOF'
-<p>✅ Completed and committed to GitHub</p>
+<p>✅ Completed and merged to main</p>
 <p><br></p>
 <p>Commit: <a href="REPO_URL/commit/COMMIT_HASH">SHORT_HASH</a></p>
 <p><br></p>
@@ -174,7 +269,7 @@ EOF
 )"
 ```
 
-#### Step 4: Close Card
+#### Step 5: Close Card
 ```bash
 fizzy card close CARD_NUMBER
 ```
@@ -207,7 +302,7 @@ fizzy card close CARD_NUMBER
 **How to find human user ID:**
 ```bash
 # List all users to find the right person
-fizzy user list | jq '.data[] | {id: .id, name: .name, email: .email_address}'
+fizzy user list --jq '[.data[] | {id, name, email: .email_address}]'
 ```
 
 **Assign:**
@@ -264,15 +359,20 @@ EOF
 ### Card Management
 ✅ **DO:**
 - Move cards through workflow stages
-- Assign appropriately (bot vs human)
+- Assign appropriately (self vs human)
 - Close cards when truly complete
 - Update steps as you progress
+- Add relevant tags to cards for discoverability
+- Run `fizzy tag list` and reuse existing tags before creating new ones
+- Note dependencies on other cards in the description (`Depends on: #N`)
 
 ❌ **DON'T:**
 - Leave cards in wrong columns
 - Close cards with incomplete work
 - Forget to assign cards
 - Skip step updates
+- Create duplicate or near-duplicate tags
+- Start a card before its dependencies are complete
 
 ---
 
@@ -280,14 +380,16 @@ EOF
 
 ### Pattern: Multi-Step Card Workflow
 ```bash
+# 0. Prepare branch (from main/master)
+git checkout -b feat/short-description
+
 # 1. Get board and column info
-BOARD_ID=$(fizzy board list | jq -r '.data[0].id')
-DOING_COL=$(fizzy column list --board $BOARD_ID | jq -r '.data[] | select(.name == "Doing") | .id')
-BOT_USER=$(fizzy identity show | jq -r '.accounts[0].user.id')
+BOARD_ID=$(fizzy board list --jq '.data[0].id')
+DOING_COL=$(fizzy column list --board $BOARD_ID --jq '.data[] | select(.name == "Doing") | .id')
 
 # 2. Start the card
 fizzy card column 15 --column $DOING_COL
-fizzy card assign 15 --user $BOT_USER
+fizzy card self-assign 15
 
 # 3. Work and mark steps
 fizzy step update STEP_1_ID --card 15 --completed
@@ -311,7 +413,7 @@ fizzy card close 15
 ```bash
 # 1. Start
 fizzy card column 20 --column <doing_col_id>
-fizzy card assign 20 --user <bot_user_id>
+fizzy card self-assign 20
 
 # 2. Work (no steps to update)
 # ... implementation ...
@@ -325,7 +427,7 @@ fizzy card close 20
 ### Pattern: Delegate to Human
 ```bash
 # Find human user
-HUMAN_USER=$(fizzy user list | jq -r '.data[] | select(.role == "owner") | .id')
+HUMAN_USER=$(fizzy user list --jq '.data[] | select(.role == "owner") | .id')
 
 # Assign and explain
 fizzy card assign 26 --user $HUMAN_USER
@@ -383,10 +485,26 @@ fizzy comment create --card 12 --body "<p>✅ Steps 1-3 complete</p>"
 
 ---
 
-## Helper Script
+## Helper Scripts
 
-Use `scripts/fizzy-context.sh BOARD_ID` to quickly get project-specific IDs:
+### `scripts/fizzy-plan-create.py <plan.json> [--dry-run]`
+Create multiple cards with steps from a JSON plan file in a single invocation. Use `--dry-run` to validate the plan before executing. Outputs JSON with created card numbers.
+
+```bash
+python3 fizzy-workflow/scripts/fizzy-plan-create.py plan.json --dry-run
+python3 fizzy-workflow/scripts/fizzy-plan-create.py plan.json
+```
+
+### `scripts/fizzy-context.sh <board_id>`
+Get column IDs and git remote for a board — run this before starting a card to look up the "Doing" column ID.
 
 ```bash
 bash fizzy-workflow/scripts/fizzy-context.sh <board_id>
+```
+
+### `scripts/fizzy-open-cards.sh <board_id>`
+List all open cards on a board with number, title, and current assignees — useful for picking what to work on next.
+
+```bash
+bash fizzy-workflow/scripts/fizzy-open-cards.sh <board_id>
 ```

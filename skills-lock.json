@@ -24,11 +24,13 @@
     "fizzy-workflow": {
       "source": "akhy/agent-skills",
       "sourceType": "github",
-      "computedHash": "ebbd1d66267a2d4f7133338cf835669510824a154cdb8a5ba32cf88e4a0b9d19"
+      "skillPath": "fizzy-workflow/SKILL.md",
+      "computedHash": "e1a9b9c7d5a738d68fde48c0a9dfc7365fbb83a6899fa8bc824000c9591db1cd"
     },
     "go-release": {
       "source": "akhy/agent-skills",
       "sourceType": "github",
+      "skillPath": "go-release/SKILL.md",
       "computedHash": "468b9f4afcd5cf44f9b42c52893a5a843b6f18e7d69af6bd8b28914c08be0fc3"
     },
     "htmx-skill": {
