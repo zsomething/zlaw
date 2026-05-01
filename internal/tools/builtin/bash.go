@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
 	"github.com/zsomething/zlaw/internal/llm"
+	"github.com/zsomething/zlaw/internal/tools/envfilter"
 )
 
 // Bash runs a shell command and returns stdout, stderr, and exit code.
@@ -77,6 +79,9 @@ func (Bash) Execute(ctx context.Context, raw json.RawMessage) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	// Filter environment to remove credential vars before exec.
+	cmd.Env = envfilter.Filter(os.Environ())
 
 	err := cmd.Run()
 	exitCode := 0
