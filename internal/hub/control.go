@@ -338,12 +338,12 @@ func (cs *ControlSocket) agentStatus(params json.RawMessage) (json.RawMessage, e
 	return json.Marshal(info)
 }
 
-// agentCreate creates a new agent entry and scaffolds its directories.
-// It delegates to mgmtHandler.opAgentCreate.
+// agentCreate registers a pre-scaffolded agent directory and spawns the agent.
+// The dir must already exist (created by ctl). Hub only registers and spawns.
 func (cs *ControlSocket) agentCreate(ctx context.Context, params json.RawMessage) error {
 	var p struct {
-		Name      string `json:"name"`
-		Workspace string `json:"workspace,omitempty"`
+		Name string `json:"name"`
+		Dir  string `json:"dir"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("parse params: %w", err)
@@ -351,7 +351,7 @@ func (cs *ControlSocket) agentCreate(ctx context.Context, params json.RawMessage
 	if p.Name == "" {
 		return fmt.Errorf("param 'name' is required")
 	}
-	return cs.mgmtHandler.AgentCreate(ctx, p.Name, p.Workspace)
+	return cs.mgmtHandler.AgentCreate(ctx, p.Name, p.Dir)
 }
 
 // agentDisable stops an agent and marks it disabled so the hub does not respawn it.
