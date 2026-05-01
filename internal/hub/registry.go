@@ -39,6 +39,7 @@ type RegistryEntry struct {
 	Capabilities  []string        `json:"capabilities"`
 	Roles         []string        `json:"roles"`
 	AuthProfiles  []string        `json:"auth_profiles"`
+	PublicKey     string          `json:"public_key"`
 	Status        AgentConnStatus `json:"status"`
 	LastHeartbeat time.Time       `json:"last_heartbeat"`
 }
@@ -50,6 +51,7 @@ type registrationMsg struct {
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
 	AuthProfiles []string `json:"auth_profiles"`
+	PublicKey    string   `json:"public_key"`
 }
 
 // Registry subscribes to zlaw.registry and maintains the live state of all
@@ -168,6 +170,7 @@ func (r *Registry) handleRegistration(data []byte) {
 	entry.Capabilities = msg.Capabilities
 	entry.Roles = msg.Roles
 	entry.AuthProfiles = msg.AuthProfiles
+	entry.PublicKey = msg.PublicKey
 	entry.Status = AgentConnected
 	entry.LastHeartbeat = time.Now()
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/zsomething/zlaw/internal/identity"
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
@@ -38,6 +39,7 @@ type hubRegistration struct {
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
 	AuthProfiles []string `json:"auth_profiles"`
+	PublicKey    string   `json:"public_key"`
 }
 
 // HubClient manages the agent's connection to the hub over NATS:
@@ -50,6 +52,7 @@ type HubClient struct {
 	capabilities []string
 	roles        []string
 	authProfiles []string
+	seedPath     string // path to identity seed for signing
 	messenger    messaging.Messenger
 	runner       HubTaskRunner
 	sysPromptFn  func() string
@@ -57,12 +60,14 @@ type HubClient struct {
 }
 
 // NewHubClient creates a HubClient. sysPromptFn is called for each incoming
-// task to get the current system prompt.
+// task to get the current system prompt. seedPath is the path to the agent's
+// identity keypair seed for signing registration messages; pass "" to skip signing.
 func NewHubClient(
 	id, version string,
 	capabilities []string,
 	roles []string,
 	authProfiles []string,
+	seedPath string,
 	messenger messaging.Messenger,
 	runner HubTaskRunner,
 	sysPromptFn func() string,
@@ -77,6 +82,7 @@ func NewHubClient(
 		capabilities: capabilities,
 		roles:        roles,
 		authProfiles: authProfiles,
+		seedPath:     seedPath,
 		messenger:    messenger,
 		runner:       runner,
 		sysPromptFn:  sysPromptFn,
@@ -189,12 +195,23 @@ func (h *HubClient) runPlainInbox(ctx context.Context, inboxSubject string) erro
 
 // publishRegistration sends a registration message to zlaw.registry.
 func (h *HubClient) publishRegistration(ctx context.Context) error {
+	var publicKey string
+	if h.seedPath != "" {
+		pub, err := identity.ResolvePublicKey(h.seedPath)
+		if err != nil {
+			h.logger.Warn("hub: failed to resolve public key", "err", err)
+		} else {
+			publicKey = pub
+		}
+	}
+
 	reg := hubRegistration{
 		Name:         h.id,
 		Version:      h.version,
 		Capabilities: h.capabilities,
 		Roles:        h.roles,
 		AuthProfiles: h.authProfiles,
+		PublicKey:    publicKey,
 	}
 	data, err := json.Marshal(reg)
 	if err != nil {

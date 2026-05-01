@@ -15,6 +15,7 @@ import (
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/cron"
+	"github.com/zsomething/zlaw/internal/identity"
 	"github.com/zsomething/zlaw/internal/llm"
 	"github.com/zsomething/zlaw/internal/messaging"
 	"github.com/zsomething/zlaw/internal/push"
@@ -224,6 +225,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 			caps,
 			cfg.Agent.Roles,
 			cfg.Agent.AuthProfiles,
+			identity.DefaultSeedPath(),
 			nm,
 			cronRunner{ag: ag, sysPromptFn: sysPromptFn},
 			sysPromptFn,

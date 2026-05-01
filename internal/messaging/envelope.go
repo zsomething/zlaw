@@ -1,5 +1,11 @@
 package messaging
 
+import (
+	"fmt"
+
+	"github.com/zsomething/zlaw/internal/identity"
+)
+
 // TaskEnvelope is the wire format for inter-agent task delegation over the hub.
 // From and To carry the stable agent ID (not display name). The receiving agent
 // uses SessionID to look up or create the appropriate history, runs the Task as
@@ -41,6 +47,34 @@ type TaskEnvelope struct {
 
 	// TraceID propagates a distributed trace identifier across agent hops.
 	TraceID string `json:"trace_id,omitempty"`
+
+	// Signature is a base64-encoded Ed25519 signature of the envelope's
+	// payload (From+To+Task+SessionID). Verified by the receiving agent
+	// against the sender's public key from the registry.
+	Signature string `json:"signature,omitempty"`
+}
+
+// Sign signs this envelope with the given seed.
+// The signed payload is From+To+Task+SessionID.
+func (e *TaskEnvelope) Sign(seed []byte) error {
+	payload := e.From + e.To + e.Task + e.SessionID
+	sig, err := identity.Sign(seed, []byte(payload))
+	if err != nil {
+		return fmt.Errorf("sign envelope: %w", err)
+	}
+	e.Signature = sig
+	return nil
+}
+
+// Verify checks the signature against the sender's public key.
+// Returns true if the signature is valid, false otherwise.
+// An empty signature is considered invalid.
+func (e *TaskEnvelope) Verify(publicKey string) bool {
+	if e.Signature == "" {
+		return false
+	}
+	payload := e.From + e.To + e.Task + e.SessionID
+	return identity.Verify(publicKey, []byte(payload), e.Signature)
 }
 
 // TaskReply is the response published back to ReplyTo after the agent turn
