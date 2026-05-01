@@ -15,14 +15,14 @@ const (
 	hubUsername = "_hub"
 )
 
-// AgentTokens maps agent name → NATS password token.
+// AgentTokens maps agent ID → NATS password token.
 type AgentTokens map[string]string
 
 // HubACL holds the generated NATS users and the token map for the hub and all agents.
 type HubACL struct {
 	// Users is the list of server.User entries to pass to server.Options.Users.
 	Users []*server.User
-	// AgentTokens maps agent name to its NATS token (password).
+	// AgentTokens maps agent ID to its NATS token (password).
 	AgentTokens AgentTokens
 	// HubToken is the NATS token for the hub's own internal connection.
 	HubToken string
@@ -33,7 +33,7 @@ type HubACL struct {
 //
 // In the P2P delegation model all agents have equal permissions:
 //   - publish: agent.*.inbox, zlaw.registry, zlaw.registry.list, _INBOX.>, $JS.ACK.>, $JS.API.>
-//   - subscribe: zlaw.registry, agent.<name>.inbox, _INBOX.>, $JS.API.>
+//   - subscribe: zlaw.registry, agent.<id>.inbox, _INBOX.>, $JS.API.>
 //
 // Hub internal (_hub): no permission restrictions (full access).
 func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
@@ -56,13 +56,13 @@ func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
 	for _, entry := range agents {
 		token, err := generateToken()
 		if err != nil {
-			return nil, fmt.Errorf("generate token for agent %q: %w", entry.Name, err)
+			return nil, fmt.Errorf("generate token for agent %q: %w", entry.ID, err)
 		}
-		acl.AgentTokens[entry.Name] = token
+		acl.AgentTokens[entry.ID] = token
 		acl.Users = append(acl.Users, &server.User{
-			Username:    entry.Name,
+			Username:    entry.ID,
 			Password:    token,
-			Permissions: agentPermissions(entry.Name),
+			Permissions: agentPermissions(entry.ID),
 		})
 	}
 
@@ -74,11 +74,11 @@ func BuildHubACL(agents []config.AgentEntry) (*HubACL, error) {
 //   - subscribe:  zlaw.registry        (receive heartbeats / registration messages)
 //   - publish:    agent.*.inbox        (P2P delegation)
 //   - publish:    zlaw.registry        (send heartbeats)
-//   - subscribe:  agent.<name>.inbox   (own inbox for JetStream durable consumer)
+//   - subscribe:  agent.<id>.inbox   (own inbox for JetStream durable consumer)
 //   - publish/sub: $JS.API.>          (JetStream: create consumers, fetch, info, etc.)
 //   - subscribe:  _INBOX.>             (NATS reply subjects for request/reply)
-func agentPermissions(name string) *server.Permissions {
-	inboxSubject := "agent." + name + ".inbox"
+func agentPermissions(agentID string) *server.Permissions {
+	inboxSubject := "agent." + agentID + ".inbox"
 	return &server.Permissions{
 		Publish: &server.SubjectPermission{
 			Allow: []string{

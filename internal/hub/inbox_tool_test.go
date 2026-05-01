@@ -43,14 +43,14 @@ func (m mockToolHubConfig) HubName() string { return m.name }
 func TestHubInbox(t *testing.T) {
 	sup := &mockToolSupervisor{
 		statuses: map[string]AgentStatus{
-			"alice": {Name: "alice", Running: true, PID: 1234},
-			"bob":   {Name: "bob", Running: false, PID: 0},
+			"alice": {ID: "alice", Running: true, PID: 1234},
+			"bob":   {ID: "bob", Running: false, PID: 0},
 		},
 	}
 	reg := &mockToolRegistry{
 		entries: map[string]RegistryEntry{
-			"alice": {Name: "alice", Status: AgentConnected},
-			"bob":   {Name: "bob", Status: AgentDisconnected},
+			"alice": {ID: "alice", Status: AgentConnected},
+			"bob":   {ID: "bob", Status: AgentDisconnected},
 		},
 	}
 	cfg := mockToolHubConfig{name: "test-hub"}
@@ -84,8 +84,8 @@ func TestHubInbox(t *testing.T) {
 		if err := json.Unmarshal([]byte(reply.Output), &result); err != nil {
 			t.Fatalf("decode output: %v", err)
 		}
-		if result.Name != "alice" {
-			t.Errorf("Name = %q, want alice", result.Name)
+		if result.ID != "alice" {
+			t.Errorf("Name = %q, want alice", result.ID)
 		}
 		if !result.Running {
 			t.Error("Running = false, want true")
@@ -148,8 +148,8 @@ func TestHubInbox(t *testing.T) {
 		if err := json.Unmarshal([]byte(reply.Output), &result); err != nil {
 			t.Fatalf("decode output: %v", err)
 		}
-		if result.Name != "alice" {
-			t.Errorf("Name = %q, want alice", result.Name)
+		if result.ID != "alice" {
+			t.Errorf("Name = %q, want alice", result.ID)
 		}
 	})
 

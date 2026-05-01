@@ -29,18 +29,18 @@ func TestRemoveAgent(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "alice"
+	id = "alice"
 dir = "agents/alice"
 
 [[agents]]
-name = "bob"
+	id = "bob"
 dir = "agents/bob"
 
 [[agents]]
-name = "carol"
+	id = "carol"
 dir = "agents/carol"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
@@ -68,7 +68,7 @@ dir = "agents/carol"
 	}
 	names := make([]string, len(cfg2.Agents))
 	for i, a := range cfg2.Agents {
-		names[i] = a.Name
+		names[i] = a.ID
 	}
 	if names[0] != "alice" || names[1] != "carol" {
 		t.Errorf("names = %v, want [alice carol]", names)
@@ -83,10 +83,10 @@ func TestRemoveAgent_NotFound(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "alice"
+	id = "alice"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -117,10 +117,10 @@ func TestRemoveAgent_LastAgent(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "solo"
+	id = "solo"
 
 [[agents]]
-name = "only"
+	id = "only"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -148,10 +148,10 @@ func TestAddAgent(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "alice"
+	id = "alice"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -163,8 +163,8 @@ name = "alice"
 	}
 
 	entry := config.AgentEntry{
-		Name: "bob",
-		Dir:  "agents/bob",
+		ID:  "bob",
+		Dir: "agents/bob",
 	}
 	if err := cfg.AddAgent(entry); err != nil {
 		t.Fatalf("AddAgent: %v", err)
@@ -174,8 +174,8 @@ name = "alice"
 	if len(cfg2.Agents) != 2 {
 		t.Fatalf("Agents len = %d, want 2", len(cfg2.Agents))
 	}
-	if cfg2.Agents[1].Name != "bob" {
-		t.Errorf("Agents[1].Name = %q, want %q", cfg2.Agents[1].Name, "bob")
+	if cfg2.Agents[1].ID != "bob" {
+		t.Errorf("Agents[1].ID = %q, want %q", cfg2.Agents[1].ID, "bob")
 	}
 	if cfg2.Agents[1].Dir != "agents/bob" {
 		t.Errorf("Agents[1].Dir = %q, want %q", cfg2.Agents[1].Dir, "agents/bob")
@@ -190,7 +190,7 @@ func TestAddAgent_NoExistingAgentsSection(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "alone"
+	id = "alone"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -201,7 +201,7 @@ name = "alone"
 		t.Fatalf("LoadHubConfig: %v", err)
 	}
 
-	if err := cfg.AddAgent(config.AgentEntry{Name: "solo"}); err != nil {
+	if err := cfg.AddAgent(config.AgentEntry{ID: "solo"}); err != nil {
 		t.Fatalf("AddAgent: %v", err)
 	}
 
@@ -219,13 +219,13 @@ func TestFindAgent(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "alice"
+	id = "alice"
 
 [[agents]]
-name = "bob"
+	id = "bob"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -237,8 +237,8 @@ name = "bob"
 	if !ok {
 		t.Fatal("FindAgent returned false, want true")
 	}
-	if entry.Name != "bob" {
-		t.Errorf("Name = %q, want %q", entry.Name, "bob")
+	if entry.ID != "bob" {
+		t.Errorf("Name = %q, want %q", entry.ID, "bob")
 	}
 
 	_, ok = cfg.FindAgent("ghost")
@@ -255,10 +255,10 @@ func TestSetAgentDisabled(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "testbot"
+	id = "testbot"
 dir = "agents/testbot"
 `), 0o600); err != nil {
 		t.Fatalf("write zlaw.toml: %v", err)
@@ -297,10 +297,10 @@ func TestSetAgentDisabled_NotFound(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "test"
+	id = "test"
 
 [[agents]]
-name = "other"
+	id = "other"
 `), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -321,16 +321,16 @@ func TestLoadHubConfig(t *testing.T) {
 	}
 	configPath := filepath.Join(zlawDir, "zlaw.toml")
 	if err := os.WriteFile(configPath, []byte(`[hub]
-name = "my-hub"
+	name = "my-hub"
 description = "test hub"
 
 [[agents]]
-name = "manager"
+	id = "manager"
 dir = "agents/manager"
 restart_policy = "always"
 
 [[agents]]
-name = "worker"
+	id = "worker"
 dir = "agents/worker"
 
 [nats]
@@ -353,8 +353,8 @@ listen = "0.0.0.0:4222"
 	if len(cfg.Agents) != 2 {
 		t.Fatalf("Agents len = %d, want 2", len(cfg.Agents))
 	}
-	if cfg.Agents[0].Name != "manager" {
-		t.Errorf("Agents[0].Name = %q", cfg.Agents[0].Name)
+	if cfg.Agents[0].ID != "manager" {
+		t.Errorf("Agents[0].ID = %q", cfg.Agents[0].ID)
 	}
 	if cfg.Agents[0].RestartPolicy != config.RestartAlways {
 		t.Errorf("Agents[0].RestartPolicy = %v, want RestartAlways", cfg.Agents[0].RestartPolicy)

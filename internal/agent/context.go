@@ -13,11 +13,10 @@ import (
 )
 
 // BuildSelfIdentitySticky returns a StickyBlock that injects the agent's own
-// identity (name + roles) into every system prompt. This gives the agent
+// identity (id + roles) into every system prompt. This gives the agent
 // self-awareness without relying on personality files.
-func BuildSelfIdentitySticky(name string, id string, roles []string) StickyBlock {
-	content := strings.ReplaceAll(StickySelfIdentity, "{agent_name}", name)
-	content = strings.ReplaceAll(content, "{agent_id}", id)
+func BuildSelfIdentitySticky(id string, roles []string) StickyBlock {
+	content := strings.ReplaceAll(StickySelfIdentity, "{agent_id}", id)
 	var rolesStr string
 	if len(roles) > 0 {
 		rolesStr = strings.Join(roles, ", ")
@@ -87,12 +86,11 @@ const StickyProactiveMemorySave = `[Memory behavior]
 When you learn something worth retaining — user preferences, facts, decisions, recurring context — call memory_save immediately. Keep memories short, factual, and tagged. Do not save transient info or things already in session history.`
 
 // StickySelfIdentity is the hardcoded instruction block injected as cache
-// checkpoint 1 that tells the agent its own identity. It is used by
-// BuildSelfIdentitySticky to inject agent name, stable ID, and roles into the system prompt.
+// checkpoint 1 that tells the agent its own identity (ID + roles).
 const StickySelfIdentity = `[Self identity]
-You are {agent_name} (stable_id: {agent_id}). Roles: {agent_roles}.
+You are agent {agent_id}. Roles: {agent_roles}.
 When delegating tasks, use the agent_list tool to find other agents — agent_list marks "is_self: true" on the current agent.
-Never impersonate another agent.`
+Never impersonate another agent.]`
 
 // BuildSkillsSection returns a formatted [Available Skills] block for injection
 // into the system prompt. Each skill is listed as:

@@ -77,7 +77,7 @@ zlaw/
 │   ├── zlaw/         # zlaw core (Phase 2)
 │   └── version/      # version info
 ├── agents/
-│   └── <agent-name>/ # agent.toml, SOUL.md, IDENTITY.md, cron.toml
+│   └── <id>/ # agent.toml, SOUL.md, IDENTITY.md, cron.toml
 ├── plugins/          # skill plugin contracts + binaries
 ├── zlaw.toml
 └── README.md
@@ -103,7 +103,7 @@ Active work: hub bootstrap CLI + hub core.
 
 Next tasks (from PLANNING.md):
 - `zlaw hub init` — generate `zlaw.toml`, `credentials.toml`, default manager agent scaffold
-- `zlaw agent auth set/list/remove` — manage per-agent credentials in `agents/<name>/credentials.toml`
+- `zlaw agent auth set/list/remove` — manage per-agent credentials in `agents/<id>/credentials.toml`
 - `zlaw hub start` — start hub, embed NATS, spawn agents
 - `zlaw hub status` — hub health + per-agent status
 - `zlaw hub agent` subcommands — list/logs/restart/stop/remove

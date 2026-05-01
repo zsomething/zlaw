@@ -52,7 +52,7 @@ func runHub(ctx context.Context, configPath, runDir, externalNATSURL string, log
 	// Pre-create durable pull consumers for all configured agents.
 	agentNames := make([]string, len(cfg.Agents))
 	for i, a := range cfg.Agents {
-		agentNames[i] = a.Name
+		agentNames[i] = a.ID
 	}
 	if err := sm.EnsureAgentConsumers(ctx, agentNames); err != nil {
 		return fmt.Errorf("create agent consumers: %w", err)
@@ -196,7 +196,7 @@ type hubStatusSocketResponse struct {
 }
 
 type agentInfoV2 struct {
-	Name          string   `json:"name"`
+	ID            string   `json:"name"`
 	Running       bool     `json:"running"`
 	PID           int      `json:"pid"`
 	LastErr       string   `json:"last_err,omitempty"`
@@ -269,7 +269,7 @@ func printHubStatus(s *hubStatusSocketResponse) error {
 	if len(s.Agents) > 0 {
 		fmt.Fprintln(os.Stdout, "\nAgent status:")
 		tw2 := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw2, "Name\tRunning\tPID\tConn\tHeartbeat\tError")
+		fmt.Fprintln(tw2, "ID\tRunning\tPID\tConn\tHeartbeat\tError")
 		for _, a := range s.Agents {
 			running := "yes"
 			if !a.Running {
@@ -280,7 +280,7 @@ func printHubStatus(s *hubStatusSocketResponse) error {
 				heartbeat = "-"
 			}
 			fmt.Fprintf(tw2, "%s\t%s\t%d\t%s\t%s\t%s\n",
-				a.Name, running, a.PID, a.ConnStatus, heartbeat, a.LastErr)
+				a.ID, running, a.PID, a.ConnStatus, heartbeat, a.LastErr)
 		}
 		tw2.Flush() //nolint:errcheck
 	}
@@ -423,13 +423,13 @@ func reloadConfig(
 	current := sup.Statuses()
 	currentNames := make(map[string]bool, len(current))
 	for _, s := range current {
-		currentNames[s.Name] = true
+		currentNames[s.ID] = true
 	}
 
 	// Get new names from config.
 	newNames := make(map[string]bool, len(newCfg.Agents))
 	for _, a := range newCfg.Agents {
-		newNames[a.Name] = true
+		newNames[a.ID] = true
 	}
 
 	// Remove agents that are no longer in the config.
@@ -445,23 +445,23 @@ func reloadConfig(
 
 	// Add new agents from the config.
 	for _, entry := range newCfg.Agents {
-		if currentNames[entry.Name] {
+		if currentNames[entry.ID] {
 			continue // already supervised
 		}
 
 		// Skip disabled agents.
 		if agentDisabled(entry.Dir) {
-			logger.Info("zlaw.toml watcher: skipping disabled agent", "name", entry.Name)
+			logger.Info("zlaw.toml watcher: skipping disabled agent", "id", entry.ID)
 			continue
 		}
 
-		logger.Info("zlaw.toml watcher: spawning agent", "name", entry.Name)
+		logger.Info("zlaw.toml watcher: spawning agent", "id", entry.ID)
 		// Ensure JetStream consumer exists.
-		if err := sm.EnsureAgentConsumers(ctx, []string{entry.Name}); err != nil {
-			logger.Warn("zlaw.toml watcher: create consumer failed", "name", entry.Name, "err", err)
+		if err := sm.EnsureAgentConsumers(ctx, []string{entry.ID}); err != nil {
+			logger.Warn("zlaw.toml watcher: create consumer failed", "id", entry.ID, "err", err)
 		}
 		if err := sup.Spawn(ctx, entry); err != nil {
-			logger.Warn("zlaw.toml watcher: spawn failed", "name", entry.Name, "err", err)
+			logger.Warn("zlaw.toml watcher: spawn failed", "id", entry.ID, "err", err)
 		}
 	}
 }

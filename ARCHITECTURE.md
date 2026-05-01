@@ -157,15 +157,15 @@ Otherwise identical: personality, long-term memory, own agentic loop, owns Teleg
 
 | Hub-management tool | What it does |
 |---|---|
-| `agent_create(name, role, description)` | Scaffold agent dir + files, register with hub, spawn process |
+| `agent_create(id, role, description)` | Scaffold agent dir + files, register with hub, spawn process |
 | `agent_list()` | All registered agents and their status |
-| `agent_configure(name, key, value)` | Write to agent's `runtime.toml`, triggers hot-reload |
-| `agent_stop(name)` / `agent_restart(name)` | Process lifecycle control |
-| `agent_delegate(name, task, context)` | Publish task envelope to `agent.<name>.inbox` via NATS |
+| `agent_configure(id, key, value)` | Write to agent's `runtime.toml`, triggers hot-reload |
+| `agent_stop(id)` / `agent_restart(id)` | Process lifecycle control |
+| `agent_delegate(id, task, context)` | Publish task envelope to `agent.<id>.inbox` via NATS |
 
 ### Agent-to-Agent Communication
 
-`agent_delegate` = thin NATS publish wrapper. Constructs structured envelope, publishes to `agent.<name>.inbox`. Hub ACL enforces which agents can publish to which subjects. No hub business logic in path.
+`agent_delegate` = thin NATS publish wrapper. Constructs structured envelope, publishes to `agent.<id>.inbox`. Hub ACL enforces which agents can publish to which subjects. No hub business logic in path.
 
 Hub middleware (composable):
 - **ACL** — verify source agent has publish permission for target subject
@@ -191,8 +191,8 @@ Async by default: fire-and-forget with reply inbox. Agents advertise capabilitie
 ### NATS Subject Namespace
 
 ```
-agent.<name>.inbox       ← inbound tasks/messages for a specific agent
-agent.<name>.outbox      ← responses/events from a specific agent
+agent.<id>.inbox       ← inbound tasks/messages for a specific agent
+agent.<id>.outbox      ← responses/events from a specific agent
 zlaw.hub.inbox           ← hub management requests (agent_create etc. reach hub here)
 zlaw.audit               ← hub subscribes; logs everything
 zlaw.registry            ← agent registration/heartbeat
@@ -214,13 +214,13 @@ zlaw.registry            ← agent registration/heartbeat
 |------|----------|---------|----------|
 | `zlaw.toml` | Hub | Hub only | NATS settings, agent registry (name → dir), hub keypair path, audit log path |
 | `credentials.toml` | Hub | Hub only at spawn time | LLM API keys, Telegram bot token, OAuth2 profiles — injected into agents as env vars |
-| `agents/<name>/agent.toml` | Agent | Hub (to spawn) + Agent (to run) | LLM backend, auth profile ref, tool ACL, context budget, isolation level, `manager: true/false` |
-| `agents/<name>/runtime.toml` | Agent (writes) | Agent + Hub watches | Dynamic overrides: model switching, flag toggles |
-| `agents/<name>/cron.toml` | Agent | Agent only | Scheduled tasks |
-| `agents/<name>/SOUL.md` | Agent | Agent only | Personality |
-| `agents/<name>/IDENTITY.md` | Agent | Agent only | Role definition |
-| `sessions/<name>/` | Agent | Agent only | Conversation JSONL history |
-| `memories/<name>/` | Agent | Agent only | Long-term memory Markdown files + vector index |
+| `agents/<id>/agent.toml` | Agent | Hub (to spawn) + Agent (to run) | LLM backend, auth profile ref, tool ACL, context budget, isolation level, `manager: true/false` |
+| `agents/<id>/runtime.toml` | Agent (writes) | Agent + Hub watches | Dynamic overrides: model switching, flag toggles |
+| `agents/<id>/cron.toml` | Agent | Agent only | Scheduled tasks |
+| `agents/<id>/SOUL.md` | Agent | Agent only | Personality |
+| `agents/<id>/IDENTITY.md` | Agent | Agent only | Role definition |
+| `sessions/<id>/` | Agent | Agent only | Conversation JSONL history |
+| `memories/<id>/` | Agent | Agent only | Long-term memory Markdown files + vector index |
 
 **Key invariant: credentials never flow directly to agents.** Hub reads `credentials.toml`, injects referenced profiles as env vars at spawn time. Agents never read `credentials.toml`.
 
@@ -249,7 +249,7 @@ zlaw hub start
 User messages manager via Telegram:
 > "Create a coding assistant for me"
 
-Manager calls `agent_create(name="coding", role="Go developer")`:
+Manager calls `agent_create(id="coding", role="Go developer")`:
 - Hub scaffolds `$ZLAW_HOME/agents/coding/` with agent.toml + personality files
 - Hub spawns process, registers in registry
 - Manager confirms: "Done. I can delegate coding work to it now."

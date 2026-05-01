@@ -42,10 +42,10 @@ func startTestNATS(t *testing.T) *nats.Conn {
 	return nc
 }
 
-func publishReg(t *testing.T, nc *nats.Conn, name, version string, caps []string) {
+func publishReg(t *testing.T, nc *nats.Conn, id, version string, caps []string) {
 	t.Helper()
 	data, _ := json.Marshal(map[string]any{
-		"name":         name,
+		"id":           id,
 		"version":      version,
 		"capabilities": caps,
 	})
@@ -75,8 +75,8 @@ func TestRegistry_RegisterAndList(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 	e := entries[0]
-	if e.Name != "coding" {
-		t.Errorf("name = %q, want %q", e.Name, "coding")
+	if e.ID != "coding" {
+		t.Errorf("name = %q, want %q", e.ID, "coding")
 	}
 	if e.Status != hub.AgentConnected {
 		t.Errorf("status = %q, want connected", e.Status)

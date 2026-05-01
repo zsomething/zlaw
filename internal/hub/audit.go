@@ -152,14 +152,14 @@ func (al *AuditLogger) buildEntry(subject, direction string, data []byte) AuditE
 	// Try to extract envelope fields based on subject.
 	switch subject {
 	case "zlaw.registry":
-		// Registry messages: {"name":"...","version":"...","capabilities":[...]}
+		// Registry messages: {"id":"...","version":"...","capabilities":[...]}
 		var reg struct {
-			Name         string   `json:"name"`
+			ID           string   `json:"id"`
 			Version      string   `json:"version"`
 			Capabilities []string `json:"capabilities"`
 		}
 		if json.Unmarshal(data, &reg) == nil {
-			entry.From = reg.Name
+			entry.From = reg.ID
 			entry.Extra = map[string]any{"version": reg.Version, "capabilities": reg.Capabilities}
 		}
 		entry.Type = AuditEventRegister
