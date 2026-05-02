@@ -19,17 +19,17 @@ func (c *SetupCmd) Run() error {
 
 	m := Model{
 		state:  state,
-		screen: ScreenBootstrap,
+		screen: ScreenMainMenu, // Init() will adjust if not configured
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(&m, tea.WithAltScreen())
 	result, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("run setup: %w", err)
 	}
 
 	// Propagate quit signal if needed.
-	if m, ok := result.(Model); ok && m.quit {
+	if m, ok := result.(*Model); ok && m.quit {
 		return os.ErrExist
 	}
 

@@ -5,6 +5,6 @@ import (
 )
 
 // updateIdentity handles keyboard events for the identity editor screen.
-func updateIdentity(m Model, msg tea.Msg) (Model, tea.Cmd) {
+func updateIdentity(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

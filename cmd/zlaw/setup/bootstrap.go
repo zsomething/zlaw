@@ -5,6 +5,6 @@ import (
 )
 
 // updateBootstrap handles keyboard events for the bootstrap screen.
-func updateBootstrap(m Model, msg tea.Msg) (Model, tea.Cmd) {
+func updateBootstrap(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

@@ -5,6 +5,6 @@ import (
 )
 
 // updateSkills handles keyboard events for the skills management screen.
-func updateSkills(m Model, msg tea.Msg) (Model, tea.Cmd) {
+func updateSkills(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

@@ -5,6 +5,6 @@ import (
 )
 
 // updateSecrets handles keyboard events for the secrets management screen.
-func updateSecrets(m Model, msg tea.Msg) (Model, tea.Cmd) {
+func updateSecrets(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

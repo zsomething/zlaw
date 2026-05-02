@@ -12,15 +12,22 @@ type Model struct {
 	state  *State
 	screen Screen
 	quit   bool
+	cursor int // cursor position in the current screen's item list
 }
 
 // Init implements tea.Model.
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
+	// Default to main menu if not configured, otherwise bootstrap
+	if m.state.IsConfigured() {
+		m.screen = ScreenMainMenu
+	} else {
+		m.screen = ScreenBootstrap
+	}
 	return nil
 }
 
 // Update implements tea.Model by dispatching to the appropriate screen update.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -63,6 +70,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (m Model) View() string {
-	return fmt.Sprintf("zlaw setup\n\n[Placeholder — screen %s]\n\nPress Q to quit.\n", m.screen)
+func (m *Model) View() string {
+	switch m.screen {
+	case ScreenMainMenu:
+		return menuView(m)
+	default:
+		return placeholderView(m)
+	}
+}
+
+func placeholderView(m *Model) string {
+	return fmt.Sprintf("zlaw setup\n\n[Screen: %s]\n\nPress Q to quit.\n", m.screen)
 }
