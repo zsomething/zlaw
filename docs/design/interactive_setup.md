@@ -18,6 +18,12 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 │  Agents                                    │
 │  ─────────────────────                      │
 │  ▶ Create Agent                            │
+│  ▶ Select Agent: assistant (3)            │
+│    Configure LLM                          │
+│    Configure adapter                        │
+│    Edit identity                            │
+│    Edit soul                                │
+│    Manage skills                            │
 │                                             │
 │  Global                                    │
 │  ─────────────────────                      │
@@ -29,14 +35,24 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 └────────────────────────────────────────────┘
 ```
 
+**When no agents exist:**
+```
+│  Agents                                    │
+│  ─────────────────────                      │
+│  ▶ Create Agent                            │
+│    Select Agent: (no agents)  ← disabled   │
+│                                             │
+
 ### Section Rules
 
-| Section | Always Visible | Agent-specific Items |
-|---------|----------------|----------------------|
-| Bootstrap | Yes | No |
-| Agents | Yes (if bootstrapped) | No |
-| Agent items | No (hidden) | Yes, require agent selected |
-| Global | Yes | No |
+| Section | Always Visible | Notes |
+|---------|----------------|-------|
+| Bootstrap | Yes | Always |
+| Agents | Yes (if bootstrapped) | |
+| Create Agent | Yes | Always when bootstrapped |
+| Select Agent | Yes | Disabled if no agents |
+| Agent items | Conditional | Shown when agent selected |
+| Global | Yes | Always |
 
 ### Item States
 
@@ -52,9 +68,9 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 
 | Item | Show When |
 |------|-----------|
-| Agent section | Home bootstrapped |
-| Agent items | Agent selected |
-| Create Agent | No agents exist, home bootstrapped |
+| Create Agent | Home bootstrapped |
+| Select Agent | Home bootstrapped (disabled if no agents) |
+| Agent config items | An agent is selected |
 | Agent selector | At least one agent exists |
 
 ### Keyboard Navigation
