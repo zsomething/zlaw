@@ -43,24 +43,29 @@ type Runner interface {
 
 ## Configuration
 
-Adapters are configured in `agent.toml`:
+Adapters are configured in `agent.toml` using presets:
 
 ```toml
 [[adapter]]
-type = "telegram"
-auth_profile = "telegram-bot"
+preset = "telegram"
+config = {
+    bot_token = "$TELEGRAM_BOT_TOKEN",
+}
 ```
 
 Multiple adapters can be enabled on one agent:
 
 ```toml
 [[adapter]]
-type = "telegram"
-auth_profile = "telegram-main"
+preset = "telegram"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 
 [[adapter]]
-type = "cli"
+preset = "slack"
+config = { bot_token = "$SLACK_BOT_TOKEN" }
 ```
+
+See [llm-presets.md](./llm-presets.md) for the preset pattern.
 
 ## Session Model
 

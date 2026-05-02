@@ -58,22 +58,23 @@ $ZLAW_HOME/
 
 Agent directories do **not** contain secrets. Agent cannot read its own secrets file.
 
-## Agent Config (References Only)
+## Agent Config (Presets + Config Block)
 
-In `agent.toml`, secret references are env var names:
+In `agent.toml`, agents use presets with a config block for secrets:
 
 ```toml
 [llm]
-backend = "minimax"
-model = "minimax-2.7"
-secret = { api_key = "$MINIMAX_API_KEY" }
+preset = "minimax"
+config = { api_key = "$MINIMAX_API_KEY" }
 
 [[adapter]]
-type = "telegram"
-secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+preset = "telegram"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 No values in agent.toml — only env var references (`$VAR_NAME`). Values injected by ctl at spawn.
+
+See [llm-presets.md](./llm-presets.md) for the presets pattern.
 
 ## Secrets Structure
 
