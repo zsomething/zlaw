@@ -24,6 +24,11 @@ func (m *Model) bootstrapInit() {
 
 // bootstrapView renders the bootstrap screen.
 func bootstrapView(m *Model) string {
+	// Initialize bootstrap state on first view.
+	if m.bootstrap == nil {
+		m.bootstrapInit()
+	}
+
 	lines := []string{
 		Styles.Title.Render("zlaw setup"),
 		"",
