@@ -14,8 +14,7 @@ func TestBootstrapConfig(t *testing.T) {
 
 	// Test BootstrapConfig.
 	cfg := config.BootstrapConfig{
-		Home:            tmpDir,
-		ManagerAgentDir: filepath.Join(tmpDir, "agents", "manager"),
+		Home: tmpDir,
 	}
 
 	// Test Exists() before create.

@@ -10,19 +10,14 @@ import (
 type BootstrapConfig struct {
 	// Home is the zlaw home directory path.
 	Home string
-	// ManagerAgentDir is the directory for the default manager agent.
-	// When empty, defaults to $ZLAW_HOME/agents/manager.
-	ManagerAgentDir string
 	// Force overwrites existing files if true.
 	Force bool
 }
 
 // DefaultBootstrapConfig returns a BootstrapConfig for the default zlaw home.
 func DefaultBootstrapConfig() BootstrapConfig {
-	home := ZlawHome()
 	return BootstrapConfig{
-		Home:            home,
-		ManagerAgentDir: filepath.Join(home, "agents", "manager"),
+		Home: ZlawHome(),
 	}
 }
 
@@ -73,26 +68,13 @@ func (c BootstrapConfig) CreateZlawHome() error {
 
 // writeZlawTOML writes the initial zlaw.toml content.
 func (c BootstrapConfig) writeZlawTOML(path string) error {
-	managerDir := c.ManagerAgentDir
-	if managerDir == "" {
-		managerDir = filepath.Join(c.Home, "agents", "manager")
-	}
-
-	content := fmt.Sprintf(zlawTOMLTemplate, managerDir)
-	return os.WriteFile(path, []byte(content), 0o600)
+	return os.WriteFile(path, []byte(zlawTOMLTemplate), 0o600)
 }
 
-// zlawTOMLTemplate has the absolute agent dir substituted for %s.
+// zlawTOMLTemplate is the initial zlaw.toml content (no agents yet).
 const zlawTOMLTemplate = `[hub]
 name = "main"
 description = "zlaw hub"
-
-[[agents]]
-id = "manager"
-dir = %q
-executor = "subprocess"
-target = "local"
-restart_policy = "on-failure"
 
 [nats]
 # Embedded NATS server listen address. Defaults to 127.0.0.1:4222.
