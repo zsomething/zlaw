@@ -45,72 +45,74 @@ func buildMenuItems(m *Model) []MenuItem {
 		Visible: true,
 	})
 
-	// Agents section
-	if m.state.HasAgents() {
-		// Agent selector info (non-selectable)
-		agentCount := len(m.state.Config.Agents)
-		selectedName := m.state.SelectedAgent
-		if selectedName == "" && agentCount > 0 {
-			selectedName = m.state.Config.Agents[0].ID
-		}
-		items = append(items, MenuItem{
-			Label:   "Agent: " + selectedName + " (" + itoa(agentCount) + ")",
-			Status:  StateView,
-			Screen:  ScreenMainMenu,
-			Visible: true,
-			Disable: true,
-		})
-
-		// Agent config items (only when agent selected)
-		if m.state.SelectedAgent != "" {
-			// LLM configuration
+	// Agent section - always visible when home is bootstrapped
+	if m.state.IsConfigured() {
+		if m.state.HasAgents() {
+			// Agent selector info (non-selectable)
+			agentCount := len(m.state.Config.Agents)
+			selectedName := m.state.SelectedAgent
+			if selectedName == "" && agentCount > 0 {
+				selectedName = m.state.Config.Agents[0].ID
+			}
 			items = append(items, MenuItem{
-				Label:   "Configure LLM",
-				Status:  detectLLMState(m.state),
-				Screen:  ScreenLLM,
-				Visible: true,
-			})
-
-			// Adapter configuration
-			items = append(items, MenuItem{
-				Label:   "Configure adapter",
-				Status:  detectAdapterState(m.state),
-				Screen:  ScreenAdapter,
-				Visible: true,
-			})
-
-			// Identity
-			items = append(items, MenuItem{
-				Label:   "Edit identity",
-				Status:  detectIdentityState(m.state),
-				Screen:  ScreenIdentity,
-				Visible: true,
-			})
-
-			// Soul
-			items = append(items, MenuItem{
-				Label:   "Edit soul",
-				Status:  detectSoulState(m.state),
-				Screen:  ScreenSoul,
-				Visible: true,
-			})
-
-			// Skills
-			items = append(items, MenuItem{
-				Label:   "Manage skills",
+				Label:   "Agent: " + selectedName + " (" + itoa(agentCount) + ")",
 				Status:  StateView,
-				Screen:  ScreenSkills,
+				Screen:  ScreenMainMenu,
+				Visible: true,
+				Disable: true,
+			})
+
+			// Agent config items (only when agent selected)
+			if m.state.SelectedAgent != "" {
+				// LLM configuration
+				items = append(items, MenuItem{
+					Label:   "Configure LLM",
+					Status:  detectLLMState(m.state),
+					Screen:  ScreenLLM,
+					Visible: true,
+				})
+
+				// Adapter configuration
+				items = append(items, MenuItem{
+					Label:   "Configure adapter",
+					Status:  detectAdapterState(m.state),
+					Screen:  ScreenAdapter,
+					Visible: true,
+				})
+
+				// Identity
+				items = append(items, MenuItem{
+					Label:   "Edit identity",
+					Status:  detectIdentityState(m.state),
+					Screen:  ScreenIdentity,
+					Visible: true,
+				})
+
+				// Soul
+				items = append(items, MenuItem{
+					Label:   "Edit soul",
+					Status:  detectSoulState(m.state),
+					Screen:  ScreenSoul,
+					Visible: true,
+				})
+
+				// Skills
+				items = append(items, MenuItem{
+					Label:   "Manage skills",
+					Status:  StateView,
+					Screen:  ScreenSkills,
+					Visible: true,
+				})
+			}
+		} else {
+			// No agents - show Create Agent option
+			items = append(items, MenuItem{
+				Label:   "Create Agent",
+				Status:  StateView,
+				Screen:  ScreenCreateAgent,
 				Visible: true,
 			})
 		}
-	} else {
-		// No agents message
-		items = append(items, MenuItem{
-			Label:   "No agents configured. Create one first.",
-			Status:  StateMissing,
-			Screen:  ScreenCreateAgent,
-			Visible: true,
-		})
 	}
 
 	// Global section
@@ -218,6 +220,9 @@ func menuView(m *Model) string {
 
 	content := strings.Join(lines, "\n")
 	help := "[↑↓] Navigate  [Enter] Select  [Q] Quit"
+	if !m.state.HasAgents() {
+		help = "[↑↓] Navigate  [Enter] Create  [Q] Quit"
+	}
 	return windowView("zlaw setup", content, help)
 }
 

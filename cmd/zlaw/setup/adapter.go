@@ -61,10 +61,10 @@ func adapterView(m *Model) string {
 				envVar = "N/A"
 			}
 			if m.adapter.cursor == i {
-				prefix = "> "
-				content.WriteString(Styles.Selected.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")"))
+				prefix = "▶ "
+				content.WriteString(Styles.Selected.Render(prefix + name + "  (" + envVar + ")"))
 			} else {
-				content.WriteString(Styles.Item.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")"))
+				content.WriteString(Styles.Item.Render(prefix + name + "  (" + envVar + ")"))
 			}
 			content.WriteString("\n")
 		}

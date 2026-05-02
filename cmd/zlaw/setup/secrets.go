@@ -59,15 +59,13 @@ func secretsView(m *Model) string {
 			content.WriteString(Styles.Item.Render("  Secret names:") + "\n")
 			for i, name := range secrets {
 				prefix := "  "
-				cursorMark := "  "
 				if m.secrets.cursor == i {
-					prefix = "> "
-					cursorMark = "*"
+					prefix = "▶ "
 				}
 				if m.secrets.cursor == i {
-					content.WriteString(Styles.Selected.Render(prefix+cursorMark+" "+name) + "\n")
+					content.WriteString(Styles.Selected.Render(prefix+name) + "\n")
 				} else {
-					content.WriteString(Styles.Item.Render(prefix+cursorMark+" "+name) + "\n")
+					content.WriteString(Styles.Item.Render(prefix+name) + "\n")
 				}
 			}
 			content.WriteString("\n")

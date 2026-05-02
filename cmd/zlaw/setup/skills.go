@@ -62,17 +62,17 @@ func skillsView(m *Model) string {
 		contentLines = append(contentLines, "")
 		if len(m.skills.skills) == 0 {
 			contentLines = append(contentLines, Styles.ItemDim.Render("No skills installed."))
-			contentLines = append(contentLines, Styles.ItemDim.Render("Press [A] to add a skill."))
+			contentLines = append(contentLines, Styles.ItemDim.Render("Press [Enter] to add a skill."))
 		} else {
 			contentLines = append(contentLines, Styles.Item.Render("Installed skills:"))
 			contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
 			for i, name := range m.skills.skills {
 				prefix := "  "
 				if m.skills.cursor == i {
-					prefix = "> "
-					contentLines = append(contentLines, Styles.Selected.Render(prefix+itoa(i+1)+". "+name))
+					prefix = "▶ "
+					contentLines = append(contentLines, Styles.Selected.Render(prefix+name))
 				} else {
-					contentLines = append(contentLines, Styles.Item.Render(prefix+itoa(i+1)+". "+name))
+					contentLines = append(contentLines, Styles.Item.Render(prefix+name))
 				}
 			}
 		}

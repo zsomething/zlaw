@@ -63,16 +63,16 @@ func llmView(m *Model) string {
 		for i, name := range presets {
 			prefix := "  "
 			if m.llm.cursor == i {
-				prefix = "> "
+				prefix = "▶ "
 			}
 			backend := getPresetBackend(name)
 			envVar := presetEnvVars[name]
 			if envVar == "" {
 				envVar = "N/A"
 			}
-			line := Styles.Item.Render(prefix + itoa(i+1) + ". " + name + "  — " + backend + " (" + envVar + ")")
+			line := Styles.Item.Render(prefix + name + "  —  " + backend + " (" + envVar + ")")
 			if m.llm.cursor == i {
-				line = Styles.Selected.Render(prefix + itoa(i+1) + ". " + name + "  — " + backend + " (" + envVar + ")")
+				line = Styles.Selected.Render(prefix + name + "  —  " + backend + " (" + envVar + ")")
 			}
 			content.WriteString(line)
 			content.WriteString("\n")
