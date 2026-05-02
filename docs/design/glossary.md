@@ -44,6 +44,12 @@ Component that connects agents to external communication channels (Telegram, CLI
 
 **Also known as**: Adapter (in code).
 
+## Preset
+
+Static, well-known configuration template stored as Go code. Defines defaults for LLM backends (base_url, api_format, default model) and channel adapters (parse_mode, features). Copied to agent config at creation. Agent.toml can override preset defaults.
+
+**Also known as**: LLMPreset, AdapterPreset.
+
 ## Delegation (P2P)
 
 Agent-to-agent communication via NATS. One agent publishes a task to another's inbox. Hub routes but does not orchestrate.
