@@ -245,10 +245,10 @@ Restart policy: [1] always  [2] on-failure (default)  [3] never
    ```toml
    [llm]
    backend = "anthropic"
-   base_url = "https://api.minimax.io/anthropic"
-
-   [llm.config]
-   api_key = "$MINIMAX_API_KEY"
+   config = {
+     base_url = "https://api.minimax.io/anthropic",
+     api_key = "$MINIMAX_API_KEY"
+   }
    ```
 2. Create secret in `secrets.toml` (if new)
 3. Add to `zlaw.toml` env_vars:
@@ -272,10 +272,10 @@ Select source agent:
    ```toml
    [llm]
    backend = "anthropic"
-   base_url = "https://api.minimax.io/anthropic"
-   
-   [llm.config]
-   api_key = "$MINIMAX_API_KEY"
+   config = {
+     base_url = "https://api.minimax.io/anthropic",
+     api_key = "$MINIMAX_API_KEY"
+   }
    ```
 2. Record required env var in `zlaw.toml`:
    ```toml
@@ -387,14 +387,14 @@ Select source agent:
 
 **Actions:**
 1. Write to agent's `agent.toml`:
-   ```toml
-   [embedding]
-   provider = "minimax"  # or same as [llm]
-   model = "MiniMax-Embedding-01"
-   ```
-2. If embedding provider differs from chat, prompt for its secret (similar to step 3)
+```toml
+[embedding]
+backend = "minimax"  # or same as [llm] if using same provider
+model = "MiniMax-Embedding-01"
+```
+2. If embedding backend differs from chat, prompt for its secret (similar to step 3)
 
-**Note:** If using different provider, repeats secret selection flow from step 3.
+**Note:** If using different backend, repeats secret selection flow from step 3.
 
 ### Step 5: Channel Adapter Configuration (`adapter`)
 
@@ -436,9 +436,21 @@ Select source agent:
 └────────────────────────────────────────────┘
 ```
 
-**Wizard creates:**
-- In `agent.toml`: `bot_token = "$TELEGRAM_BOT_TOKEN"` (env var reference)
-- In `zlaw.toml` env_vars: `{ name = "TELEGRAM_BOT_TOKEN", from_secret = "<secret-key>" }`
+**Wizard creates in `agent.toml`:**
+```toml
+[[adapter]]
+backend = "telegram"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+```
+
+**Wizard creates in `zlaw.toml`:**
+```toml
+[[agents]]
+id = "assistant"
+env_vars = [
+  { name = "TELEGRAM_BOT_TOKEN", from_secret = "<secret-key>" }
+]
+```
 
 ### Step 6: Agent Configuration (`agent-config`)
 
@@ -640,10 +652,10 @@ The wizard creates a mapping between what the config expects and where the actua
 
 ```toml
 # agent.toml — what the LLM/adapter config expects
-[llm.config]
-api_key = "$MINIMAX_API_KEY"
-#                    ^^^^^^^^^^
-#                    env var name the config references
+[llm]
+config = { api_key = "$MINIMAX_API_KEY" }
+#                      ^^^^^^^^^^
+#                      env var name the config references
 ```
 
 ```toml

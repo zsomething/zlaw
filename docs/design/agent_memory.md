@@ -57,13 +57,16 @@ Optional: Vector store for semantic search (chroma-go).
 When enabled, requires separate embedder configuration in `agent.toml`:
 
 ```toml
-[memory.embedder]
-backend = "openai"              # preset name
-model = "text-embedding-3-small" # embedding model
-auth_profile = "openai-embed"   # separate credentials profile
+[embedding]
+backend = "openai"
+config = {
+  base_url = "https://api.openai.com/v1",
+  model = "text-embedding-3-small",
+  api_key = "$OPENAI_API_KEY"
+}
 ```
 
-The embedder uses its own credentials (distinct from LLM auth profile). Markdown files remain the source of truth; vector index is regenerable.
+The embedder uses its own credentials (distinct from LLM config). Markdown files remain the source of truth; vector index is regenerable.
 
 ## See Also
 

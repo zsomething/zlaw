@@ -60,21 +60,24 @@ Agent directories do **not** contain secrets. Agent cannot read its own secrets 
 
 ## Agent Config (Presets + Config Block)
 
-In `agent.toml`, agents use presets with a config block for secrets:
+In `agent.toml`, agents use presets with an inline config block. Preset values (backend, base_url, model, etc.) are copied at creation:
 
 ```toml
 [llm]
-preset = "minimax"
-config = { api_key = "$MINIMAX_API_KEY" }
+backend = "anthropic"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  api_key = "$MINIMAX_API_KEY"
+}
 
 [[adapter]]
-preset = "telegram"
+backend = "telegram"
 config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 No values in agent.toml — only env var references (`$VAR_NAME`). Values injected by ctl at spawn.
 
-See [llm-presets.md](./llm-presets.md) for the presets pattern.
+See [llm_presets.md](./llm_presets.md) for the presets pattern.
 
 ## Secrets Structure
 

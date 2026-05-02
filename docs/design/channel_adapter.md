@@ -47,7 +47,7 @@ Adapters are configured in `agent.toml` using presets:
 
 ```toml
 [[adapter]]
-preset = "telegram"
+backend = "telegram"
 config = {
     bot_token = "$TELEGRAM_BOT_TOKEN",
 }
@@ -57,15 +57,15 @@ Multiple adapters can be enabled on one agent:
 
 ```toml
 [[adapter]]
-preset = "telegram"
+backend = "telegram"
 config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 
 [[adapter]]
-preset = "slack"
+backend = "slack"
 config = { bot_token = "$SLACK_BOT_TOKEN" }
 ```
 
-See [llm-presets.md](./llm-presets.md) for the preset pattern.
+See [llm_presets.md](./llm_presets.md) for the preset pattern.
 
 ## Session Model
 

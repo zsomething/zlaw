@@ -1,11 +1,32 @@
-# LLM & Adapter Presets
+# LLM & Adapter Presets (Inline Copy Pattern)
+
+## Pattern
+
+Presets are **templates for inline copying** into `agent.toml` at creation. No runtime lookup after copy.
+
+```toml
+# Preset defines template:
+# { Name: "minimax", Backend: "anthropic", Config: { base_url: "...", model: "..." } }
+
+# Wizard copies to agent.toml:
+[llm]
+backend = "anthropic"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  model = "MiniMax-Text-01",
+  api_key = "$MINIMAX_API_KEY"
+}
+```
+
+After copy, `agent.toml` is **self-contained**. Agent needs no preset lookup.
+
 
 ## Goal
 
-Flatten LLM and adapter configuration with a presets pattern:
+Flatten LLM and adapter configuration with an inline copy pattern:
 - **Presets**: static, well-known configurations stored as code
-- **Inline copy**: preset values copied directly into agent.toml at creation
-- **Runtime secrets**: config block for env-var expansion (no preset reference)
+- **Inline copy**: preset values copied directly into agent.toml at creation (no reference)
+- **Runtime secrets**: config block for env-var expansion
 - **Unified model**: same pattern for LLM backends and channel adapters
 
 ## Problem
@@ -24,20 +45,31 @@ This creates:
 
 ### Preset Definition
 
-Presets are static Go structs with well-known configurations:
+Presets are static Go structs with well-known configurations. They bundle the protocol (`backend`) with default config values (including `base_url`):
 
 ```go
 // llm/preset.go
 type LLMPreset struct {
-    Name      string            // "minimax", "anthropic", etc. (for selection)
-    Backend   string            // protocol: "openai" or "anthropic"
-    BaseURL   string            // API endpoint
-    Config    map[string]any    // backend-specific defaults (model, max_tokens, etc.)
+    Name    string            // "minimax", "anthropic", etc. (for selection)
+    Backend string            // protocol: "openai" or "anthropic"
+    Config  map[string]any    // includes base_url, model, max_tokens, etc.
 }
 
 type AdapterPreset struct {
-    Name   string              // "telegram", "discord", etc.
-    Config map[string]any      // adapter-specific defaults
+    Name    string            // "telegram", "discord", etc.
+    Backend string            // protocol: "telegram", "slack", etc.
+    Config  map[string]any    // adapter-specific defaults
+}
+```
+
+When copied inline to `agent.toml`, the preset becomes:
+
+```toml
+[[adapter]]
+backend = "telegram"              # from preset.Backend
+config = {                        # from preset.Config + user secrets
+  parse_mode = "Markdown",
+  bot_token = "$TELEGRAM_BOT_TOKEN"
 }
 ```
 
@@ -49,8 +81,8 @@ var LLMPresets = []LLMPreset{
     {
         Name:    "minimax",
         Backend: "anthropic",
-        BaseURL: "https://api.minimax.io/anthropic",
         Config: map[string]any{
+            "base_url":   "https://api.minimax.io/anthropic",
             "model":      "MiniMax-Text-01",
             "max_tokens": 4096,
         },
@@ -58,8 +90,8 @@ var LLMPresets = []LLMPreset{
     {
         Name:    "minimax-cn",
         Backend: "anthropic",
-        BaseURL: "https://api.minimaxi.com/anthropic",
         Config: map[string]any{
+            "base_url":   "https://api.minimaxi.com/anthropic",
             "model":      "MiniMax-Text-01",
             "max_tokens": 4096,
         },
@@ -67,16 +99,16 @@ var LLMPresets = []LLMPreset{
     {
         Name:    "anthropic",
         Backend: "anthropic",
-        BaseURL: "https://api.anthropic.com",
         Config: map[string]any{
+            "base_url": "https://api.anthropic.com",
             "model": "claude-sonnet-4-20250514",
         },
     },
     {
         Name:    "openai",
         Backend: "openai",
-        BaseURL: "https://api.openai.com/v1",
         Config: map[string]any{
+            "base_url": "https://api.openai.com/v1",
             "model": "gpt-4o",
         },
     },
@@ -85,13 +117,15 @@ var LLMPresets = []LLMPreset{
 
 var AdapterPresets = []AdapterPreset{
     {
-        Name: "telegram",
+        Name:    "telegram",
+        Backend: "telegram",
         Config: map[string]any{
             "parse_mode": "Markdown",
         },
     },
     {
-        Name: "slack",
+        Name:    "slack",
+        Backend: "slack",
         Config: map[string]any{
             "reaction": true,
         },
@@ -107,18 +141,18 @@ At creation, ctl copies preset values **inline** into agent.toml. No preset refe
 # agent.toml — created by `zlaw ctl create --preset minimax`
 
 [llm]
-backend = "anthropic"              # from preset
-base_url = "https://api.minimax.io/anthropic"  # from preset
-
-[llm.config]                        # runtime config, expanded at spawn
-api_key = "$MINIMAX_API_KEY"        # user-provided via env var
+backend = "anthropic"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  api_key = "$MINIMAX_API_KEY"
+}
 ```
 
 The `config` block contains **env-var references** (not actual values). Expansion happens inside the agent process at runtime:
 
 ```toml
-[llm.config]
-api_key = "$MINIMAX_API_KEY"
+[llm]
+config = { api_key = "$MINIMAX_API_KEY" }
 ```
 
 **Expansion flow:**
@@ -146,10 +180,8 @@ api_key = "$MINIMAX_API_KEY"
 
 ```toml
 [[adapter]]
-backend = "telegram"              # from preset
-
-[adapter.config]                  # runtime config
-bot_token = "$TELEGRAM_BOT_TOKEN"  # user-provided
+backend = "telegram"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 ## Bootstrap Flow
@@ -163,16 +195,13 @@ When creating a new agent (`zlaw ctl create <name> --preset minimax`):
    
    [llm]
    backend = "anthropic"
-   base_url = "https://api.minimax.io/anthropic"
-   # config block left empty for user
+   config = {
+     base_url = "https://api.minimax.io/anthropic",
+     api_key = "$MINIMAX_API_KEY"
+   }
    
-4. User edits agent.toml, adds to config:
-   
-   [llm.config]
-   api_key = "$MINIMAX_API_KEY"
-   
-5. User runs `zlaw auth add --name MINIMAX_API_KEY`
-6. User adds env_vars mapping in zlaw.toml
+4. User runs `zlaw auth add --name MINIMAX_API_KEY`
+5. User adds env_vars mapping in zlaw.toml
 
 **Expansion happens inside the agent**, not in ctl:
 
@@ -242,17 +271,15 @@ func expandConfig(cfg map[string]any, secrets map[string]string) map[string]any 
 
 [llm]
 backend = "anthropic"
-base_url = "https://api.minimax.io/anthropic"
-model = "MiniMax-Text-01"
-
-[llm.config]
-api_key = "$MINIMAX_API_KEY"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  model = "MiniMax-Text-01",
+  api_key = "$MINIMAX_API_KEY"
+}
 
 [[adapter]]
 backend = "telegram"
-
-[adapter.config]
-bot_token = "$TELEGRAM_BOT_TOKEN"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 ## Files Affected

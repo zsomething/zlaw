@@ -52,13 +52,15 @@ Secret references use env var names:
 
 ```toml
 [llm]
-backend = "minimax"
-model = "minimax-2.7"
-secret = { api_key = "$MINIMAX_API_KEY" }
+backend = "anthropic"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  api_key = "$MINIMAX_API_KEY"
+}
 
 [[adapter]]
-type = "telegram"
-secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+backend = "telegram"
+config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 No values in config — only `$VAR_NAME` references. Values injected by ctl at spawn.
