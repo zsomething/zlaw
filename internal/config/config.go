@@ -110,9 +110,21 @@ func (m AgentMeta) GetDisplayName() string {
 // LLMConfig holds LLM backend settings.
 // Authentication is handled separately via a named credential profile in
 // ~/.config/zlaw/credentials.toml — no secrets belong in agent.toml.
+//
+// Two configuration patterns are supported:
+//   - New (inline): Backend + Config map with env-var references ($VAR)
+//   - Legacy: Backend name with runtime lookup + individual field overrides
 type LLMConfig struct {
-	// Backend selects a named preset (e.g. "minimax", "minimax-cn", "openrouter").
+	// Backend is the wire protocol ("openai" or "anthropic") for the new pattern,
+	// or a preset name ("minimax", "anthropic") for legacy lookup.
 	Backend string `toml:"backend"`
+
+	// Config holds inline configuration values for the new pattern.
+	// Includes base_url, model, api_key, max_tokens, etc.
+	// Values can contain env-var references ($VAR or ${VAR}) that are
+	// expanded at config load time using os.ExpandEnv.
+	// Example: "api_key": "$MINIMAX_API_KEY"
+	Config map[string]any `toml:"config"`
 
 	// APIFormat overrides the wire protocol from the preset ("openai" or "anthropic").
 	// Leave empty to use the preset default.
@@ -475,8 +487,30 @@ func loadTOML(path string) (AgentConfig, error) {
 	if _, err := toml.Decode(expanded, &cfg); err != nil {
 		return AgentConfig{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	// Expand env vars in nested Config maps (for new inline pattern).
+	cfg.LLM.Config = expandConfigMap(cfg.LLM.Config)
+	cfg.Memory.Embedder.BaseURL = os.ExpandEnv(cfg.Memory.Embedder.BaseURL)
 	syncAuthProfiles(&cfg)
 	return cfg, nil
+}
+
+// expandConfigMap recursively expands $VAR and ${VAR} references in config values.
+func expandConfigMap(cfg map[string]any) map[string]any {
+	if cfg == nil {
+		return nil
+	}
+	result := make(map[string]any, len(cfg))
+	for k, v := range cfg {
+		switch val := v.(type) {
+		case string:
+			result[k] = os.ExpandEnv(val)
+		case map[string]any:
+			result[k] = expandConfigMap(val)
+		default:
+			result[k] = v
+		}
+	}
+	return result
 }
 
 // syncAuthProfiles derives AuthProfiles from LLM + Memory + Adapter configs

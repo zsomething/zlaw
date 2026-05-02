@@ -1,61 +1,40 @@
 package llm
 
-import "fmt"
-
-// APIFormat identifies the wire protocol used to communicate with a backend.
-type APIFormat string
-
-const (
-	APIFormatOpenAI    APIFormat = "openai"
-	APIFormatAnthropic APIFormat = "anthropic"
-)
-
-// BackendPreset is a named, well-known backend configuration.
+// LLMPreset is a named, well-known backend configuration.
 // A preset defines default values; individual fields can be overridden in agent.toml.
-type BackendPreset struct {
-	BaseURL   string
-	APIFormat APIFormat
-}
-
-// presets is the built-in registry of named backends.
-var presets = map[string]BackendPreset{
-	// Minimax — global endpoint (Anthropic-compatible, recommended)
-	"minimax": {
-		BaseURL:   "https://api.minimax.io/anthropic",
-		APIFormat: APIFormatAnthropic,
-	},
-	// Minimax — global endpoint (OpenAI-compatible)
-	"minimax-openai": {
-		BaseURL:   "https://api.minimax.io/v1",
-		APIFormat: APIFormatOpenAI,
-	},
-	// Minimax — China endpoint (Anthropic-compatible, recommended)
-	"minimax-cn": {
-		BaseURL:   "https://api.minimaxi.com/anthropic",
-		APIFormat: APIFormatAnthropic,
-	},
-	// Minimax — China endpoint (OpenAI-compatible)
-	"minimax-cn-openai": {
-		BaseURL:   "https://api.minimaxi.com/v1",
-		APIFormat: APIFormatOpenAI,
-	},
-	// OpenRouter — aggregator
-	"openrouter": {
-		BaseURL:   "https://openrouter.ai/api/v1",
-		APIFormat: APIFormatOpenAI,
-	},
-	// Anthropic — native Messages API
-	"anthropic": {
-		BaseURL:   "https://api.anthropic.com",
-		APIFormat: APIFormatAnthropic,
-	},
+// Values are copied inline at agent creation time — no runtime lookup needed.
+type LLMPreset struct {
+	// Name is the preset identifier (e.g., "minimax", "anthropic").
+	Name string
+	// Backend is the wire protocol ("openai" or "anthropic").
+	Backend string
+	// Config contains default values including base_url, model, max_tokens, etc.
+	// These are copied inline into agent.toml at creation.
+	Config map[string]any
 }
 
 // LookupPreset returns the preset for the given name, or an error if unknown.
-func LookupPreset(name string) (BackendPreset, error) {
-	p, ok := presets[name]
+func LookupPreset(name string) (LLMPreset, error) {
+	preset, ok := presets[name]
 	if !ok {
-		return BackendPreset{}, fmt.Errorf("llm: unknown backend preset %q", name)
+		return LLMPreset{}, nil
 	}
-	return p, nil
+	// Return a copy to prevent mutation of the original.
+	return LLMPreset{
+		Name:    preset.Name,
+		Backend: preset.Backend,
+		Config:  copyConfig(preset.Config),
+	}, nil
+}
+
+// copyConfig returns a shallow copy of the config map.
+func copyConfig(cfg map[string]any) map[string]any {
+	if cfg == nil {
+		return nil
+	}
+	result := make(map[string]any, len(cfg))
+	for k, v := range cfg {
+		result[k] = v
+	}
+	return result
 }

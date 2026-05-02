@@ -138,6 +138,12 @@ func (p CredentialProfile) GetData(key string) string {
 	return p.Data[key]
 }
 
+// NewFixedTokenSource returns a TokenSource that always returns key.
+// Use for inline config patterns where the API key is already resolved.
+func NewFixedTokenSource(key string) TokenSource {
+	return &staticKeySource{key: key}
+}
+
 // staticKeySource returns a fixed API key.
 type staticKeySource struct {
 	key string

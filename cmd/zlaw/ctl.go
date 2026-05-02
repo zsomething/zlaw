@@ -50,19 +50,22 @@ restart_policy = "on-failure"
 description = ""
 
 [llm]
-backend = "minimax"
-model = "minimax-2.7"
-secret = { api_key = "$MINIMAX_API_KEY" }
-max_tokens = 4096
-timeout_sec = 60
+backend = "anthropic"
+config = {
+  base_url = "https://api.minimax.io/anthropic",
+  model = "MiniMax-Text-01",
+  api_key = "$MINIMAX_API_KEY",
+  max_tokens = 4096,
+  timeout_sec = 60,
+}
 
 [tools]
 allowed = []
 
 # Configure adapters with secrets:
 # [[adapter]]
-# type = "telegram"
-# secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+# backend = "telegram"
+# config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 `
 
 const ctlSoulMDTemplate = `You are a helpful personal assistant.

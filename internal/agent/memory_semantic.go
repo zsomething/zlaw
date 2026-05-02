@@ -195,7 +195,13 @@ func NewEmbeddingFunc(cfg config.EmbedderConfig, credPath string) (chromem.Embed
 		return nil, fmt.Errorf("embedder: %w", err)
 	}
 
-	baseURL := preset.BaseURL
+	// Get base_url from preset Config (new pattern) or use override.
+	baseURL := ""
+	if preset.Config != nil {
+		if v, ok := preset.Config["base_url"].(string); ok {
+			baseURL = v
+		}
+	}
 	if cfg.BaseURL != "" {
 		baseURL = cfg.BaseURL
 	}

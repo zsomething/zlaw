@@ -12,54 +12,54 @@ import (
 // NewClientFromConfig constructs the appropriate Client based on agent config.
 // credentialsPath is the path to credentials.toml; pass "" to use the default.
 //
-// Resolution order:
-//  1. Look up the named preset from cfg.Backend.
-//  2. Apply any per-field overrides from cfg (APIFormat, BaseURL).
-//  3. Dispatch to the matching Client implementation by APIFormat.
+// The Config map contains inline values with env-var references already expanded:
+//   - base_url, model, max_tokens, timeout_sec
+//   - api_key: the actual token value (env-var expanded from $VAR pattern)
 func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *slog.Logger) (Client, error) {
-	if credentialsPath == "" {
-		credentialsPath = credentials.DefaultCredentialsPath()
-	}
+	// Extract values from Config map (already env-var expanded by loadTOML).
+	baseURL := getString(cfg.Config, "base_url", "")
+	model := getString(cfg.Config, "model", "")
+	maxTokens := getInt(cfg.Config, "max_tokens", 4096)
+	timeout := time.Duration(getInt(cfg.Config, "timeout_sec", 60)) * time.Second
+	apiFormat := cfg.Backend // "openai" or "anthropic"
 
-	src, err := credentials.NewTokenSourceFromStore(credentialsPath, cfg.AuthProfile)
-	if err != nil {
-		return nil, fmt.Errorf("llm: load auth profile %q: %w", cfg.AuthProfile, err)
-	}
+	var tokenSource credentials.TokenSource
 
-	preset, err := LookupPreset(cfg.Backend)
-	if err != nil {
-		return nil, err
+	// Get API key from config (expanded value).
+	apiKey := getString(cfg.Config, "api_key", "")
+	if apiKey != "" {
+		tokenSource = credentials.NewFixedTokenSource(apiKey)
+	} else if cfg.AuthProfile != "" {
+		// Fall back to credentials.toml if no api_key in config.
+		if credentialsPath == "" {
+			credentialsPath = credentials.DefaultCredentialsPath()
+		}
+		var err error
+		tokenSource, err = credentials.NewTokenSourceFromStore(credentialsPath, cfg.AuthProfile)
+		if err != nil {
+			return nil, fmt.Errorf("llm: load auth profile %q: %w", cfg.AuthProfile, err)
+		}
+	} else {
+		return nil, fmt.Errorf("llm: no api_key in config and no auth_profile specified")
 	}
-
-	// Apply per-config overrides.
-	baseURL := preset.BaseURL
-	if cfg.BaseURL != "" {
-		baseURL = cfg.BaseURL
-	}
-	apiFormat := preset.APIFormat
-	if cfg.APIFormat != "" {
-		apiFormat = APIFormat(cfg.APIFormat)
-	}
-
-	timeout := time.Duration(cfg.TimeoutSec) * time.Second
 
 	switch apiFormat {
-	case APIFormatOpenAI:
+	case "openai":
 		return NewOpenAICompatClient(OpenAICompatConfig{
 			BaseURL:     baseURL,
-			TokenSource: src,
-			Model:       cfg.Model,
-			MaxTokens:   cfg.MaxTokens,
+			TokenSource: tokenSource,
+			Model:       model,
+			MaxTokens:   maxTokens,
 			Timeout:     timeout,
 			Logger:      logger,
 		})
-	case APIFormatAnthropic:
+	case "anthropic":
 		promptCaching := cfg.PromptCaching == nil || *cfg.PromptCaching
 		return NewAnthropicClient(AnthropicConfig{
 			BaseURL:       baseURL,
-			TokenSource:   src,
-			Model:         cfg.Model,
-			MaxTokens:     cfg.MaxTokens,
+			TokenSource:   tokenSource,
+			Model:         model,
+			MaxTokens:     maxTokens,
 			Timeout:       timeout,
 			Logger:        logger,
 			PromptCaching: promptCaching,
@@ -67,4 +67,29 @@ func NewClientFromConfig(cfg config.LLMConfig, credentialsPath string, logger *s
 	default:
 		return nil, fmt.Errorf("llm: unknown api_format %q (supported: openai, anthropic)", apiFormat)
 	}
+}
+
+// getString extracts a string from a config map, with fallback.
+func getString(cfg map[string]any, key, fallback string) string {
+	if v, ok := cfg[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return fallback
+}
+
+// getInt extracts an int from a config map, with fallback.
+func getInt(cfg map[string]any, key string, fallback int) int {
+	if v, ok := cfg[key]; ok {
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		}
+	}
+	return fallback
 }
