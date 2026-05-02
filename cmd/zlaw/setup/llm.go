@@ -49,16 +49,15 @@ func llmView(m *Model) string {
 		m.llmInit()
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-	}
+	var content strings.Builder
 
 	if m.llm.step == "select" {
-		lines = append(lines, Styles.Heading.Render("Configure LLM — "+m.state.SelectedAgent))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Item.Render("Select LLM preset:"))
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+		content.WriteString(Styles.Heading.Render("Configure LLM — " + m.state.SelectedAgent))
+		content.WriteString("\n\n")
+		content.WriteString(Styles.Item.Render("Select LLM preset:"))
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		content.WriteString("\n")
 
 		presets := llm.ListPresets()
 		for i, name := range presets {
@@ -75,26 +74,30 @@ func llmView(m *Model) string {
 			if m.llm.cursor == i {
 				line = Styles.Selected.Render(prefix + itoa(i+1) + ". " + name + "  — " + backend + " (" + envVar + ")")
 			}
-			lines = append(lines, line)
+			content.WriteString(line)
+			content.WriteString("\n")
 		}
 
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[Enter] Select  [B] Back"))
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		content.WriteString("\n")
+		content.WriteString(Styles.Help.Render("[Enter] Select  [B] Back"))
 	} else {
 		// Secret setup screen.
 		presetName := m.llm.preset
 		backend := getPresetBackend(presetName)
 		envVar := presetEnvVars[presetName]
 
-		lines = append(lines, Styles.Heading.Render("LLM: "+presetName+" ("+backend+")"))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Item.Render("This preset requires:"))
-		lines = append(lines, Styles.Item.Render("• api_key — Env var: "+envVar))
-		lines = append(lines, "")
+		content.WriteString(Styles.Heading.Render("LLM: " + presetName + " (" + backend + ")"))
+		content.WriteString("\n\n")
+		content.WriteString(Styles.Item.Render("This preset requires:"))
+		content.WriteString("\n")
+		content.WriteString(Styles.Item.Render("• api_key — Env var: " + envVar))
+		content.WriteString("\n\n")
 
 		// Secret mode selection.
-		lines = append(lines, Styles.Item.Render("Secret:"))
+		content.WriteString(Styles.Item.Render("Secret:"))
+		content.WriteString("\n")
 		for i, opt := range []string{"Create new", "Use existing"} {
 			prefix := "  "
 			if m.llm.secretMode == strings.ToLower(strings.ReplaceAll(opt, " ", "")) {
@@ -105,38 +108,41 @@ func llmView(m *Model) string {
 				} else {
 					line += "  [E]"
 				}
-				lines = append(lines, line)
+				content.WriteString(line)
+				content.WriteString("\n")
 			} else {
 				if i == 0 {
-					lines = append(lines, Styles.Item.Render(prefix+opt+"  [N]"))
+					content.WriteString(Styles.Item.Render(prefix + opt + "  [N]"))
 				} else {
-					lines = append(lines, Styles.Item.Render(prefix+opt+"  [E]"))
+					content.WriteString(Styles.Item.Render(prefix + opt + "  [E]"))
 				}
+				content.WriteString("\n")
 			}
 		}
 
-		lines = append(lines, "")
+		content.WriteString("\n")
 
 		if m.llm.secretMode == "new" {
 			// Secret name and value input.
 			if m.llm.focused == 0 {
-				lines = append(lines, Styles.Selected.Render("> Secret name: ")+Styles.Item.Render(m.llm.secretName+"_"))
+				content.WriteString(Styles.Selected.Render("> Secret name: ") + Styles.Item.Render(m.llm.secretName+"_"))
 			} else {
-				lines = append(lines, Styles.Item.Render("  Secret name: ")+Styles.Item.Render(m.llm.secretName))
+				content.WriteString(Styles.Item.Render("  Secret name: ") + Styles.Item.Render(m.llm.secretName))
 			}
-			lines = append(lines, Styles.Dim.Render("  > default: "+envVar))
+			content.WriteString("\n")
+			content.WriteString(Styles.ItemDim.Render("  > default: " + envVar))
+			content.WriteString("\n\n")
 
-			lines = append(lines, "")
 			if m.llm.focused == 1 {
-				lines = append(lines, Styles.Selected.Render("> Secret value: ")+Styles.Item.Render(strings.Repeat("*", intMax(0, len(m.llm.secretValue)-3))+"***"))
+				content.WriteString(Styles.Selected.Render("> Secret value: ") + Styles.Item.Render(strings.Repeat("*", intMax(0, len(m.llm.secretValue)-3))+"***"))
 			} else {
-				lines = append(lines, Styles.Item.Render("  Secret value: [hidden]"))
+				content.WriteString(Styles.Item.Render("  Secret value: [hidden]"))
 			}
 		} else {
 			// Existing secrets list.
 			secrets := config.ListSecrets()
 			if len(secrets) == 0 {
-				lines = append(lines, Styles.Dim.Render("  No secrets found. Create one first."))
+				content.WriteString(Styles.ItemDim.Render("  No secrets found. Create one first."))
 			} else {
 				for i, name := range secrets {
 					prefix := "  "
@@ -144,25 +150,27 @@ func llmView(m *Model) string {
 						prefix = "> "
 					}
 					if m.llm.cursor < len(secrets) && m.llm.cursor == i {
-						lines = append(lines, Styles.Selected.Render(prefix+name))
+						content.WriteString(Styles.Selected.Render(prefix + name))
 					} else {
-						lines = append(lines, Styles.Item.Render(prefix+name))
+						content.WriteString(Styles.Item.Render(prefix + name))
 					}
+					content.WriteString("\n")
 				}
 			}
 		}
 
 		if m.llm.errMsg != "" {
-			lines = append(lines, "")
-			lines = append(lines, Styles.StatusErr.Render("Error: "+m.llm.errMsg))
+			content.WriteString("\n")
+			content.WriteString(Styles.StatusErr.Render("Error: " + m.llm.errMsg))
 		}
 
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[C] Configure  [B] Back"))
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		content.WriteString("\n")
+		content.WriteString(Styles.Help.Render("[C] Configure  [B] Back"))
 	}
 
-	return strings.Join(lines, "\n")
+	return windowView("zlaw setup", content.String(), "")
 }
 
 // getPresetBackend returns the backend for a preset.

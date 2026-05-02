@@ -39,35 +39,32 @@ func soulView(m *Model) string {
 		m.soulInit()
 	}
 
-	lines := []string{
-		Styles.TitleBar.Render("zlaw setup"),
-		"",
-		Styles.Heading.Render("Edit Soul — " + m.state.SelectedAgent),
-		"",
-	}
+	var content strings.Builder
+
+	content.WriteString(Styles.Heading.Render("Edit Soul — " + m.state.SelectedAgent))
+	content.WriteString("\n\n")
 
 	if m.soul.path != "" {
-		lines = append(lines, Styles.Item.Render("File: "+m.soul.path))
+		content.WriteString(Styles.Item.Render("File: " + m.soul.path))
 	} else {
-		lines = append(lines, Styles.ItemDim.Render("File: (no agent selected)"))
+		content.WriteString(Styles.ItemDim.Render("File: (no agent selected)"))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.Item.Render("Status: "+m.soul.status))
-	lines = append(lines, "")
+	content.WriteString("\n\n")
+	content.WriteString(Styles.Item.Render("Status: " + m.soul.status))
+	content.WriteString("\n\n")
 
 	// Show whether file exists.
 	if _, err := os.Stat(m.soul.path); os.IsNotExist(err) {
-		lines = append(lines, Styles.ItemDim.Render("File does not exist yet."))
+		content.WriteString(Styles.ItemDim.Render("File does not exist yet."))
 	} else if err == nil {
-		lines = append(lines, Styles.StatusOK.Render("File exists."))
+		content.WriteString(Styles.StatusOK.Render("File exists."))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
-	lines = append(lines, Styles.Help.Render("[E] Open editor  [B] Back"))
+	content.WriteString("\n\n")
+	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-	return strings.Join(lines, "\n")
+	return windowView("zlaw setup", content.String(), "[E] Open editor  [B] Back")
 }
 
 // updateSoul handles keyboard events for the soul editor screen.

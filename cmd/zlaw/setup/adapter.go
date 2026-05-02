@@ -44,117 +44,119 @@ func adapterView(m *Model) string {
 		m.adapterInit()
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-	}
+	var content strings.Builder
 
 	if m.adapter.step == "select" {
-		lines = append(lines, Styles.Heading.Render("Configure Adapter — "+m.state.SelectedAgent))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Item.Render("Select adapter:"))
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+		content.WriteString(Styles.Heading.Render("Configure Adapter — " + m.state.SelectedAgent))
+		content.WriteString("\n")
+		content.WriteString(Styles.Item.Render("Select adapter:"))
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		content.WriteString("\n")
 
 		for i, name := range adapterPresets {
 			prefix := "  "
-			if m.adapter.cursor == i {
-				prefix = "> "
-			}
 			envVar := adapterEnvVars[name]
 			if envVar == "" {
 				envVar = "N/A"
 			}
-			line := Styles.Item.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")")
 			if m.adapter.cursor == i {
-				line = Styles.Selected.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")")
-			}
-			lines = append(lines, line)
-		}
-
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[Enter] Select  [B] Back"))
-	} else {
-		// Secret setup screen.
-		presetName := m.adapter.preset
-		envVar := adapterEnvVars[presetName]
-
-		lines = append(lines, Styles.Heading.Render("Adapter: "+presetName))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Item.Render("This adapter requires:"))
-		lines = append(lines, Styles.Item.Render("• bot_token — Env var: "+envVar))
-		lines = append(lines, "")
-
-		// Secret mode selection.
-		lines = append(lines, Styles.Item.Render("Secret:"))
-		for i, opt := range []string{"Create new", "Use existing"} {
-			prefix := "  "
-			if m.adapter.secretMode == strings.ToLower(strings.ReplaceAll(opt, " ", "")) {
 				prefix = "> "
-				line := Styles.Selected.Render(prefix + opt)
-				if m.adapter.secretMode == "new" {
-					line += "  [N]"
-				} else {
-					line += "  [E]"
-				}
-				lines = append(lines, line)
+				content.WriteString(Styles.Selected.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")"))
 			} else {
-				if i == 0 {
-					lines = append(lines, Styles.Item.Render(prefix+opt+"  [N]"))
-				} else {
-					lines = append(lines, Styles.Item.Render(prefix+opt+"  [E]"))
-				}
+				content.WriteString(Styles.Item.Render(prefix + itoa(i+1) + ". " + name + "  (" + envVar + ")"))
 			}
+			content.WriteString("\n")
 		}
 
-		lines = append(lines, "")
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-		if m.adapter.secretMode == "new" {
-			// Secret name and value input.
-			if m.adapter.focused == 0 {
-				lines = append(lines, Styles.Selected.Render("> Secret name: ")+Styles.Item.Render(m.adapter.secretName+"_"))
-			} else {
-				lines = append(lines, Styles.Item.Render("  Secret name: ")+Styles.Item.Render(m.adapter.secretName))
-			}
-			lines = append(lines, Styles.Dim.Render("  > default: "+envVar))
-
-			lines = append(lines, "")
-			if m.adapter.focused == 1 {
-				lines = append(lines, Styles.Selected.Render("> Secret value: ")+Styles.Item.Render(strings.Repeat("*", intMax(0, len(m.adapter.secretValue)-3))+"***"))
-			} else {
-				lines = append(lines, Styles.Item.Render("  Secret value: [hidden]"))
-			}
-		} else {
-			// Existing secrets list.
-			secrets := config.ListSecrets()
-			if len(secrets) == 0 {
-				lines = append(lines, Styles.Dim.Render("  No secrets found. Create one first."))
-			} else {
-				for i, name := range secrets {
-					prefix := "  "
-					if m.adapter.cursor < len(secrets) && m.adapter.cursor == i {
-						prefix = "> "
-					}
-					if m.adapter.cursor < len(secrets) && m.adapter.cursor == i {
-						lines = append(lines, Styles.Selected.Render(prefix+name))
-					} else {
-						lines = append(lines, Styles.Item.Render(prefix+name))
-					}
-				}
-			}
-		}
-
-		if m.adapter.errMsg != "" {
-			lines = append(lines, "")
-			lines = append(lines, Styles.StatusErr.Render("Error: "+m.adapter.errMsg))
-		}
-
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[C] Configure  [B] Back"))
+		return windowView("zlaw setup", content.String(), "[Enter] Select  [B] Back")
 	}
 
-	return strings.Join(lines, "\n")
+	// Secret setup screen.
+	presetName := m.adapter.preset
+	envVar := adapterEnvVars[presetName]
+
+	content.WriteString(Styles.Heading.Render("Adapter: " + presetName))
+	content.WriteString("\n\n")
+	content.WriteString(Styles.Item.Render("This adapter requires:"))
+	content.WriteString("\n")
+	content.WriteString(Styles.Item.Render("• bot_token — Env var: " + envVar))
+	content.WriteString("\n\n")
+
+	// Secret mode selection.
+	content.WriteString(Styles.Item.Render("Secret:"))
+	content.WriteString("\n")
+	for i, opt := range []string{"Create new", "Use existing"} {
+		prefix := "  "
+		modeMatch := m.adapter.secretMode == strings.ToLower(strings.ReplaceAll(opt, " ", ""))
+		if modeMatch {
+			prefix = "> "
+			var line string
+			if m.adapter.secretMode == "new" {
+				line = Styles.Selected.Render(prefix+opt) + "  [N]"
+			} else {
+				line = Styles.Selected.Render(prefix+opt) + "  [E]"
+			}
+			content.WriteString(line)
+		} else {
+			if i == 0 {
+				content.WriteString(Styles.Item.Render(prefix + opt + "  [N]"))
+			} else {
+				content.WriteString(Styles.Item.Render(prefix + opt + "  [E]"))
+			}
+		}
+		content.WriteString("\n")
+	}
+
+	content.WriteString("\n")
+
+	if m.adapter.secretMode == "new" {
+		// Secret name and value input.
+		if m.adapter.focused == 0 {
+			content.WriteString(Styles.Selected.Render("> Secret name: ") + Styles.Item.Render(m.adapter.secretName+"_"))
+		} else {
+			content.WriteString(Styles.Item.Render("  Secret name: ") + Styles.Item.Render(m.adapter.secretName))
+		}
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render("  > default: " + envVar))
+		content.WriteString("\n\n")
+
+		if m.adapter.focused == 1 {
+			content.WriteString(Styles.Selected.Render("> Secret value: ") + Styles.Item.Render(strings.Repeat("*", intMax(0, len(m.adapter.secretValue)-3))+"***"))
+		} else {
+			content.WriteString(Styles.Item.Render("  Secret value: [hidden]"))
+		}
+	} else {
+		// Existing secrets list.
+		secrets := config.ListSecrets()
+		if len(secrets) == 0 {
+			content.WriteString(Styles.ItemDim.Render("  No secrets found. Create one first."))
+		} else {
+			for i, name := range secrets {
+				prefix := "  "
+				if m.adapter.cursor < len(secrets) && m.adapter.cursor == i {
+					prefix = "> "
+					content.WriteString(Styles.Selected.Render(prefix + name))
+				} else {
+					content.WriteString(Styles.Item.Render(prefix + name))
+				}
+				content.WriteString("\n")
+			}
+		}
+	}
+
+	if m.adapter.errMsg != "" {
+		content.WriteString("\n")
+		content.WriteString(Styles.StatusErr.Render("Error: " + m.adapter.errMsg))
+	}
+
+	content.WriteString("\n")
+	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+
+	return windowView("zlaw setup", content.String(), "[C] Configure  [B] Back")
 }
 
 // updateAdapter handles keyboard events for the adapter configuration screen.

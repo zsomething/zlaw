@@ -39,35 +39,31 @@ func identityView(m *Model) string {
 		m.identityInit()
 	}
 
-	lines := []string{
-		Styles.TitleBar.Render("zlaw setup"),
-		"",
-		Styles.Heading.Render("Edit Identity — " + m.state.SelectedAgent),
-		"",
-	}
+	var content strings.Builder
+	content.WriteString(Styles.Heading.Render("Edit Identity — " + m.state.SelectedAgent))
+	content.WriteString("\n\n")
 
 	if m.identity.path != "" {
-		lines = append(lines, Styles.Item.Render("File: "+m.identity.path))
+		content.WriteString(Styles.Item.Render("File: " + m.identity.path))
 	} else {
-		lines = append(lines, Styles.ItemDim.Render("File: (no agent selected)"))
+		content.WriteString(Styles.ItemDim.Render("File: (no agent selected)"))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.Item.Render("Status: "+m.identity.status))
-	lines = append(lines, "")
+	content.WriteString("\n\n")
+	content.WriteString(Styles.Item.Render("Status: " + m.identity.status))
+	content.WriteString("\n\n")
 
 	// Show whether file exists.
 	if _, err := os.Stat(m.identity.path); os.IsNotExist(err) {
-		lines = append(lines, Styles.ItemDim.Render("File does not exist yet."))
+		content.WriteString(Styles.ItemDim.Render("File does not exist yet."))
 	} else if err == nil {
-		lines = append(lines, Styles.StatusOK.Render("File exists."))
+		content.WriteString(Styles.StatusOK.Render("File exists."))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
-	lines = append(lines, Styles.Help.Render("[E] Open editor  [B] Back"))
+	content.WriteString("\n\n")
+	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-	return strings.Join(lines, "\n")
+	return windowView("zlaw setup", content.String(), "[E] Open editor  [B] Back")
 }
 
 // updateIdentity handles keyboard events for the identity editor screen.

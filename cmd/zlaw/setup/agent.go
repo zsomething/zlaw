@@ -54,42 +54,43 @@ func agentView(m *Model) string {
 		m.agentInit(mode)
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-	}
+	var content strings.Builder
 
 	if m.agent.mode == "create" {
-		lines = append(lines, Styles.Heading.Render("Create Agent"))
-		lines = append(lines, "")
-		lines = append(lines, agentFieldView(m, "Agent ID:", m.agent.agentID, agentIDPrompt, 0))
-		lines = append(lines, agentDropdownView(m, "Executor:", m.agent.executor, []string{"subprocess", "systemd", "docker"}, 1))
-		lines = append(lines, agentDropdownView(m, "Target:", m.agent.target, []string{"local", "ssh"}, 2))
-		lines = append(lines, agentDropdownView(m, "Restart:", m.agent.restart, []string{"always", "on-failure", "never"}, 3))
+		content.WriteString(Styles.Heading.Render("Create Agent"))
+		content.WriteString("\n\n")
+		content.WriteString(agentFieldView(m, "Agent ID:", m.agent.agentID, agentIDPrompt, 0))
+		content.WriteString("\n")
+		content.WriteString(agentDropdownView(m, "Executor:", m.agent.executor, []string{"subprocess", "systemd", "docker"}, 1))
+		content.WriteString("\n")
+		content.WriteString(agentDropdownView(m, "Target:", m.agent.target, []string{"local", "ssh"}, 2))
+		content.WriteString("\n")
+		content.WriteString(agentDropdownView(m, "Restart:", m.agent.restart, []string{"always", "on-failure", "never"}, 3))
 	} else {
-		lines = append(lines, Styles.Heading.Render("Delete Agent?"))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Item.Render("Agent: "+m.agent.agentID))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, agentOption(m, "Delete", 'D', 0))
-		lines = append(lines, agentOption(m, "Cancel", 'N', 1))
+		content.WriteString(Styles.Heading.Render("Delete Agent?"))
+		content.WriteString("\n\n")
+		content.WriteString(Styles.Item.Render("Agent: " + m.agent.agentID))
+		content.WriteString("\n\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		content.WriteString("\n")
+		content.WriteString(agentOption(m, "Delete", 'D', 0))
+		content.WriteString("\n")
+		content.WriteString(agentOption(m, "Cancel", 'N', 1))
 	}
 
 	if m.agent.errMsg != "" {
-		lines = append(lines, "")
-		lines = append(lines, Styles.StatusErr.Render("Error: "+m.agent.errMsg))
+		content.WriteString("\n")
+		content.WriteString(Styles.StatusErr.Render("Error: " + m.agent.errMsg))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+	var help string
 	if m.agent.mode == "create" {
-		lines = append(lines, Styles.Footer.Render("[C] Create  [B] Back  [Tab] Next field"))
+		help = "[C] Create  [B] Back  [Tab] Next field"
 	} else {
-		lines = append(lines, Styles.Footer.Render("[D] Delete  [N] Cancel  [B] Back"))
+		help = "[D] Delete  [N] Cancel  [B] Back"
 	}
 
-	return strings.Join(lines, "\n")
+	return windowView("Setup", content.String(), help)
 }
 
 // agentFieldView renders a text input field.
@@ -102,11 +103,11 @@ func agentFieldView(m *Model, label, value, hint string, fieldIdx int) string {
 
 	if focused {
 		return Styles.Selected.Render(cursor+" "+label) + " " +
-			Styles.Item.Render(value) + Styles.ItemHelp.Render("_"+strings.Repeat(" ", intMax(0, 20-len(value)))) + "\n" +
-			Styles.Dim.Render("  > "+hint)
+			Styles.Item.Render(value) + Styles.ItemDim.Render("_"+strings.Repeat(" ", intMax(0, 20-len(value)))) + "\n" +
+			Styles.ItemDim.Render("  > "+hint)
 	}
 	return Styles.Item.Render(cursor+" "+label) + " " +
-		Styles.Item.Render(value) + Styles.Dim.Render(strings.Repeat(" ", intMax(0, 20-len(value))))
+		Styles.Item.Render(value) + Styles.ItemDim.Render(strings.Repeat(" ", intMax(0, 20-len(value))))
 }
 
 // agentDropdownView renders a dropdown field.
