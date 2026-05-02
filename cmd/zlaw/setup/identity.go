@@ -63,7 +63,7 @@ func identityView(m *Model) string {
 	content.WriteString("\n\n")
 	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-	return windowView("zlaw setup", content.String(), "[E] Open editor  [B] Back")
+	return windowView("zlaw setup", content.String(), "[E] Open editor  [←] Back")
 }
 
 // updateIdentity handles keyboard events for the identity editor screen.
@@ -78,7 +78,7 @@ func updateIdentity(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e", "E":
 			return identityEdit(m)
 
-		case "left", "h", "b", "B":
+		case "left", "h":
 			m.screen = ScreenMainMenu
 			m.identity = nil
 			return m, nil

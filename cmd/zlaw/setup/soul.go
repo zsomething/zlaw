@@ -64,7 +64,7 @@ func soulView(m *Model) string {
 	content.WriteString("\n\n")
 	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-	return windowView("zlaw setup", content.String(), "[E] Open editor  [B] Back")
+	return windowView("zlaw setup", content.String(), "[E] Open editor  [←] Back")
 }
 
 // updateSoul handles keyboard events for the soul editor screen.
@@ -79,7 +79,7 @@ func updateSoul(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e", "E":
 			return soulEdit(m)
 
-		case "left", "h", "b", "B":
+		case "left", "h":
 			m.screen = ScreenMainMenu
 			m.soul = nil
 			return m, nil

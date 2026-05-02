@@ -98,7 +98,7 @@ func updateBootstrap(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "left", "h", "b", "B":
+		case "left", "h":
 			m.screen = ScreenMainMenu
 			m.bootstrap = nil
 			return m, nil

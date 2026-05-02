@@ -72,7 +72,7 @@ func adapterView(m *Model) string {
 		content.WriteString("\n")
 		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-		return windowView("zlaw setup", content.String(), "[Enter] Select  [B] Back")
+		return windowView("zlaw setup", content.String(), "[↑↓] Navigate  [Enter] Select  [←] Back")
 	}
 
 	// Secret setup screen.
@@ -156,7 +156,7 @@ func adapterView(m *Model) string {
 	content.WriteString("\n")
 	content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 
-	return windowView("zlaw setup", content.String(), "[C] Configure  [B] Back")
+	return windowView("zlaw setup", content.String(), "[↑↓] Navigate  [Tab] Next field  [Enter] Done  [←] Back")
 }
 
 // updateAdapter handles keyboard events for the adapter configuration screen.
@@ -222,27 +222,7 @@ func updateAdapter(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "n", "N":
-			if m.adapter.step == "secret" {
-				m.adapter.secretMode = "new"
-			}
-			return m, nil
-
-		case "e", "E":
-			if m.adapter.step == "secret" {
-				m.adapter.secretMode = "existing"
-				m.adapter.cursor = 0
-			}
-			return m, nil
-
-		case "c", "C":
-			if m.adapter.step == "secret" {
-				m2, cmd := adapterConfigure(m)
-				return m2, cmd
-			}
-			return m, nil
-
-		case "left", "h", "b", "B":
+		case "left", "h":
 			if m.adapter.step == "secret" {
 				m.adapter.step = "select"
 				m.adapter.errMsg = ""

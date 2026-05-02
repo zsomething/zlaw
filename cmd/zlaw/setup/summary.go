@@ -143,7 +143,7 @@ func updateSummary(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "left", "h", "b", "B":
+		case "left", "h":
 			m.screen = ScreenMainMenu
 			m.summary = nil
 			return m, nil

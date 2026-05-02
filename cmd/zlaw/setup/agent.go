@@ -85,9 +85,9 @@ func agentView(m *Model) string {
 
 	var help string
 	if m.agent.mode == "create" {
-		help = "[C] Create  [B] Back  [Tab] Next field"
+		help = "[Enter] Create  [Tab] Next field  [←] Back"
 	} else {
-		help = "[D] Delete  [N] Cancel  [B] Back"
+		help = "[Enter] Delete  [←] Cancel"
 	}
 
 	return windowView("Setup", content.String(), help)
@@ -212,10 +212,19 @@ func updateCreateAgent(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "escape", "esc":
+			// Close dropdowns first.
 			if m.agent.dropdown >= 0 {
 				m.agent.dropdown = -1
 				m.agent.cursor = 0
+				return m, nil
 			}
+			// If not in ID field, back to menu.
+			if m.agent.focused > 0 || m.agent.agentID == "" {
+				m.screen = ScreenMainMenu
+				m.agent = nil
+				return m, nil
+			}
+			// Can't escape from ID field, let user type.
 			return m, nil
 
 		case "left", "h":
@@ -224,29 +233,27 @@ func updateCreateAgent(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agent = nil
 			return m, nil
 
-		case "b", "B":
-			m.screen = ScreenMainMenu
-			m.agent = nil
-			return m, nil
-
-		case "c", "C":
-			m2, cmd := agentCreate(m)
-			return m2, cmd
-
-		case "q", "Q", "ctrl+c":
+		case "ctrl+c", "q", "Q":
 			m.quit = true
 			return m, tea.Quit
 
 		default:
-			// Character input for ID field.
+			// Character input for ID field — only when focused on ID.
 			if m.agent.focused == 0 && m.agent.dropdown < 0 {
-				if isValidAgentIDChar(msg.Runes) {
-					m.agent.agentID += strings.ToLower(string(msg.Runes))
+				// Check for letter keys that should be treated as text input, not shortcuts
+				if len(msg.Runes) == 1 {
+					c := msg.Runes[0]
+					// Only consume letter input if it's a valid agent ID character
+					if isValidAgentIDChar(msg.Runes) {
+						m.agent.agentID += strings.ToLower(string(c))
+					} else if msg.String() == "backspace" && len(m.agent.agentID) > 0 {
+						m.agent.agentID = m.agent.agentID[:len(m.agent.agentID)-1]
+					}
 				} else if msg.String() == "backspace" && len(m.agent.agentID) > 0 {
 					m.agent.agentID = m.agent.agentID[:len(m.agent.agentID)-1]
 				}
+				return m, nil
 			}
-			return m, nil
 		}
 	}
 
@@ -292,12 +299,12 @@ func updateDeleteAgent(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agent = nil
 			return m, nil
 
-		case "left", "h", "b", "B":
+		case "left", "h":
 			m.screen = ScreenMainMenu
 			m.agent = nil
 			return m, nil
 
-		case "q", "Q", "ctrl+c":
+		case "escape", "ctrl+c", "q", "Q":
 			m.quit = true
 			return m, tea.Quit
 		}

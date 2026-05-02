@@ -73,7 +73,7 @@ func secretsView(m *Model) string {
 			content.WriteString("\n")
 			content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
 		}
-		help = "[A] Add  [D] Delete  [B] Back"
+		help = "[↑↓] Navigate  [Enter] Add/Delete  [←] Back"
 
 	case secretsModeAdd:
 		content.WriteString(Styles.Item.Render("Add new secret") + "\n")
@@ -103,7 +103,7 @@ func secretsView(m *Model) string {
 
 		content.WriteString("\n")
 		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
-		help = "[Tab] Switch field  [Enter] Save  [B] Cancel"
+		help = "[Tab] Switch field  [Enter] Save  [←] Cancel"
 
 	case secretsModeConfirm:
 		if m.secrets.confirmIdx >= 0 && m.secrets.confirmIdx < len(secrets) {
@@ -113,7 +113,7 @@ func secretsView(m *Model) string {
 			content.WriteString(Styles.Selected.Render("  > "+name) + "\n\n")
 			content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
 		}
-		help = "[Enter] Confirm  [B] Cancel"
+		help = "[Enter] Confirm  [←] Cancel"
 	}
 
 	if m.secrets.errMsg != "" {
@@ -158,30 +158,18 @@ func updateSecrets(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "a", "A":
-			if m.secrets.mode == secretsModeList {
+		case "enter":
+			switch m.secrets.mode {
+			case secretsModeList:
+				// Start add mode.
 				m.secrets.mode = secretsModeAdd
 				m.secrets.name = ""
 				m.secrets.value = ""
 				m.secrets.focused = 0
 				m.secrets.errMsg = ""
 				m.secrets.successMsg = ""
-			}
-			return m, nil
+				return m, nil
 
-		case "d", "D":
-			if m.secrets.mode == secretsModeList {
-				secrets := config.ListSecrets()
-				if m.secrets.cursor < len(secrets) {
-					m.secrets.mode = secretsModeConfirm
-					m.secrets.confirmIdx = m.secrets.cursor
-					m.secrets.errMsg = ""
-				}
-			}
-			return m, nil
-
-		case "enter":
-			switch m.secrets.mode {
 			case secretsModeAdd:
 				// Validate inputs.
 				if m.secrets.name == "" {
@@ -230,7 +218,7 @@ func updateSecrets(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "b", "B", "left", "h":
+		case "left", "h":
 			switch m.secrets.mode {
 			case secretsModeAdd:
 				m.secrets.mode = secretsModeList

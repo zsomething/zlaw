@@ -78,7 +78,7 @@ func skillsView(m *Model) string {
 		}
 		contentLines = append(contentLines, "")
 		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
-		helpText = "[A] Add  [R] Remove  [B] Back"
+		helpText = "[↑↓] Navigate  [Enter] Add  [←] Back"
 
 	case "add":
 		contentLines = append(contentLines, Styles.Heading.Render("Add Skill"))
@@ -88,7 +88,7 @@ func skillsView(m *Model) string {
 		contentLines = append(contentLines, Styles.ItemDim.Render("  Creates: skills/<name>.md"))
 		contentLines = append(contentLines, "")
 		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
-		helpText = "[Enter] Create  [B] Cancel"
+		helpText = "[Enter] Create  [←] Cancel"
 
 	case "confirm":
 		contentLines = append(contentLines, Styles.Heading.Render("Delete Skill"))
@@ -100,7 +100,7 @@ func skillsView(m *Model) string {
 		contentLines = append(contentLines, Styles.StatusErr.Render("  This action cannot be undone."))
 		contentLines = append(contentLines, "")
 		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
-		helpText = "[D] Delete  [B] Cancel"
+		helpText = "[Enter] Delete  [←] Cancel"
 	}
 
 	if m.skills.errMsg != "" {
@@ -133,42 +133,27 @@ func updateSkills(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "a", "A":
-			if m.skills.mode == "list" {
+		case "enter":
+			switch m.skills.mode {
+			case "list":
+				// Navigate to add mode.
 				m.skills.mode = "add"
 				m.skills.newSkillName = ""
-			}
-			return m, nil
-
-		case "r", "R":
-			if m.skills.mode == "list" && len(m.skills.skills) > 0 && m.skills.cursor < len(m.skills.skills) {
-				m.skills.mode = "confirm"
-				m.skills.deleteTarget = m.skills.skills[m.skills.cursor]
-			}
-			return m, nil
-
-		case "d", "D":
-			if m.skills.mode == "confirm" {
+				return m, nil
+			case "add":
+				m2, cmd := skillsAdd(m)
+				return m2, cmd
+			case "confirm":
+				// Delete confirmed.
 				m2, cmd := skillsDelete(m)
 				return m2, cmd
 			}
 			return m, nil
 
-		case "enter":
-			switch m.skills.mode {
-			case "list":
-				return m, nil
-			case "add":
-				m2, cmd := skillsAdd(m)
-				return m2, cmd
-			}
-			return m, nil
-
-		case "left", "h", "b", "B":
+		case "left", "h":
 			switch m.skills.mode {
 			case "add":
 				m.skills.mode = "list"
-				m.skills.newSkillName = ""
 			case "confirm":
 				m.skills.mode = "list"
 				m.skills.deleteTarget = ""

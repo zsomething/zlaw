@@ -81,7 +81,7 @@ func llmView(m *Model) string {
 		content.WriteString("\n")
 		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 		content.WriteString("\n")
-		content.WriteString(Styles.Help.Render("[Enter] Select  [B] Back"))
+		content.WriteString(Styles.Help.Render("[↑↓] Navigate  [Enter] Select  [←] Back"))
 	} else {
 		// Secret setup screen.
 		presetName := m.llm.preset
@@ -167,7 +167,7 @@ func llmView(m *Model) string {
 		content.WriteString("\n")
 		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)))
 		content.WriteString("\n")
-		content.WriteString(Styles.Help.Render("[C] Configure  [B] Back"))
+		content.WriteString(Styles.Help.Render("[↑↓] Navigate  [Enter] Done  [←] Back"))
 	}
 
 	return windowView("zlaw setup", content.String(), "")
@@ -219,6 +219,7 @@ func updateLLM(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
+			//nolint:staticcheck // tagged switch would require larger refactor
 			if m.llm.step == "select" {
 				presets := llm.ListPresets()
 				if m.llm.cursor < len(presets) {
@@ -229,13 +230,16 @@ func updateLLM(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.llm.secretName = "API_KEY"
 					}
 				}
-			} else if m.llm.secretMode == "existing" {
-				secrets := config.ListSecrets()
-				if m.llm.cursor < len(secrets) {
-					m.llm.secretName = secrets[m.llm.cursor]
-					m2, cmd := llmConfigure(m)
-					return m2, cmd
+			} else if m.llm.step == "secret" {
+				if m.llm.secretMode == "existing" {
+					secrets := config.ListSecrets()
+					if m.llm.cursor < len(secrets) {
+						m.llm.secretName = secrets[m.llm.cursor]
+					}
 				}
+				// Configure with current values.
+				m2, cmd := llmConfigure(m)
+				return m2, cmd
 			}
 			return m, nil
 
@@ -245,27 +249,7 @@ func updateLLM(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "n", "N":
-			if m.llm.step == "secret" {
-				m.llm.secretMode = "new"
-			}
-			return m, nil
-
-		case "e", "E":
-			if m.llm.step == "secret" {
-				m.llm.secretMode = "existing"
-				m.llm.cursor = 0
-			}
-			return m, nil
-
-		case "c", "C":
-			if m.llm.step == "secret" {
-				m2, cmd := llmConfigure(m)
-				return m2, cmd
-			}
-			return m, nil
-
-		case "left", "h", "b", "B":
+		case "left", "h":
 			if m.llm.step == "secret" {
 				m.llm.step = "select"
 				m.llm.errMsg = ""
