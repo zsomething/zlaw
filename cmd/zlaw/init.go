@@ -115,10 +115,11 @@ func (c *InitCmd) initWorkspace() error {
 }
 
 // initAgent creates a single agent home under $ZLAW_HOME/agents/<name>.
-// Scaffolds SOUL.md, IDENTITY.md, and workspace/ in the agent home.
+// Scaffolds SOUL.md, IDENTITY.md, workspace/, and skills/ in the agent home.
 func (c *InitCmd) initAgent(name string) error {
 	agentDir := filepath.Join(config.ZlawHome(), "agents", name)
 	agentWorkspace := filepath.Join(agentDir, "workspace")
+	agentSkills := filepath.Join(agentDir, "skills")
 
 	type fileEntry struct {
 		path    string
@@ -144,6 +145,9 @@ func (c *InitCmd) initAgent(name string) error {
 	}
 	if err := os.MkdirAll(agentWorkspace, 0o700); err != nil {
 		return fmt.Errorf("create agent workspace: %w", err)
+	}
+	if err := os.MkdirAll(agentSkills, 0o755); err != nil {
+		return fmt.Errorf("create agent skills dir: %w", err)
 	}
 
 	for _, f := range files {

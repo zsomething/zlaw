@@ -2,726 +2,440 @@
 
 ## Goal
 
-Provide a guided, interactive TUI wizard (`zlaw setup`) that leads users through first-time configuration. The same command re-runs to refine any part. Non-interactive/scripted mode enables automation.
+Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu shows all actions with state. Sub-screens handle individual configuration flows.
 
-**Key properties:**
-- **Idempotent** — repeating setup detects existing config and offers update/add
-- **Non-blocking steps** — each step immediately writes to disk, can quit anytime
-- **Ordered refinement** — re-run can target any step in any order
-- **TTY-aware** — interactive TUI when connected to TTY, scripted output otherwise
+## Menu Structure
 
-## Modes
-
-### Interactive Only
-
-`zlaw setup` — launches TUI wizard with terminal UI, keyboard navigation, colored output.
-
-Non-interactive setup uses dedicated commands (not yet designed):
-```bash
-# Future non-interactive commands (TBD)
-zlaw init --yes
-zlaw auth add --name X --value Y
-zlaw agent create --llm minimax --adapter telegram
-```
-
-### Selective Mode
-
-`zlaw setup --step <step>` — run only a specific step, skip detection.
-
-```bash
-zlaw setup --step init           # Initialize zlaw_home only
-zlaw setup --step llm           # Configure LLM only
-zlaw setup --step secrets       # Manage secrets only
-zlaw setup --step adapter       # Configure channel adapter only
-zlaw setup --step agent-config  # Configure agent settings only
-```
-
-**Note:** Wizard operates on all configured agents (like `ctl`'s interactive helper).
-
-## Idempotency Detection
-
-On each step, the wizard checks existing state:
-
-| Step | Detection Logic | User Prompt |
-|------|-----------------|-------------|
-| `init` | Does `$ZLAW_HOME/zlaw.toml` exist? | "zlaw_home already exists. Overwrite? [y/N]" |
-| `agent` | Is agent ID already in `zlaw.toml`? | "Agent 'X' exists. Update? [y/N]" |
-| `llm` | Does agent have `[llm]` section in `agent.toml`? | "LLM configured. Update? [y/N]" |
-| `adapter` | Does agent have `[[adapter]]` section? | "Adapter configured. Update? [y/N]" |
-| `secrets` | Are required env vars mapped in `zlaw.toml`? | "X secrets need mapping. Add? [y/N]" |
-
-**Skip mode:** `zlaw setup --force` forces re-creation (with confirmation for destructive changes).
-
-## Step Flow
-
-**Key principle:** Each config step (llm, adapter, embedding) handles its own secret setup inline. This ensures credentials are available before model selection.
-
-```
-1. init          → bootstrap zlaw_home
-2. agent         → create/update agents
-3. llm           → select preset + inline secret setup
-4. model         → fetch & select chat model (needs credentials)
-5. embedding     → [optional] enable semantic search, select embedding model
-6. adapter       → select preset + inline secret setup
-7. agent-config  → personality, identity, skills
-8. summary       → show config summary + next steps
-```
-
-### Step 1: Initialize (`init`)
-
-**Purpose:** Bootstrap `$ZLAW_HOME` directory and core files.
-
-**Detection:** `zlaw.toml` exists?
-
-**Flow:**
 ```
 ┌────────────────────────────────────────────┐
-│  Welcome to zlaw setup!                    │
+│  zlaw setup                                │
 │                                             │
-│  This wizard will guide you through:       │
-│  1. Initialize zlaw_home                    │
-│  2. Create/update agents                    │
-│  3. Configure LLM provider + secret        │
-│  4. Select chat model                       │
-│  5. [Optional] Enable semantic search      │
-│  6. Configure channel adapter + secret     │
-│  7. Configure agent settings               │
-│  8. Summary                                │
+│  Bootstrap                                 │
+│  ────────                                  │
+│  ▶ Bootstrap Zlaw Home                     │
+│    /home/user/.config/zlaw                  │
+│    ✅ configured                           │
 │                                             │
-│  Press ENTER to continue...                 │
+│  Agents                                    │
+│  ──────                                    │
+│  Agent: [assistant ▼]  (3)           │
+│  ─────────────────────                      │
+│  ● Configure LLM                          │
+│    minimax                                 │
+│    ⚠️ missing                              │
+│  ● Configure adapter                      │
+│    telegram                                │
+│    ✅ configured                           │
+│  ● Edit identity                          │
+│    ✅ configured                           │
+│  ● Edit soul                              │
+│    ✅ configured                           │
+│  ● Manage skills                          │
+│    3 installed                             │
+│                                             │
+│  Global                                    │
+│  ──────                                    │
+│  ● Manage secrets                         │
+│    2 secrets                               │
+│  ● Summary                                │
+│    view                                    │
+│                                             │
+│  ───────────────────────────────────────── │
+│  [Q] Quit                                   │
 └────────────────────────────────────────────┘
 ```
 
-**If already initialized:**
+### Section Rules
+
+| Section | Always Visible | Agent-specific Items |
+|---------|----------------|----------------------|
+| Bootstrap | Yes | No |
+| Agents | Yes | No |
+| Agent items | No (hidden) | Yes, require agent |
+| Global | Yes | No |
+
+### Item States
+
+| State | Indicator | Meaning |
+|-------|-----------|---------|
+| Missing | ⚠️ | Required but not configured |
+| Configured | ✅ | Set up and valid |
+| Invalid | ❌ | Configured but broken (e.g., missing secret) |
+| Installed/Count | number | Shows count (skills, secrets) |
+| view | — | Opens read-only display |
+
+### Visibility Rules
+
+| Item | Show When |
+|------|-----------|
+| Agent section selector | At least one agent exists |
+| Agent items | Agent selected |
+| "No agents configured. Create one first." | No agents exist |
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Navigate menu |
+| `Enter` | Select item |
+| `Q` | Quit (sticky, always shown) |
+| `B` | Back (sub-screens only) |
+
+## Bootstrap Section
+
+### Bootstrap Zlaw Home
+
+**Purpose:** Create `$ZLAW_HOME/` and core files.
+
+**States:**
+- Not configured: `⚠️ not initialized`
+- Configured: `✅ configured`
+
+**Display:**
 ```
-⚠️  zlaw_home already exists at /home/user/.config/zlaw/
-   zlaw.toml found (dated 2025-04-15)
-
-   [R] Re-run setup   [S] Skip init   [Q] Quit
+│  ▶ Bootstrap Zlaw Home                     │
+│    /home/user/.config/zlaw                  │
+│    ✅ configured                           │
 ```
 
-**Actions:**
-1. Create `$ZLAW_HOME/` if missing
-2. Create `$ZLAW_HOME/zlaw.toml` skeleton:
-   ```toml
-   # zlaw.toml — generated by zlaw setup
-   version = "1"
-   
-   [[agents]]  # empty; agents added in step 2
-   ```
-3. Create `$ZLAW_HOME/secrets.toml` (empty, mode 0600)
-4. Create `$ZLAW_HOME/agents/` directory
-
-**Output:**
+**Flow (not configured):**
 ```
-✅ Initialized zlaw_home at /home/user/.config/zlaw/
-   ├── zlaw.toml
-   ├── secrets.toml
-   └── agents/
-```
-
-### Step 2: Create/Update Agents (`agent`)
-
-**Purpose:** Define which agents to manage. Can have multiple.
-
-**Detection:** Entries in `zlaw.toml` `[[agents]]` section.
-
-**Flow:**
-```
-┌────────────────────────────────────────────┐
-│  Agent Configuration                       │
+│  Create Zlaw Home?                         │
 │                                             │
-│  Existing agents:                          │
-│  1. [assistant] — subprocess, local       │
+│  Path: /home/user/.config/zlaw             │
 │                                             │
-│  [A] Add new agent                         │
-│  [E] Edit existing agent                   │
-│  [D] Delete agent                          │
-│  [N] Next step                             │
+│  [Y] Create   [N] Cancel                   │
 └────────────────────────────────────────────┘
 ```
 
-**Add Agent Flow:**
+**Flow (already configured):**
 ```
-Agent ID: assistant
-> Agent ID must be unique, lowercase, alphanumeric + dash
-
-Executor: [1] subprocess  [2] systemd  [3] docker
-> Subprocess recommended for development
-
-Target: [1] local  [2] ssh
-> Local runs on this machine
-
-Restart policy: [1] always  [2] on-failure (default)  [3] never
+│  Zlaw Home already exists at:              │
+│  /home/user/.config/zlaw                   │
+│                                             │
+│  [R] Re-create   [K] Keep   [N] Cancel    │
+└────────────────────────────────────────────┘
 ```
 
-**Actions:**
+**Creates:**
+- `$ZLAW_HOME/zlaw.toml` (skeleton)
+- `$ZLAW_HOME/secrets.toml` (empty, mode 0600)
+- `$ZLAW_HOME/agents/` (directory)
+
+## Agent Section
+
+### Agent Selector
+
+Dropdown to select which agent to configure. Shows all agents from `zlaw.toml`.
+
+```
+│  Agent: [assistant ▼]  (3)           │
+```
+
+When no agents exist:
+```
+│  Agents                                    │
+│  ──────                                    │
+│  ● No agents configured. Create one first. │
+│                                             │
+│  Global                                    │
+```
+
+Selecting "Create one first" opens agent creation flow.
+
+### Create Agent
+
+**Flow:**
+```
+│  Create Agent                              │
+│                                             │
+│  Agent ID: _                                │
+│  > lowercase, alphanumeric + dash          │
+│                                             │
+│  Executor: [subprocess ▼]                   │
+│  > [subprocess] [systemd] [docker]          │
+│                                             │
+│  Target: [local ▼]                          │
+│  > [local] [ssh]                           │
+│                                             │
+│  Restart policy: [on-failure ▼]             │
+│  > [always] [on-failure] [never]           │
+│                                             │
+│  [C] Create   [B] Back                      │
+└────────────────────────────────────────────┘
+```
+
+**On create:**
 1. Create `$ZLAW_HOME/agents/<id>/` directory
-2. Create `$ZLAW_HOME/agents/<id>/agent.toml`:
-   ```toml
-   # agent.toml — generated by zlaw setup
-   id = "<id>"
-   # executor, target, restart_policy set in zlaw.toml
-   # llm, adapter sections added in steps 3-4
-   ```
-3. Create `$ZLAW_HOME/agents/<id>/SOUL.md` (personality template)
-4. Create `$ZLAW_HOME/agents/<id>/IDENTITY.md` (role template)
+2. Create `$ZLAW_HOME/agents/<id>/agent.toml`
+3. Create `$ZLAW_HOME/agents/<id>/SOUL.md`
+4. Create `$ZLAW_HOME/agents/<id>/IDENTITY.md`
 5. Create `$ZLAW_HOME/agents/<id>/skills/` directory
-6. Add agent entry to `zlaw.toml`:
-   ```toml
-   [[agents]]
-   id = "<id>"
-   executor = "subprocess"
-   target = "local"
-   restart_policy = "on-failure"
-   ```
+6. Add agent entry to `$ZLAW_HOME/zlaw.toml`
 
-### Step 3: LLM Provider Configuration (`llm`)
+### Delete Agent
 
-**Purpose:** Select LLM preset and configure secret.
+Available from agent selector dropdown or a delete option.
 
-**Detection:** Does agent have `[llm]` section in `agent.toml`?
+## Agent Items
+
+All agent items show: label, current value/status, state indicator.
+
+### Configure LLM
+
+**States:**
+- Missing: `⚠️ missing`
+- Configured: `✅ configured` + backend name
 
 **Flow:**
 ```
-┌────────────────────────────────────────────┐
-│  LLM Configuration for: assistant          │
-│                                             │
-│  Current: none                             │
+│  Configure LLM — assistant                 │
 │                                             │
 │  Select LLM preset:                        │
-│  1. minimax     — MiniMax API (China)      │
-│  2. minimax-cn  — MiniMax API (Global)     │
+│  ─────────────────────                      │
+│  1. minimax     — MiniMax API (Global)    │
+│  2. minimax-cn  — MiniMax API (China)     │
 │  3. anthropic   — Anthropic Claude        │
 │  4. openai      — OpenAI GPT               │
-│  5. ollama      — Local Ollama             │
-│  6. Copy from existing agent...            │
 │                                             │
-│  [B] Back   [N] Next step                  │
-└────────────────────────────────────────────┘
-```
-
-**After preset selection — Inline Secret Setup:**
-```
-┌────────────────────────────────────────────┐
-│  LLM: minimax (anthropic backend)           │
-│                                             │
-│  This preset requires:                      │
-│  • api_key — Env var: MINIMAX_API_KEY      │
-│                                             │
-│  Secret for this env var:                   │
-│  1. Create new secret                      │
-│  2. Use existing secret                     │
-│                                             │
-│  > Select option [1]:                       │
-└────────────────────────────────────────────┘
-```
-
-**If "Create new secret":**
-```
-  Secret key name: [MINIMAX_API_KEY]
-  > Press ENTER to use default (matches env var name)
-  > Or enter custom name (e.g., MINIMAX_API_KEY_DEV)
-
-  Enter secret value: ********
-
-  ✓ Secret MINIMAX_API_KEY created
-```
-
-**If "Use existing secret":**
-```
-  Select from existing secrets:
-  1. MINIMAX_API_KEY (set)
-  2. ANTHROPIC_API_KEY (set)
-  3. TELEGRAM_BOT_TOKEN (set)
-
-  > Enter number or name: 1
-
-  ✓ Using MINIMAX_API_KEY for env var MINIMAX_API_KEY
-```
-
-**Actions:**
-1. Write to agent's `agent.toml`:
-   ```toml
-   [llm]
-   backend = "anthropic"
-   client_config = {
-     base_url = "https://api.minimax.io/anthropic",
-     api_key = "$MINIMAX_API_KEY"
-   }
-   model = "MiniMax-Text-01"
-   model_config = {
-     max_tokens = 8192,
-     timeout_sec = 120
-   }
-   ```
-2. Create secret in `secrets.toml` (if new)
-3. Add to `zlaw.toml` env_vars:
-   ```toml
-   env_vars = [
-     { name = "MINIMAX_API_KEY", from_secret = "MINIMAX_API_KEY" }
-   ]
-   ```
-
-**Note:** Secret is set inline before proceeding to model selection.
-
-**"Copy from existing agent" option:**
-```
-Select source agent:
-1. [assistant]
-> Enter agent ID or number:
-```
-
-**Actions:**
-1. Write to agent's `agent.toml`:
-   ```toml
-   [llm]
-   backend = "anthropic"
-   client_config = {
-     base_url = "https://api.minimax.io/anthropic",
-     api_key = "$MINIMAX_API_KEY"
-   }
-   model = "MiniMax-Text-01"
-   model_config = {
-     max_tokens = 8192,
-     timeout_sec = 120
-   }
-   ```
-2. Record required env var in `zlaw.toml`:
-   ```toml
-   [[agents]]
-   id = "assistant"
-   env_vars = [
-     { name = "MINIMAX_API_KEY", from_secret = "MINIMAX_API_KEY" }
-   ]
-   ```
-
-### Step 4: Model Selection (`model`)
-
-**Purpose:** Select which model to use from the LLM provider's available models.
-
-**Precondition:** LLM config + secret are set in step 3 (credentials available).
-
-**Detection:** Does agent have `model` field in `[llm]` section of `agent.toml`?
-
-**Flow:**
-```
-┌────────────────────────────────────────────┐
-│  Model Selection for: assistant             │
-│  Provider: minimax (anthropic backend)     │
-│  Secret: MINIMAX_API_KEY ✓                 │
-│                                             │
-│  Current: MiniMax-Text-01 (from preset)    │
-│                                             │
-│  Fetching available models...              │
-│                                             │
-│  Available models:                         │
-│  1. MiniMax-Text-01 ★ (current)            │
-│  2. MiniMax-Text-02                         │
-│  3. MiniMax-Embedding-01                    │
-│                                             │
-│  [E] Enter model manually                   │
-│  [K] Keep current model                     │
 │  [B] Back                                   │
 └────────────────────────────────────────────┘
 ```
 
-**Validation with warning:**
+**After preset selection — Secret Setup:**
 ```
-┌────────────────────────────────────────────┐
-│  ⚠️  Could not fetch models from API        │
+│  LLM: minimax (anthropic backend)          │
 │                                             │
-│  Reason: Connection timeout                │
+│  This preset requires:                      │
+│  • api_key — Env var: MINIMAX_API_KEY      │
 │                                             │
-│  [P] Proceed with warning (keep current)  │
-│  [R] Retry                                 │
-│  [E] Enter model manually                  │
-│  [B] Back                                  │
+│  Secret: [Create new ▼]                     │
+│  > [Create new] [Use existing]             │
+│                                             │
+│  Secret name: [MINIMAX_API_KEY]            │
+│                                             │
+│  [C] Configure   [B] Back                    │
 └────────────────────────────────────────────┘
 ```
 
-**Actions:**
-1. Call LLM provider's models API with configured credentials
-2. Display list for selection
-3. Write to agent's `agent.toml`:
-   ```toml
-   [llm]
-   model = "MiniMax-Text-01"
-   ```
+**Display after configured:**
+```
+│  ● Configure LLM                          │
+│    minimax                                 │
+│    ✅ configured                           │
+```
 
-### Step 4b: Semantic Search (`embedding`) — Optional
+### Configure Adapter
 
-**Purpose:** Enable semantic search using an embedding model.
-
-**Detection:** Does agent have `[embedding]` section in `agent.toml`?
+**States:**
+- Missing: `⚠️ no adapter`
+- Configured: `✅ telegram` (or other)
 
 **Flow:**
 ```
-┌────────────────────────────────────────────┐
-│  Semantic Search for: assistant            │
+│  Configure Adapter — assistant             │
 │                                             │
-│  Enable semantic search (vector embeddings)?│
+│  Select adapter:                           │
+│  ─────────────────                         │
+│  1. telegram  — Telegram Bot API          │
+│  2. slack     — Slack webhook             │
+│  3. None     — NATS only (no adapter)     │
 │                                             │
-│  [Y] Yes, enable                           │
-│  [N] No, skip (default)                    │
-│  [B] Back                                  │
+│  [B] Back                                   │
 └────────────────────────────────────────────┘
 ```
 
-**If enabled — model selection:**
+**After selection — Secret Setup (if needed):**
 ```
-┌────────────────────────────────────────────┐
-│  Embedding Model for: assistant            │
-│                                             │
-│  Select LLM provider:                       │
-│  1. Same as chat model (minimax)           │
-│  2. Different provider...                  │
-│                                             │
-│  > Select option [1]:                       │
-└────────────────────────────────────────────┘
-```
-
-**If same provider:**
-```
-�┌────────────────────────────────────────────┐
-│  Fetching available embedding models...     │
-│                                             │
-│  Available models:                         │
-│  1. MiniMax-Embedding-01 ★ (recommended)   │
-│  2. MiniMax-Embedding-02                    │
-│                                             │
-│  [E] Enter model manually                   │
-│  [B] Back                                  │
-└────────────────────────────────────────────┘
-```
-
-**Actions:**
-1. Write to agent's `agent.toml`:
-```toml
-[memory.embedder]
-backend = "minimax"  # or same as [llm] if using same provider
-model = "MiniMax-Embedding-01"
-```
-2. If embedding backend differs from chat, prompt for its secret (similar to step 3)
-
-**Note:** If using different backend, repeats secret selection flow from step 3.
-
-### Step 5: Channel Adapter Configuration (`adapter`)
-
-**Purpose:** Configure how the agent receives/sends messages.
-
-**Detection:** Does agent have `[[adapter]]` in `agent.toml`?
-
-**Flow:**
-```
-┌────────────────────────────────────────────┐
-│  Channel Adapter for: assistant            │
-│                                             │
-│  Current: none                             │
-│                                             │
-│  Select adapter preset:                    │
-│  1. telegram  — Telegram Bot API           │
-│  2. slack     — Slack webhook              │
-│  3. cli       — Terminal I/O               │
-│  4. Copy from existing agent...            │
-│  5. None (agent uses NATS only)            │
-│                                             │
-│  [B] Back   [N] Next step                  │
-└────────────────────────────────────────────┘
-```
-
-**After adapter selection:**
-```
-┌────────────────────────────────────────────┐
 │  Adapter: telegram                         │
 │                                             │
-│  This preset requires:                     │
+│  This adapter requires:                    │
 │  • bot_token — Env var: TELEGRAM_BOT_TOKEN │
 │                                             │
-│  Secret for this env var:                   │
-│  1. Create new secret                      │
-│  2. Use existing secret                     │
+│  Secret: [Create new ▼]                    │
 │                                             │
-│  > Select option [1]:                       │
+│  [C] Configure   [B] Back                   │
 └────────────────────────────────────────────┘
 ```
 
-**Wizard creates in `agent.toml`:**
-```toml
-[[adapter]]
-backend = "telegram"
-client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+### Edit Identity
+
+Opens `IDENTITY.md` in `$EDITOR`.
+
+**Display:**
+```
+│  ● Edit identity                          │
+│    IDENTITY.md                            │
+│    ✅ configured                           │
 ```
 
-**Wizard creates in `zlaw.toml`:**
-```toml
-[[agents]]
-id = "assistant"
-env_vars = [
-  { name = "TELEGRAM_BOT_TOKEN", from_secret = "<secret-key>" }
-]
+### Edit Soul
+
+Opens `SOUL.md` in `$EDITOR`.
+
+**Display:**
+```
+│  ● Edit soul                              │
+│    SOUL.md                                │
+│    ✅ configured                           │
 ```
 
-### Step 6: Agent Configuration (`agent-config`)
+### Manage Skills
 
-**Purpose:** Fine-tune agent settings (personality, memory, skills).
+Shows list of skills, allows adding/removing.
 
-**Detection:** Check `SOUL.md`, `IDENTITY.md`, `skills/` contents.
-
-**Flow:**
+**Display:**
 ```
-┌────────────────────────────────────────────┐
-│  Agent Settings for: assistant              │
+│  ● Manage skills                          │
+│    skills/                                │
+│    3 installed                            │
 │                                             │
-│  1. [IDENTITY.md] — Role definition        │
-│     Current: Go developer                   │
+│  skills:                                   │
+│  ──────                                    │
+│  1. weather                                │
+│  2. calendar                               │
+│  3. slack-notify                           │
 │                                             │
-│  2. [SOUL.md] — Personality                 │
-│     Current: default template               │
-│                                             │
-│  3. [skills/] — Agent capabilities         │
-│     Current: 2 skills installed            │
-│                                             │
-│  [E] Edit file                             │
-│  [V] View file                             │
-│  [B] Back   [N] Next step                  │
+│  [A] Add skill   [R] Remove   [B] Back    │
 └────────────────────────────────────────────┘
 ```
 
-**Actions:**
-- Open selected file in `$EDITOR`
-- Or inline edit in TUI (basic text input)
+## Global Section
 
-### Step 7: Summary & Next Steps
+### Manage Secrets
 
-**Purpose:** Show what was configured, provide next commands.
+View, add, remove secrets in `secrets.toml`.
 
 ```
-┌────────────────────────────────────────────┐
-│  Setup Complete! 🎉                         │
+│  Manage Secrets                           │
 │                                             │
-│  Configuration summary:                    │
-│  • zlaw_home: /home/user/.config/zlaw/     │
-│  • Agent: assistant                         │
-│  • LLM: minimax                            │
-│  • Adapter: telegram                        │
-│  • Secrets: 2 configured                   │
+│  secrets.toml                              │
+│  2 secrets                                 │
+│  ──────────                                │
+│  1. MINIMAX_API_KEY          set           │
+│  2. TELEGRAM_BOT_TOKEN      set           │
+│                                             │
+│  [A] Add secret   [R] Remove   [B] Back  │
+└────────────────────────────────────────────┘
+```
+
+### Summary
+
+Read-only view of current configuration.
+
+```
+│  Configuration Summary                    │
+│                                             │
+│  Bootstrap                                 │
+│  ──────────                                │
+│  zlaw_home:  /home/user/.config/zlaw       │
+│  status:     ✅ configured                │
+│                                             │
+│  Agent: assistant                         │
+│  ───────────────                           │
+│  LLM:       minimax     ✅ configured      │
+│  Adapter:   telegram    ✅ configured     │
+│  Identity:  IDENTITY.md  ✅ configured    │
+│  Soul:      SOUL.md      ✅ configured    │
+│  Skills:    3                             │
+│                                             │
+│  Secrets:   2 configured                  │
 │                                             │
 │  Next steps:                               │
 │  $ zlaw ctl start                          │
 │    → Start hub + agents                    │
 │                                             │
-│  $ zlaw agent run assistant                │
-│    → Run agent directly (dev mode)         │
-│                                             │
-│  Press ENTER to exit...                    │
+│  [B] Back                                   │
 └────────────────────────────────────────────┘
-```
-
-## File Changes
-
-### Created Files
-
-| Path | Purpose | Mode |
-|------|---------|------|
-| `$ZLAW_HOME/zlaw.toml` | Hub + agents config | 0644 |
-| `$ZLAW_HOME/secrets.toml` | Secret storage | 0600 |
-| `$ZLAW_HOME/agents/<id>/agent.toml` | Agent config | 0644 |
-| `$ZLAW_HOME/agents/<id>/SOUL.md` | Personality template | 0644 |
-| `$ZLAW_HOME/agents/<id>/IDENTITY.md` | Role template | 0644 |
-| `$ZLAW_HOME/agents/<id>/skills/` | Per-agent skills | 0755 |
-
-### Modified Files
-
-| Path | Change |
-|------|--------|
-| `$ZLAW_HOME/zlaw.toml` | Add agent entries, env_vars mappings |
-| `$ZLAW_HOME/secrets.toml` | Add secret key-values |
-| `$ZLAW_HOME/agents/<id>/agent.toml` | Add [llm], [[adapter]] sections |
-
-## CLI Reference
-
-```bash
-# Interactive setup (TTY wizard)
-zlaw setup
-
-# Non-interactive (scripted/automated)
-zlaw setup --non-interactive
-
-# Run specific step only
-zlaw setup --step init
-zlaw setup --step agent
-zlaw setup --step llm
-zlaw setup --step adapter
-zlaw setup --step secrets
-zlaw setup --step agent-config
-
-# Force re-creation (with confirmation)
-zlaw setup --force
-
-# Target specific agent (for agent-specific steps)
-zlaw setup --step llm --agent assistant
-```
-
-### Non-interactive Output Format
-
-```json
-{
-  "step": "init",
-  "status": "completed",
-  "files_created": [
-    "/home/user/.config/zlaw/zlaw.toml",
-    "/home/user/.config/zlaw/secrets.toml"
-  ]
-}
-```
-
-```json
-{
-  "step": "secrets",
-  "status": "pending_input",
-  "required_secrets": [
-    { "name": "MINIMAX_API_KEY", "agent": "assistant" }
-  ],
-  "prompt": "Enter value for MINIMAX_API_KEY"
-}
 ```
 
 ## Implementation Notes
 
 ### TUI Framework
 
-Use Bubble Tea (Charm) for terminal UI:
-- Stateful wizard steps
-- Keyboard navigation
-- Color output
-- Graceful degradation when not a TTY
+**Dependency:** `github.com/charmbracelet/bubbletea`
 
-### Idempotency Check
+Bubble Tea model:
+- Each screen (main menu, LLM config, adapter config, etc.) is a separate `tea.Model`
+- Screens return to main menu via `tea.Quit` + state update
+- Global state (selected agent, config cache) passed via initial model
+
+### Project Structure
+
+```
+cmd/zlaw/setup/
+├── main.go           # setup command entry
+├── menu.go           # main menu model
+├── bootstrap.go       # bootstrap screen
+├── agent.go          # agent creation screen
+├── agent_list.go     # (future) multi-agent selector
+├── llm.go            # LLM configuration screen
+├── adapter.go        # adapter configuration screen
+├── secrets.go        # secrets management screen
+├── skills.go         # skills management screen
+├── summary.go        # summary screen
+├── state.go          # shared state (selected agent, config cache)
+└── styles.go         # Bubble Tea styles
+```
+
+### State Management
 
 ```go
-func (s *SetupWizard) detectState(step string) StepState {
-    switch step {
-    case "init":
-        return detectInitState()
-    case "agent":
-        return detectAgentState(s.agentID)
-    case "llm":
-        return detectLLMState(s.agentID)
-    case "adapter":
-        return detectAdapterState(s.agentID)
-    case "secrets":
-        return detectSecretsState(s.agentID)
+type State struct {
+    Home         string           // ZLAW_HOME path
+    Config       *config.HubConfig
+    Secrets      secrets.Store
+    SelectedAgent string         // agent ID or ""
+}
+
+type Model struct {
+    state  State
+    screen ScreenType
+    // ... screen-specific fields
+}
+```
+
+### Sub-screen Navigation
+
+Each sub-screen returns `tea.Model` with updated state. Main loop dispatches to appropriate screen:
+
+```go
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch m.screen {
+    case ScreenMainMenu:
+        return m.updateMainMenu(msg)
+    case ScreenLLM:
+        return m.updateLLM(msg)
+    case ScreenAdapter:
+        return m.updateAdapter(msg)
+    // ...
     }
 }
 ```
 
-### Step State Machine
+## CLI Reference
 
-```
-     ┌──────────┐
-     │  START   │
-     └────┬─────┘
-          ▼
-     ┌──────────┐
-     │   init   │◄───────────────────┐
-     └────┬─────┘                    │
-          ▼                          │
-     ┌──────────┐     (back)        │
-     │  agent   │────────────────────┤
-     └────┬─────┘                   │
-          ▼                          │
-     ┌──────────┐                   │
-     │   llm    │────────────────────┤
-     └────┬─────┘                   │
-          ▼                          │
-     ┌──────────┐                   │
-     │ adapter  │────────────────────┤
-     └────┬─────┘                   │
-          ▼                          │
-     ┌──────────┐                   │
-     │ secrets  │────────────────────┤
-     └────┬─────┘                   │
-          ▼                          │
-     ┌──────────┐                   │
-     │agent-conf│────────────────────┘
-     └────┬─────┘
-          ▼
-     ┌──────────┐
-     │ summary  │
-     └────┬─────┘
-          ▼
-     ┌──────────┐
-     │   DONE   │
-     └──────────┘
+```bash
+# Interactive setup wizard
+zlaw setup
 ```
 
-### Env Var Mapping Model
-
-The wizard creates a mapping between what the config expects and where the actual secret lives:
-
-```toml
-# agent.toml — what the LLM/adapter config expects
-[llm]
-client_config = {
-  base_url = "https://api.minimax.io/anthropic",
-  api_key = "$MINIMAX_API_KEY"
-}
-model = "MiniMax-Text-01"
-model_config = {
-  max_tokens = 8192,
-  timeout_sec = 120
-}
-#                          ^^^^^^^^^^
-#                          env var name the config references
-```
-
-```toml
-# secrets.toml — actual secret key (user-chosen name)
-MINIMAX_API_KEY_DEV = "sk-xxx"
-# ^^^^^^^^^^^^^^^^^^^
-# Secret key (can differ from env var name)
-```
-
-```toml
-# zlaw.toml — the mapping ctl uses at spawn
-[[agents]]
-id = "assistant"
-env_vars = [
-  { name = "MINIMAX_API_KEY", from_secret = "MINIMAX_API_KEY_DEV" }
-]
-#          ^^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^
-#          env var name          secret key in secrets.toml
-```
-
-**At spawn:** ctl reads `MINIMAX_API_KEY_DEV` from secrets.toml, injects as `MINIMAX_API_KEY` env var. Agent's LLM factory expands `$MINIMAX_API_KEY` → actual value.
-
-**Wizard flow:**
-1. User selects LLM preset → config has `api_key = "$MINIMAX_API_KEY"`
-2. Wizard prompts: `Secret name: [MINIMAX_API_KEY]` — default matches env var name
-3. User can change to `MINIMAX_API_KEY_DEV` (or any name)
-4. Wizard creates mapping: `{ name = "MINIMAX_API_KEY", from_secret = "MINIMAX_API_KEY_DEV" }`
-
-This supports multiple secrets for same provider:
-- `MINIMAX_API_KEY_DEV` → injected as `MINIMAX_API_KEY` for dev agent
-- `MINIMAX_API_KEY_PROD` → injected as `MINIMAX_API_KEY` for prod agent
+No command-line flags for individual steps — all navigation is via menu.
 
 ## Open Questions
 
-1. **Non-interactive command names:** Design dedicated commands for scripted setup (`zlaw init --yes`, `zlaw auth add --value`, etc.)
-
-2. **Model selection flow:** After LLM config + secret is set, wizard prompts for model selection via API call. Allow proceed with warning if validation fails.
+1. **Model selection flow:** After LLM config, prompt for model via API call. Allow proceed with warning if fetch fails.
 
 ## Resolved Design Decisions
 
-- **TTY detection:** Not needed. `zlaw setup` is interactive only; non-interactive uses separate commands.
-- **Agent selection:** Wizard operates on all agents (interactive helper for `ctl`).
-- **Secret rotation:** Not needed for v1.
-- **Backup:** Simple timestamp backup before overwriting configs.
+- **Non-interactive mode:** Not needed. Automation uses existing `zlaw init --agent`, `zlaw auth add`, etc.
+- **cli adapter:** Not a selectable preset; use `zlaw agent run` directly.
+- **Menu vs wizard flow:** Menu-based navigation, not linear wizard.
+- **Item visibility:** Agent items hidden when no agents; shown (possibly disabled) when agent selected.
+- **Sub-screen replacement:** Sub-screens replace the menu, not inline.
 
 ## See Also
 
-- [user_journey.md](./user_journey.md) — day 0/1 flow reference
 - [llm_presets.md](./llm_presets.md) — LLM preset pattern
 - [agent_secrets.md](./agent_secrets.md) — secrets injection design
 - [channel_adapter.md](./channel_adapter.md) — adapter presets
