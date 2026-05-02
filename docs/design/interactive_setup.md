@@ -653,9 +653,9 @@ The wizard creates a mapping between what the config expects and where the actua
 ```toml
 # agent.toml — what the LLM/adapter config expects
 [llm]
-config = { api_key = "$MINIMAX_API_KEY" }
-#                      ^^^^^^^^^^
-#                      env var name the config references
+client_config = { api_key = "$MINIMAX_API_KEY" }
+#                          ^^^^^^^^^^
+#                          env var name the config references
 ```
 
 ```toml

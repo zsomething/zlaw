@@ -2,6 +2,8 @@
 
 Read `docs/design/` for architecture. Read `plans/` for current work.
 
+**Never code without an approved design. Design first, sign off, then code.**
+
 ## What
 
 Multi-agent personal assistant in Go. Central hub routes messages between autonomous agents over embedded NATS.

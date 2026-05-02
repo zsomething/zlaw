@@ -58,17 +58,27 @@ $ZLAW_HOME/
 
 Agent directories do **not** contain secrets. Agent cannot read its own secrets file.
 
-## Agent Config (Presets + Config Block)
+## Agent Config (Presets + Inline Copy)
 
-In `agent.toml`, agents use presets with an inline config block. Preset values (backend, base_url, model, etc.) are copied at creation:
+In `agent.toml`, agents use presets with inline copy. Preset values (backend, client_config, model_config, etc.) are copied at creation:
 
 ```toml
 [llm]
 backend = "anthropic"
-config = {
+client_config = {
   base_url = "https://api.minimax.io/anthropic",
   api_key = "$MINIMAX_API_KEY"
 }
+model = "MiniMax-Text-01"
+model_config = {
+  max_tokens = 4096,
+  prompt_caching = true
+}
+
+[[adapter]]
+backend = "telegram"
+client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+```
 
 [[adapter]]
 backend = "telegram"

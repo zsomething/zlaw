@@ -30,11 +30,22 @@ description = ""
 
 ```toml
 [llm]
-backend      = "openrouter"           # named preset or custom (see Backends)
-model        = "openai/gpt-4o"
-auth_profile = "openrouter"           # profile name in credentials.toml
-max_tokens   = 4096
-timeout_sec  = 60
+backend = "openai"                    # protocol: openai or anthropic
+
+# Client configuration (auth/endpoint)
+client_config = {
+  base_url = "https://openrouter.ai/api/v1",
+  api_key = "$OPENROUTER_API_KEY"
+}
+
+# Model name
+model = "openai/gpt-4o"
+
+# Model behavior (varies by backend)
+model_config = {
+  max_tokens = 4096,
+  timeout_sec = 60
+}
 
 # Hard limit on message history size (in tokens).
 # Oldest turns are pruned when the estimate exceeds this value.
@@ -54,9 +65,6 @@ context_summarize_model = "openai/gpt-4o-mini"
 # strip_thinking → strip_tool_results → drop_pairs
 context_prune_levels = ["strip_thinking", "strip_tool_results", "drop_pairs"]
 
-# Anthropic prompt caching (default: true on Anthropic backend).
-# prompt_caching = true
-
 # Cap the [Memories] block injected into the system prompt.
 max_memory_tokens = 2000
 ```
@@ -68,9 +76,12 @@ max_memory_tokens = 2000
 proactive_memory_save = true   # agent saves facts without being asked
 
 [memory.embedder]
-backend      = "openrouter"
-model        = "openai/text-embedding-3-small"
-auth_profile = "openrouter"    # omit to reuse the LLM auth profile
+backend = "openai"
+client_config = {
+  base_url = "https://openrouter.ai/api/v1",
+  api_key = "$OPENROUTER_API_KEY"
+}
+model = "openai/text-embedding-3-small"
 ```
 
 Memory files are stored as `$ZLAW_HOME/memories/<agent>/<id>.md` with YAML frontmatter. The vector index lives in `.index/` alongside the memory files and is a regenerable cache — delete it to force a full rebuild.
