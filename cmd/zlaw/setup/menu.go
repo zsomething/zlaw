@@ -308,45 +308,60 @@ func updateMenu(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // menuView renders the main menu view.
-func menuView(m *Model) string {
+// menuItems returns a slice of all menu items.
+// Structure: [Bootstrap, ...Agent items..., Manage secrets, Summary]
+func menuItems(m *Model) []MenuItem {
 	items := getVisibleItems(buildMenuItems(m))
+	return items
+}
+
+func menuView(m *Model) string {
+	items := menuItems(m)
+	if len(items) == 0 {
+		return "No items"
+	}
 
 	var lines []string
 
 	lines = append(lines, Styles.Title.Render("zlaw setup"))
 	lines = append(lines, "")
 
-	// Bootstrap section
+	// Bootstrap section (always first item)
 	lines = append(lines, Styles.Heading.Render("Bootstrap"))
 	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+	lines = append(lines, menuItemView(items[0], m.cursor == 0))
 
-	if len(items) > 0 {
-		i := items[0]
-		line := menuItemView(i, m.cursor == 0)
-		lines = append(lines, line)
-	}
-
+	// Agents section
 	lines = append(lines, "")
 	lines = append(lines, Styles.Heading.Render("Agents"))
 	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
 
-	// Agent items
-	for idx, item := range items[1:] {
-		if item.Disabled && item.State == StateView && item.Label == "Agent: "+m.state.SelectedAgent {
-			lines = append(lines, Styles.Dim.Render(item.Label+item.SubLabel))
-			lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-			continue
+	agentStart := 1
+	agentEnd := len(items) - 2 // Exclude Global items
+	if agentEnd <= agentStart {
+		// No agents section items, show message if configured
+		if len(items) > 1 && items[1].Label == "No agents configured. Create one first." {
+			lines = append(lines, menuItemView(items[1], m.cursor == 1))
 		}
-		cursorIdx := idx + 1
-		line := menuItemView(item, m.cursor == cursorIdx)
-		lines = append(lines, line)
+	} else {
+		for idx := agentStart; idx < agentEnd; idx++ {
+			item := items[idx]
+			// Render agent selector as dimmed info
+			if item.Disabled && item.State == StateView && strings.HasPrefix(item.Label, "Agent: ") {
+				lines = append(lines, Styles.Dim.Render(item.Label+item.SubLabel))
+				lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+				continue
+			}
+			line := menuItemView(item, m.cursor == idx)
+			lines = append(lines, line)
+		}
 	}
 
+	// Global section (last 2 items)
 	lines = append(lines, "")
 	lines = append(lines, Styles.Heading.Render("Global"))
 	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
 
-	// Global items (last 2)
 	globalStart := len(items) - 2
 	for idx := globalStart; idx < len(items); idx++ {
 		item := items[idx]
