@@ -47,19 +47,26 @@ func buildMenuItems(m *Model) []MenuItem {
 
 	// Agent section - always visible when home is bootstrapped
 	if m.state.IsConfigured() {
+		// Always show Create Agent
+		items = append(items, MenuItem{
+			Label:   "Create Agent",
+			Status:  StateView,
+			Screen:  ScreenCreateAgent,
+			Visible: true,
+		})
+
 		if m.state.HasAgents() {
-			// Agent selector info (non-selectable)
+			// Show Select Agent (navigates to agent selector)
 			agentCount := len(m.state.Config.Agents)
 			selectedName := m.state.SelectedAgent
 			if selectedName == "" && agentCount > 0 {
 				selectedName = m.state.Config.Agents[0].ID
 			}
 			items = append(items, MenuItem{
-				Label:   "Agent: " + selectedName + " (" + itoa(agentCount) + ")",
+				Label:   "Select Agent: " + selectedName + " (" + itoa(agentCount) + ")",
 				Status:  StateView,
-				Screen:  ScreenMainMenu,
+				Screen:  ScreenSelectAgent,
 				Visible: true,
-				Disable: true,
 			})
 
 			// Agent config items (only when agent selected)
@@ -104,14 +111,6 @@ func buildMenuItems(m *Model) []MenuItem {
 					Visible: true,
 				})
 			}
-		} else {
-			// No agents - show Create Agent option
-			items = append(items, MenuItem{
-				Label:   "Create Agent",
-				Status:  StateView,
-				Screen:  ScreenCreateAgent,
-				Visible: true,
-			})
 		}
 	}
 

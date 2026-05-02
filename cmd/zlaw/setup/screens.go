@@ -7,6 +7,7 @@ const (
 	ScreenMainMenu      Screen = "main-menu"
 	ScreenBootstrap     Screen = "bootstrap"
 	ScreenCreateAgent   Screen = "create-agent"
+	ScreenSelectAgent   Screen = "select-agent"
 	ScreenDeleteAgent   Screen = "delete-agent"
 	ScreenLLM           Screen = "llm"
 	ScreenLLMSecret     Screen = "llm-secret"

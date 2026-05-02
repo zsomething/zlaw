@@ -55,9 +55,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ScreenBootstrap:
 		return updateBootstrap(m, msg)
 	case ScreenCreateAgent:
-		return updateCreateAgent(m, msg)
-	case ScreenDeleteAgent:
-		return updateDeleteAgent(m, msg)
+		return updateAgent(m, msg)
+	case ScreenSelectAgent:
+		return updateSelectAgent(m, msg)
 	case ScreenLLM:
 		return updateLLM(m, msg)
 	case ScreenLLMSecret:
@@ -88,8 +88,10 @@ func (m *Model) View() string {
 		return menuView(m)
 	case ScreenBootstrap:
 		return bootstrapView(m)
-	case ScreenCreateAgent, ScreenDeleteAgent:
+	case ScreenCreateAgent:
 		return agentView(m)
+	case ScreenSelectAgent:
+		return selectAgentView(m)
 	case ScreenLLM, ScreenLLMSecret:
 		return llmView(m)
 	case ScreenAdapter, ScreenAdapterSecret:

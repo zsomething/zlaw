@@ -125,7 +125,7 @@ func adapterView(m *Model) string {
 		content.WriteString("\n\n")
 
 		if m.adapter.focused == 1 {
-			content.WriteString(Styles.Selected.Render("> Secret value: ") + Styles.Item.Render(strings.Repeat("*", intMax(0, len(m.adapter.secretValue)-3))+"***"))
+			content.WriteString(Styles.Selected.Render("> Secret value: ") + Styles.Item.Render("***"))
 		} else {
 			content.WriteString(Styles.Item.Render("  Secret value: [hidden]"))
 		}
