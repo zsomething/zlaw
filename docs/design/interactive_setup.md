@@ -81,6 +81,58 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 | `Q` | Quit (sticky, always shown) |
 | `B` | Back (sub-screens only) |
 
+## Shared Config Management
+
+All setup and configuration operations are implemented in `internal/config/` to enable reuse across all entry points:
+
+| Entry Point | Uses |
+|-------------|------|
+| `zlaw setup` (interactive TUI) | `internal/config/` |
+| `zlaw init` (non-interactive CLI) | `internal/config/` |
+| `zlaw hub` (auto-bootstrap on startup) | `internal/config/` |
+
+### Packages
+
+```
+internal/config/
+├── hub.go       # HubConfig, AgentEntry, zlaw.toml load/save
+├── config.go    # AgentConfig (LLM/adapter settings per agent)
+├── bootstrap.go # BootstrapConfig, SetupAgentConfig (setup operations)
+```
+
+### BootstrapConfig
+
+Creates `$ZLAW_HOME/` structure (zlaw.toml, secrets.toml, agents/):
+
+```go
+cfg := config.BootstrapConfig{
+    Home:     "~/.config/zlaw",
+    Force:    false, // error if exists
+}
+if err := cfg.CreateZlawHome(); err != nil {
+    // handle error
+}
+```
+
+### SetupAgentConfig
+
+Creates agent directory structure (SOUL.md, IDENTITY.md, workspace/, skills/):
+
+```go
+cfg := config.DefaultSetupAgentConfig("assistant")
+cfg.Force = false
+if err := cfg.CreateAgent(); err != nil {
+    // handle error
+}
+```
+
+### Principles
+
+1. **Shared logic**: All config operations live in `internal/config/`, never in `cmd/`
+2. **Composable**: Config structs have sensible defaults, can override fields
+3. **Idempotent**: Operations check existence and support `Force` flag
+4. **Error messaging**: Errors include context for user-friendly display
+
 ## Bootstrap Section
 
 ### Bootstrap Zlaw Home

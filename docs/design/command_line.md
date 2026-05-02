@@ -76,6 +76,10 @@ zlaw init                # Full workspace: zlaw.toml + manager agent
 zlaw init -a <name>     # Single agent scaffold only
 ```
 
+**Implementation:** Both `zlaw init` and `zlaw setup` share the same config
+logic via `internal/config/bootstrap.go` (BootstrapConfig, SetupAgentConfig).
+This ensures consistent behavior across interactive and non-interactive flows.
+
 ## See Also
 
 - [ctl_supervisor.md](./ctl_supervisor.md) — supervisor design

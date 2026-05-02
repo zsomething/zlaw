@@ -35,6 +35,9 @@ zlaw init
 # Generates: $ZLAW_HOME/zlaw.toml (skeleton)
 #            $ZLAW_HOME/secrets.toml (empty, mode 0600)
 #            $ZLAW_HOME/agents/<id>/ (scaffold)
+#
+# Uses internal/config/bootstrap.go for shared setup logic
+# (same as zlaw setup wizard)
 
 zlaw auth add --name MINIMAX_API_KEY
 # Prompts for value → saves to secrets.toml
