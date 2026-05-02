@@ -1,135 +1,138 @@
-# Agent: Credentials
+# Agent: Secrets
 
 ## Overview
 
-Credentials are managed by the human operator via `zlaw auth` CLI. The hub **does not** own or manage credentials. At spawn time, the hub reads from the global credentials file and injects values as environment variables into the agent process.
+Secrets are managed by the human operator via `zlaw auth` CLI. Stored in `secrets.toml` (formerly `credentials.toml`). At spawn time, ctl injects secret values as environment variables into the agent process. Hub has no credential access.
 
 ## Ownership Model
 
 | Component | Role |
 |-----------|------|
-| **ctl (operator)** | Owns `credentials.toml`, manages via `zlaw auth` |
-| **Hub** | Reads credentials at spawn, injects as env vars |
+| **ctl (operator)** | Owns `secrets.toml`, manages via `zlaw auth` |
+| **Hub** | Message routing only. No secret access. |
 | **Agent** | Receives only env vars, never sees file path |
 
 ## Design Goals
 
-1. **Secret isolation** — agent only receives env vars with values it needs
-2. **No credential file exposure** — no file path exposed to agent
-3. **Operator control** — human operator manages credentials via CLI
-4. **Minimal surface** — agent receives only the credentials it needs
+1. **Secret isolation** — agent receives only env vars with values it needs
+2. **No secret file exposure** — no file path exposed to agent
+3. **Operator control** — human operator manages secrets via CLI
+4. **Minimal surface** — agent receives only the secrets it needs
 
 ## Injection Flow
 
 ```
-Human Operator (ctl)                    Hub                              Agent
+Human Operator (ctl)                    ctl                              Agent
        │                                  │                                 │
-       │ Edit credentials.toml:            │                                 │
-       │ [anthropic]                      │                                 │
-       │   api_key = "sk-ant-..."        │                                 │
+       │ Edit secrets.toml:                │                                 │
+       │ MINIMAX_API_KEY_DEV = "xxx"      │                                 │
+       │ ANTHROPIC_API_KEY = "sk-..."      │                                 │
+       │                                  │                                 │
+       │ Configure in zlaw.toml:           │                                 │
+       │ [[agents]]                       │                                 │
+       │ id = "assistant"                  │                                 │
+       │ env_vars = [                     │                                 │
+       │   { name = "MINIMAX_API_KEY",    │                                 │
+       │     from_secret = "MINIMAX_API_KEY_DEV" } ] │                       │
        │                                  │                                 │
        │                                  │ At spawn:                       │
-       │                                  │ Read credentials.toml            │
-       │                                  │ Extract needed profiles          │
-       │                                  │                                  │
+       │                                  │ Read secrets.toml               │
+       │                                  │ Look up MINIMAX_API_KEY_DEV     │
+       │                                  │                                 │
        │                                  │ Inject as env vars:             │
-       │                                  │   ANTHROPIC_API_KEY=sk-ant-... ──┤── Agent sees only
-       │                                  │   (per-profile keys as env vars)   │   env vars
-       │                                  │                                  │
+       │                                  │ MINIMAX_API_KEY=xxx ────────────┼── Agent sees only
+       │                                  │                                  │   env vars
        │                                  │ Agent reads env vars             │  No file path
-       │                                  │   apiKey := os.Getenv(...)         │  No file to read
+       │                                  │ $MINIMAX_API_KEY → value        │  No file to read
 ```
 
-## Credentials File Location
+## Secrets File Location
 
-Global credentials file managed by ctl:
+Global secrets file managed by ctl:
 
 ```
 $ZLAW_HOME/
 ├── zlaw.toml           # hub + agents config
-└── credentials.toml    # operator-managed, hub reads at spawn
+└── secrets.toml        # operator-managed, ctl reads at spawn
 ```
 
-Agent directories do **not** contain credentials. Agent cannot read its own credentials file.
+Agent directories do **not** contain secrets. Agent cannot read its own secrets file.
 
-## Environment Variables
+## Agent Config (References Only)
 
-Hub injects profile values as env vars at spawn. Env var names are derived from profile name and key:
-
-| Profile | Env Var | Example |
-|---------|---------|---------|
-| `anthropic` | `ANTHROPIC_API_KEY` | `sk-ant-...` |
-| `minimax` | `MINIMAX_API_KEY` | `sk-...` |
-| `telegram` | `TELEGRAM_BOT_TOKEN` | `12345:abc...` |
-| `fizzy` | `FIZZY_API_KEY` | `...` |
-
-## Profile Reference
-
-In `agent.toml`:
+In `agent.toml`, secret references are env var names:
 
 ```toml
 [llm]
-backend = "anthropic"
-auth_profile = "anthropic"
-model = "claude-sonnet-4-5"
+backend = "minimax"
+model = "minimax-2.7"
+secret = { api_key = "$MINIMAX_API_KEY" }
 
 [[adapter]]
 type = "telegram"
-auth_profile = "telegram"
+secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
-The hub reads the `auth_profile` from `agent.toml` and injects the corresponding env vars at spawn.
+No values in agent.toml — only env var references (`$VAR_NAME`). Values injected by ctl at spawn.
 
-## Credential Structure
+## Secrets Structure
 
-Stored in `credentials.toml` (ctl-managed):
+Stored in `secrets.toml` (ctl-managed):
 
 ```toml
-[profiles.anthropic]
-name = "anthropic"
-data = { api_key = "sk-ant-..." }
-
-[profiles.minimax]
-name = "minimax"
-data = { api_key = "sk-..." }
-
-[profiles.telegram]
-name = "telegram"
-data = { telegram_bot_token = "12345:abc..." }
-
-[profiles.fizzy]
-name = "fizzy"
-data = { fizzy_api_key = "..." }
+MINIMAX_API_KEY_DEV = "xxx"
+MINIMAX_API_KEY_PROD = "yyy"
+ANTHROPIC_API_KEY = "sk-ant-..."
+TELEGRAM_BOT_TOKEN = "12345:abc..."
+FIZZY_API_KEY = "..."
 ```
+
+Flat key-value pairs. Supports multiple credentials of same service (e.g., `MINIMAX_API_KEY_DEV` vs `MINIMAX_API_KEY_PROD`).
+
+## Agent Mapping
+
+In `zlaw.toml`:
+
+```toml
+[[agents]]
+id = "assistant"
+executor = "subprocess"
+env_vars = [
+  { name = "MINIMAX_API_KEY", from_secret = "MINIMAX_API_KEY_DEV" },
+  { name = "TELEGRAM_BOT_TOKEN", from_secret = "TELEGRAM_BOT_TOKEN" }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `name` | Env var name injected to agent |
+| `from_secret` | Key in secrets.toml |
 
 ## CLI Commands
 
 ```bash
-# Add credentials
-zlaw auth add --profile anthropic
-# Prompts for API key, saves to credentials.toml
+# Add secrets
+zlaw auth add --name MINIMAX_API_KEY_DEV
+# Prompts for value, saves to secrets.toml
 
-zlaw auth add --profile telegram --key 12345:abc...
-# Non-interactive: specify key directly
-
-# List profiles
+# List secrets (names only, no values)
 zlaw auth list
 
-# Remove profile
-zlaw auth remove --profile anthropic
+# Remove secret
+zlaw auth remove --name MINIMAX_API_KEY_DEV
 ```
 
 ## Security Properties
 
-- **No file to read** — credentials as env vars, not file path
-- **No enumeration** — agent doesn't know other profile names
+- **No file to read** — secrets as env vars, not file path
+- **No enumeration** — agent doesn't know other secret names
 - **Compromise resistant** — even if agent is prompt-injected, no file path to read
-- **Minimal exposure** — only needed credentials injected
-- **Subprocess filtered** — credential env vars not passed to subprocesses (e.g., bash tool)
+- **Minimal exposure** — only needed secrets injected
+- **Subprocess filtered** — secret env vars not passed to subprocesses (e.g., bash tool)
 - **Operator control** — human operator manages via CLI, not agent
 
 ## See Also
 
-- [agent_standalone.md](./agent_standalone.md) — agent startup sequence
+- [agent_lifecycle.md](./agent_lifecycle.md) — agent lifecycle
 - [security.md](./security.md) — security model
 - [command_line.md](./command_line.md) — CLI reference

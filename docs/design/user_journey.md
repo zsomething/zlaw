@@ -5,11 +5,11 @@
 ```
 zlaw init
 # Generates: $ZLAW_HOME/zlaw.toml (skeleton with first agent entry)
-#            $ZLAW_HOME/credentials.toml (empty template, 0600)
+#            $ZLAW_HOME/secrets.toml (empty template, 0600)
 #            $ZLAW_HOME/agents/<id>/ (full agent scaffold)
 
-zlaw auth add --profile anthropic
-# Prompts for API key → saves to credentials.toml
+zlaw auth add --name MINIMAX_API_KEY
+# Prompts for value → saves to secrets.toml
 
 zlaw ctl start
 # Starts NATS + hub + all agents
@@ -38,10 +38,10 @@ restart_policy = "on-failure"
 ## Day N — Operations
 
 ```bash
-# Credentials management
-zlaw auth add --profile anthropic          # Add credential
-zlaw auth list                              # List all profiles
-zlaw auth remove --profile <name>           # Remove profile
+# Secrets management
+zlaw auth add --name MINIMAX_API_KEY_DEV     # Add secret
+zlaw auth list                                # List secret names (no values)
+zlaw auth remove --name <name>               # Remove secret
 
 # System management
 zlaw ctl start                              # Start NATS + hub + agents
@@ -62,5 +62,5 @@ zlaw ctl agent delete <id> --prune        # stop + remove + delete home director
 
 - [agent_lifecycle.md](./agent_lifecycle.md) — executor + target matrix
 - [ctl_supervisor.md](./ctl_supervisor.md) — supervisor design
-- [agent_credentials.md](./agent_credentials.md) — credentials design
+- [agent_credentials.md](./agent_credentials.md) — secrets design
 - [security.md](./security.md) — security model

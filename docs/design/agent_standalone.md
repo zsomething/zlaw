@@ -7,7 +7,7 @@ A standalone agent is a self-contained process that runs the agentic loop indepe
 ## Startup Sequence
 
 ```
-1. Load agent.toml       → config (model, backend, auth profile, tools)
+1. Load agent.toml       → config (model, backend, secret references)
 2. Load SOUL.md          → system prompt component (personality)
 3. Load IDENTITY.md      → system prompt component (role definition)
 4. Restore history       → sessions/<id>/ (JSONL files)
@@ -20,9 +20,8 @@ A standalone agent is a self-contained process that runs the agentic loop indepe
 
 ```
 $ZLAW_AGENT_HOME/           # set by ZLAW_AGENT_HOME env var
-├── agent.toml             # configuration
+├── agent.toml             # configuration (secret references, not values)
 ├── runtime.toml           # runtime overrides (watched, hot-reloaded)
-├── credentials.toml       # written by hub at spawn time
 ├── cron.toml              # scheduled tasks
 ├── SOUL.md                # personality (hot-reload on change)
 ├── IDENTITY.md            # role definition (hot-reload on change)
@@ -35,7 +34,7 @@ $ZLAW_AGENT_HOME/           # set by ZLAW_AGENT_HOME env var
 └── workspace/            # agent's working directory
 ```
 
-Agent only knows `ZLAW_AGENT_HOME`, not `ZLAW_HOME` (hub's home).
+Agent only knows `ZLAW_AGENT_HOME`, not `ZLAW_HOME` (ctl's home).
 
 ## Configuration (agent.toml)
 
@@ -43,11 +42,26 @@ See [docs/users/configuration.md](../users/configuration.md) for full reference.
 
 Key sections:
 - `[agent]` — ID, name, description, roles
-- `[llm]` — backend, model, auth_profile, context_budget
+- `[llm]` — backend, model, secret reference, context_budget
 - `[tools]` — allowed list, max_result_bytes
 - `[adapter]` — adapter instances (telegram, fizzy, etc)
 - `[sticky]` — system prompt injection rules
 - `[memory]` — memory backend configuration
+
+Secret references use env var names:
+
+```toml
+[llm]
+backend = "minimax"
+model = "minimax-2.7"
+secret = { api_key = "$MINIMAX_API_KEY" }
+
+[[adapter]]
+type = "telegram"
+secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+```
+
+No values in config — only `$VAR_NAME` references. Values injected by ctl at spawn.
 
 ## Context Building
 
@@ -93,19 +107,20 @@ See [agent_tools.md](./agent_tools.md) and [agent_skills.md](./agent_skills.md).
 
 | Var | Source | Purpose |
 |-----|--------|---------|
-| `ZLAW_AGENT_HOME` | Hub injects at spawn | Root for all agent files |
-| `ZLAW_AGENT_ID` | Hub injects | Agent ID |
-| `ZLAW_NATS_URL` | Hub injects | NATS connection (standalone: not set) |
-| `ANTHROPIC_API_KEY` | Hub injects at spawn | From credentials.toml |
-| `MINIMAX_API_KEY` | Hub injects at spawn | From credentials.toml |
-| `TELEGRAM_BOT_TOKEN` | Hub injects at spawn | From credentials.toml |
+| `ZLAW_AGENT_HOME` | ctl injects at spawn | Root for all agent files |
+| `ZLAW_AGENT_ID` | ctl injects | Agent ID |
+| `ZLAW_NATS_URL` | ctl injects | NATS connection (standalone: not set) |
+| `MINIMAX_API_KEY` | ctl injects | From secrets.toml (via env_vars mapping) |
+| `ANTHROPIC_API_KEY` | ctl injects | From secrets.toml |
+| `TELEGRAM_BOT_TOKEN` | ctl injects | From secrets.toml |
 
-Agent receives credentials as env vars at spawn — no file path exposed.
+Agent receives secrets as env vars at spawn — no file path exposed.
 
-Agent does NOT know about `ZLAW_HOME`.
+Agent does NOT know about `ZLAW_HOME` or `secrets.toml`.
 
 ## See Also
 
+- [agent_credentials.md](./agent_credentials.md) — secrets design
 - [agent_contexts.md](./agent_contexts.md) — context engineering details
 - [agent_tools.md](./agent_tools.md) — built-in tools reference
 - [agent_skills.md](./agent_skills.md) — markdown-based skills

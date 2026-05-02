@@ -12,19 +12,19 @@ Pattern: Input → Build context → LLM call → (tool call → execute → app
 
 ## Hub
 
-Communication broker. Routes messages between agents and provides external interfaces (webhook). Enforces NATS ACL. Does NOT manage agent lifecycle.
+Communication broker. Routes messages between agents and provides external interfaces (webhook). Enforces NATS ACL. Does NOT manage agent lifecycle or secrets.
 
 **Not**: Agent orchestrator, process manager.
 
 ## ctl
 
-Human operator CLI. Scaffolds agent directories, manages agent lifecycle (create/start/stop/restart/delete), talks to hub via control socket. Uses executor abstraction for execution.
+Human operator CLI. Scaffolds agent directories, manages agent lifecycle (create/start/stop/restart/delete), manages secrets, talks to hub via control socket. Uses executor abstraction for execution.
 
 **Not**: Agent, plugin.
 
 ## ZLAW_HOME
 
-Root directory convention for local setups. ctl-owned. Contains `zlaw.toml`, `credentials.toml`, `run/`, `nats/`, `agents/`.
+Root directory convention for local setups. ctl-owned. Contains `zlaw.toml`, `secrets.toml`, `run/`, `nats/`, `agents/`.
 
 **Not**: Agent's home directory.
 
@@ -34,15 +34,15 @@ Agent's self-contained root. Set via env var. Agent reads this for all its files
 
 **Not**: ZLAW_HOME.
 
+## Secrets (formerly Credentials)
+
+API keys, tokens, and secrets stored in `secrets.toml` (formerly `credentials.toml`). Injected into agents as env vars at spawn time via ctl. Never exposed as file paths to agents.
+
 ## Channel Adapter
 
 Component that connects agents to external communication channels (Telegram, CLI, webhook). Translates between external messages and agent sessions.
 
 **Also known as**: Adapter (in code).
-
-## Credentials
-
-API keys, tokens, and secrets stored in `credentials.toml`. Injected into agents as env vars at spawn time. Never exposed as file paths.
 
 ## Delegation (P2P)
 
@@ -97,7 +97,7 @@ Per-agent permissions enforced at NATS broker layer. All agents equal: subscribe
 Unix socket exposed by hub and agent for ctl commands.
 
 | Component | Socket Path | Purpose |
-|----------|------------|---------|
+|-----------|------------|---------|
 | hub | `$ZLAW_HOME/run/hub.sock` | Agent lifecycle commands |
 | agent | `$ZLAW_HOME/agents/<id>/agent.sock` | Local agent control |
 

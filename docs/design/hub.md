@@ -4,7 +4,7 @@
 
 Hub is a communication broker. It routes messages between agents and provides external interfaces.
 
-Hub lifecycle is managed by **ctl** via its supervisor subsystem. See [ctl_supervisor.md](./ctl_supervisor.md).
+Hub lifecycle is managed by **ctl** via its executor subsystem. See [ctl_supervisor.md](./ctl_supervisor.md).
 
 ## Hub's Role
 
@@ -12,13 +12,12 @@ Hub lifecycle is managed by **ctl** via its supervisor subsystem. See [ctl_super
 - **External interface** — optional webhook/HTTP endpoint to reach agents
 - **ACL enforcement** — per-agent permissions at NATS layer
 - **Audit logging** — logs all messages and tool calls
-- **Credential injection** — reads credentials.toml at spawn, injects env vars
 
 Hub does NOT:
 - Spawn or stop agents
 - Read agent configuration files
 - Manage agent directories
-- Own or manage credentials (ctl owns credentials.toml)
+- Access secrets (ctl handles secret injection)
 
 ## Components
 
@@ -32,7 +31,7 @@ Hub does NOT:
 
 ## Startup
 
-Managed by supervisor. See [agent_lifecycle.md](./agent_lifecycle.md).
+Managed by ctl via executor. See [agent_lifecycle.md](./agent_lifecycle.md).
 
 ## NATS ACL
 
@@ -72,11 +71,11 @@ Hub validates and routes to `agent.<id>.inbox` via NATS.
 
 ## Agent Lifecycle
 
-Managed by ctl via supervisor. See [ctl_supervisor.md](./ctl_supervisor.md).
+Managed by ctl via executor. See [ctl_supervisor.md](./ctl_supervisor.md).
 
 ## See Also
 
-- [ctl_supervisor.md](./ctl_supervisor.md) — ctl and supervisor design
+- [ctl_supervisor.md](./ctl_supervisor.md) — ctl and executor design
 - [hub_lifecycle.md](./hub_lifecycle.md) — hub lifecycle management
 - [agent_lifecycle.md](./agent_lifecycle.md) — agent lifecycle
 - [overview.md](./overview.md) — high-level architecture

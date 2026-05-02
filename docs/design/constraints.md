@@ -8,7 +8,7 @@
 ✅ Use AgentHome() for all file paths
 ✅ Communicate via NATS only
 ✅ Never call ZlawHome()
-✅ Never read credentials (receives only env vars at spawn)
+✅ Never read secrets (receives only env vars at spawn)
 ```
 
 ### Hub Must Not
@@ -17,19 +17,19 @@
 ❌ Write to agent directories
 ❌ Call ZlawHome() at runtime
 ❌ Know about workspace, sessions, memories
-❌ Own credentials (reads only at spawn for injection)
+❌ Access secrets (ctl handles injection)
 ```
 
 ### ctl May
 ```
 ✅ Scaffold agent directories
 ✅ Create agent config files (agent.toml, SOUL.md, IDENTITY.md)
-✅ Own and manage credentials.toml
+✅ Own and manage secrets.toml
 ✅ Talk to hub and agent via control sockets (never NATS)
 ✅ Access both hub and agent files
 ✅ Manage hub lifecycle (start, stop)
 ✅ Manage agent lifecycle (spawn, stop, restart, delete)
-✅ Supervisor: execution abstraction for local/remote spawning
+✅ Executor: spawning agents with secret injection
 ```
 
 ## Execution Models

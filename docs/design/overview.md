@@ -15,8 +15,8 @@
 | Component | Role | Key Responsibility |
 |-----------|------|---------------------|
 | **Agent** | Autonomous executor | Runs agentic loop, owns its own filesystem, communicates via NATS |
-| **Hub** | Communication broker | Routes agent-to-agent messages, external webhooks; enforces ACL
-| **ctl** | Human operator CLI | Scaffolds agent directories, talks to hub via control socket |
+| **Hub** | Communication broker | Routes agent-to-agent messages, external webhooks; enforces ACL |
+| **ctl** | Human operator CLI | Scaffolds agent directories, manages secrets, talks to hub via control socket |
 
 ## Separation of Concerns
 
@@ -25,6 +25,7 @@
 - Owns filesystem under `$ZLAW_AGENT_HOME`
 - Uses `AgentHome()` for all file paths
 - Never calls `ZlawHome()`
+- Never reads secrets (receives via env vars)
 - Communicates with other agents via NATS only
 
 ### Hub
@@ -32,27 +33,28 @@
 - Routes agent-to-agent and external-to-agent messages
 - Enforces ACL at NATS layer
 - Does NOT spawn or manage agent processes
+- Does NOT access secrets
 
 ### ctl
 - Scaffolds agent directories and files
+- Owns and manages `secrets.toml`
+- Injects secrets as env vars at agent spawn
 - Talks to hub via Unix control socket
-- Accesses both hub and agent files
 
 ## Directory Structure
 
 ```
 $ZLAW_HOME/                  # ctl-owned convention
 ├── zlaw.toml               # hub config + agent registry
-├── credentials.toml        # global credentials
+├── secrets.toml            # operator-managed secrets (key-value pairs)
 ├── skills/                 # shared skills
-├── run/                    # hub runtime (sockets, PIDs, injected creds)
+├── run/                    # hub runtime (sockets, PIDs)
 ├── nats/                   # JetStream store
 └── agents/<id>/            # ZLAW_AGENT_HOME for each agent
 
 $ZLAW_AGENT_HOME/           # agent's self-contained root
-├── agent.toml             # agent config
+├── agent.toml             # agent config (secret references only)
 ├── runtime.toml           # runtime overrides
-├── credentials.toml      # auth profiles (injected by hub)
 ├── cron.toml              # scheduled tasks
 ├── SOUL.md                # personality
 ├── IDENTITY.md            # role definition
@@ -68,12 +70,21 @@ $ZLAW_AGENT_HOME/           # agent's self-contained root
 Agent → Agent (P2P)
 │   └── Via NATS agent.<id>.inbox
 │
-Agent ← Hub (spawn context)
-│   └── Via env vars: ZLAW_AGENT_HOME, ZLAW_NATS_URL, ZLAW_CREDENTIALS_FILE
-│   Note: Hub does not spawn agents — that's ctl's responsibility.
+Agent ← ctl (spawn context)
+│   └── Via env vars: ZLAW_AGENT_HOME, ZLAW_NATS_URL, plus secret values
+│   Note: ctl injects secrets at spawn via executor.
 │
 ctl → Hub (control socket)
-│   └── Via Unix socket at $ZLAW_HOME/run/control.sock
+│   └── Via Unix socket at $ZLAW_HOME/run/hub.sock
+```
+
+## Secret Injection Flow
+
+```
+1. ctl reads zlaw.toml → finds env_vars mapping for agent
+2. ctl reads secrets.toml → looks up secret values
+3. ctl injects env vars at spawn → agent receives only env vars
+4. Agent resolves $VAR_NAME in agent.toml → uses value
 ```
 
 ## NATS Subject Namespace
@@ -90,12 +101,11 @@ ctl → Hub (control socket)
 
 | File | Owned by | Read by | Contents |
 |------|----------|---------|----------|
-| `zlaw.toml` | Hub | Hub + ctl | NATS settings, agent registry (id → dir), hub keypair path, audit log path |
-| `credentials.toml` | Hub | Hub at spawn time | LLM API keys, adapter tokens — injected into agents as env vars |
-| `agents/<id>/agent.toml` | Agent | Hub (to spawn) + Agent | LLM backend, auth profile ref, tool ACL, context budget, isolation level |
-| `agents/<id>/runtime.toml` | Agent (writes) | Agent + Hub watches | Dynamic overrides: model switching, flag toggles |
+| `zlaw.toml` | ctl | ctl + hub | NATS settings, agent registry (id → dir, env_vars mapping) |
+| `secrets.toml` | ctl | ctl only | Secret key-value pairs |
+| `agents/<id>/agent.toml` | ctl + agent | Agent | LLM backend, secret references, tool ACL, context budget |
 
-**Key invariant: credentials never flow directly to agents.** Hub reads `credentials.toml`, injects referenced profiles as env vars at spawn time. Agents never read `credentials.toml`.
+**Key invariant: secrets never flow directly to agents as files.** ctl reads `secrets.toml`, injects referenced values as env vars at spawn time. Agents never read `secrets.toml`.
 
 ## See Also
 
@@ -104,4 +114,5 @@ ctl → Hub (control socket)
 - [user_journey.md](./user_journey.md) — day 0, day 1, day N workflows
 - [agent_standalone.md](./agent_standalone.md) — standalone agent internals
 - [hub.md](./hub.md) — hub internals
+- [agent_credentials.md](./agent_credentials.md) — secrets design
 - [agent_delegation.md](./agent_delegation.md) — P2P delegation design
