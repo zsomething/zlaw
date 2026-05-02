@@ -4,6 +4,8 @@ Read `docs/design/` for architecture. Read `plans/` for current work.
 
 **Never code without an approved design. Design first, sign off, then code.**
 
+**Doc sync rule:** When user updates design/decisions, always check all design docs to update all relevant sections. This is essential for consistency and avoid confused coding agents.
+
 ## What
 
 Multi-agent personal assistant in Go. Central hub routes messages between autonomous agents over embedded NATS.
@@ -20,6 +22,10 @@ See `docs/design/`:
 See `plans/planning.md` for feature checklist.
 
 ## Key Decisions
+
+When design change is discussed:
+- **Doc sync first**: Update ALL relevant design docs before coding
+- **Design before code**: Ask user to clarify or update design BEFORE implementing anything that might violate current design
 
 - **Language**: Go only in core. Plugins any language via gRPC/IPC.
 - **Hub**: Communication broker only. Routes messages, enforces ACL. No agent lifecycle management.
