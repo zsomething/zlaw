@@ -245,9 +245,14 @@ Restart policy: [1] always  [2] on-failure (default)  [3] never
    ```toml
    [llm]
    backend = "anthropic"
-   config = {
+   client_config = {
      base_url = "https://api.minimax.io/anthropic",
      api_key = "$MINIMAX_API_KEY"
+   }
+   model = "MiniMax-Text-01"
+   model_config = {
+     max_tokens = 8192,
+     timeout_sec = 120
    }
    ```
 2. Create secret in `secrets.toml` (if new)
@@ -272,9 +277,14 @@ Select source agent:
    ```toml
    [llm]
    backend = "anthropic"
-   config = {
+   client_config = {
      base_url = "https://api.minimax.io/anthropic",
      api_key = "$MINIMAX_API_KEY"
+   }
+   model = "MiniMax-Text-01"
+   model_config = {
+     max_tokens = 8192,
+     timeout_sec = 120
    }
    ```
 2. Record required env var in `zlaw.toml`:
@@ -388,7 +398,7 @@ Select source agent:
 **Actions:**
 1. Write to agent's `agent.toml`:
 ```toml
-[embedding]
+[memory.embedder]
 backend = "minimax"  # or same as [llm] if using same provider
 model = "MiniMax-Embedding-01"
 ```
@@ -440,7 +450,7 @@ model = "MiniMax-Embedding-01"
 ```toml
 [[adapter]]
 backend = "telegram"
-config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 **Wizard creates in `zlaw.toml`:**
@@ -653,7 +663,15 @@ The wizard creates a mapping between what the config expects and where the actua
 ```toml
 # agent.toml — what the LLM/adapter config expects
 [llm]
-client_config = { api_key = "$MINIMAX_API_KEY" }
+client_config = {
+  base_url = "https://api.minimax.io/anthropic",
+  api_key = "$MINIMAX_API_KEY"
+}
+model = "MiniMax-Text-01"
+model_config = {
+  max_tokens = 8192,
+  timeout_sec = 120
+}
 #                          ^^^^^^^^^^
 #                          env var name the config references
 ```

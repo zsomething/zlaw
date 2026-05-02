@@ -80,11 +80,6 @@ backend = "telegram"
 client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
-[[adapter]]
-backend = "telegram"
-config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
-```
-
 No values in agent.toml — only env var references (`$VAR_NAME`). Values injected by ctl at spawn.
 
 See [llm_presets.md](./llm_presets.md) for the presets pattern.

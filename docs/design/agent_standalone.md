@@ -53,14 +53,19 @@ Secret references use env var names:
 ```toml
 [llm]
 backend = "anthropic"
-config = {
-  base_url = "https://api.minimax.io/anthropic",
-  api_key = "$MINIMAX_API_KEY"
+client_config = {
+  base_url = "https://api.anthropic.com",
+  api_key = "$ANTHROPIC_API_KEY"
+}
+model = "claude-sonnet-4"
+model_config = {
+  max_tokens = 8192,
+  timeout_sec = 120
 }
 
 [[adapter]]
 backend = "telegram"
-config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
 
 No values in config — only `$VAR_NAME` references. Values injected by ctl at spawn.
