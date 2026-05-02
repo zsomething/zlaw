@@ -1,14 +1,11 @@
 package setup
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
 
-	"github.com/zsomething/zlaw/internal/secrets"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // bootstrapState holds the state for the bootstrap screen.
@@ -128,7 +125,8 @@ func bootstrapConfirm(m *Model) (tea.Model, tea.Cmd) {
 		// Re-create or Keep.
 		switch m.bootstrap.cursor {
 		case 0: // Re-create
-			if err := createZlawHome(m.state.Home, true); err != nil {
+			cfg := config.BootstrapConfig{Home: m.state.Home, Force: true}
+			if err := cfg.CreateZlawHome(); err != nil {
 				m.errMsg = err.Error()
 				return m, nil
 			}
@@ -141,7 +139,8 @@ func bootstrapConfirm(m *Model) (tea.Model, tea.Cmd) {
 		// Create or Cancel.
 		switch m.bootstrap.cursor {
 		case 0: // Create
-			if err := createZlawHome(m.state.Home, false); err != nil {
+			cfg := config.BootstrapConfig{Home: m.state.Home}
+			if err := cfg.CreateZlawHome(); err != nil {
 				m.errMsg = err.Error()
 				return m, nil
 			}
@@ -161,52 +160,3 @@ func bootstrapConfirm(m *Model) (tea.Model, tea.Cmd) {
 	m.bootstrap = nil
 	return m, nil
 }
-
-// createZlawHome creates the zlaw home structure.
-func createZlawHome(home string, force bool) error {
-	// Check if already exists.
-	zlawPath := filepath.Join(home, "zlaw.toml")
-	if _, err := os.Stat(zlawPath); err == nil && !force {
-		return nil // Already exists, no need to create.
-	}
-
-	// Create directory if needed.
-	if err := os.MkdirAll(home, 0o700); err != nil {
-		return fmt.Errorf("create home directory: %w", err)
-	}
-
-	// Create zlaw.toml.
-	zlawTOMLContent := fmt.Sprintf(zlawTOMLTemplate, filepath.Join(home, "agents", "manager"))
-	if err := os.WriteFile(zlawPath, []byte(zlawTOMLContent), 0o600); err != nil {
-		return fmt.Errorf("write zlaw.toml: %w", err)
-	}
-
-	// Create secrets.toml.
-	secretsPath := secrets.DefaultSecretsPath()
-	if err := secrets.Save(secretsPath, secrets.Store{}); err != nil {
-		return fmt.Errorf("create secrets.toml: %w", err)
-	}
-
-	// Create agents/ directory.
-	agentsDir := filepath.Join(home, "agents")
-	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
-		return fmt.Errorf("create agents directory: %w", err)
-	}
-
-	return nil
-}
-
-// zlawTOMLTemplate has the absolute agent dir substituted for %s.
-const zlawTOMLTemplate = `[hub]
-name = "main"
-description = "zlaw hub"
-
-[[agents]]
-id = "manager"
-dir = %q
-executor = "subprocess"
-target = "local"
-restart_policy = "on-failure"
-
-	[nats]
-`
