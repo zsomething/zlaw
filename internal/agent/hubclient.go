@@ -38,7 +38,6 @@ type hubRegistration struct {
 	Version      string   `json:"version"`
 	Capabilities []string `json:"capabilities"`
 	Roles        []string `json:"roles"`
-	AuthProfiles []string `json:"auth_profiles"`
 	PublicKey    string   `json:"public_key"`
 }
 
@@ -51,7 +50,6 @@ type HubClient struct {
 	version      string
 	capabilities []string
 	roles        []string
-	authProfiles []string
 	seedPath     string // path to identity seed for signing
 	messenger    messaging.Messenger
 	runner       HubTaskRunner
@@ -66,7 +64,6 @@ func NewHubClient(
 	id, version string,
 	capabilities []string,
 	roles []string,
-	authProfiles []string,
 	seedPath string,
 	messenger messaging.Messenger,
 	runner HubTaskRunner,
@@ -81,7 +78,6 @@ func NewHubClient(
 		version:      version,
 		capabilities: capabilities,
 		roles:        roles,
-		authProfiles: authProfiles,
 		seedPath:     seedPath,
 		messenger:    messenger,
 		runner:       runner,
@@ -210,7 +206,6 @@ func (h *HubClient) publishRegistration(ctx context.Context) error {
 		Version:      h.version,
 		Capabilities: h.capabilities,
 		Roles:        h.roles,
-		AuthProfiles: h.authProfiles,
 		PublicKey:    publicKey,
 	}
 	data, err := json.Marshal(reg)

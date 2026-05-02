@@ -2,8 +2,8 @@
 // adapters.
 //
 // Credentials are stored in ~/.config/zlaw/credentials.toml (path overridable
-// via ZLAW_CREDENTIALS_FILE). The agent.toml references a named profile via
-// llm.auth_profile or adapter.auth_profile — no secrets ever appear in agent config.
+// via ZLAW_CREDENTIALS_FILE). No longer used by default — prefer inline
+// client_config with env-var references.
 package credentials
 
 import (

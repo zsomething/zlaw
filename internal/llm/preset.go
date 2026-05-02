@@ -1,16 +1,21 @@
 package llm
 
 // LLMPreset is a named, well-known backend configuration.
-// A preset defines default values; individual fields can be overridden in agent.toml.
-// Values are copied inline at agent creation time — no runtime lookup needed.
+// A preset defines default values; copied inline into agent.toml at creation.
+// No runtime lookup needed.
 type LLMPreset struct {
 	// Name is the preset identifier (e.g., "minimax", "anthropic").
 	Name string
 	// Backend is the wire protocol ("openai" or "anthropic").
 	Backend string
-	// Config contains default values including base_url, model, max_tokens, etc.
-	// These are copied inline into agent.toml at creation.
-	Config map[string]any
+	// ClientConfig contains default values for client construction.
+	// Includes base_url, api_key (reference only, not secrets).
+	ClientConfig map[string]any
+	// ModelConfig contains provider-specific behavior defaults.
+	// Includes max_tokens, timeout_sec, prompt_caching, etc.
+	ModelConfig map[string]any
+	// DefaultModel is the default model name.
+	DefaultModel string
 }
 
 // LookupPreset returns the preset for the given name, or an error if unknown.
@@ -21,9 +26,11 @@ func LookupPreset(name string) (LLMPreset, error) {
 	}
 	// Return a copy to prevent mutation of the original.
 	return LLMPreset{
-		Name:    preset.Name,
-		Backend: preset.Backend,
-		Config:  copyConfig(preset.Config),
+		Name:         preset.Name,
+		Backend:      preset.Backend,
+		ClientConfig: copyConfig(preset.ClientConfig),
+		ModelConfig:  copyConfig(preset.ModelConfig),
+		DefaultModel: preset.DefaultModel,
 	}, nil
 }
 

@@ -34,23 +34,17 @@ type MemoryConfig struct {
 }
 
 // EmbedderConfig selects and configures the embedding backend used by the
-// semantic memory store. Authentication is handled via credentials.toml,
-// the same as the LLM backend.
+// semantic memory store.
 type EmbedderConfig struct {
-	// Backend selects a named preset (e.g. "minimax-openai", "openrouter").
-	// The preset must resolve to an OpenAI-compatible endpoint.
+	// Backend is the wire protocol ("openai" or "anthropic").
 	Backend string `toml:"backend"`
+
+	// ClientConfig holds config for client construction (base_url, api_key).
+	// Env-var references ($VAR) expanded at load time.
+	ClientConfig map[string]any `toml:"client_config"`
 
 	// Model is the embedding model name (e.g. "text-embedding-3-small").
 	Model string `toml:"model"`
-
-	// BaseURL overrides the endpoint URL from the preset. Leave empty to use the
-	// preset default.
-	BaseURL string `toml:"base_url"`
-
-	// AuthProfile is the credentials.toml profile name. Leave empty to use the
-	// same profile as the LLM backend.
-	AuthProfile string `toml:"auth_profile"`
 }
 
 // ServeConfig controls daemon-mode behaviour.
@@ -93,9 +87,6 @@ type AgentMeta struct {
 	// Used by hub registry and peer discovery.
 	// Example: roles = ["calendar", "scheduling"]
 	Roles []string `toml:"roles"`
-	// AuthProfiles are the credential profile names required by this agent.
-	// Used by hub at spawn time to inject credentials without reading agent.toml.
-	AuthProfiles []string `toml:"auth_profiles"`
 }
 
 // GetDisplayName returns the human-readable display name. When Name is empty it
@@ -108,36 +99,21 @@ func (m AgentMeta) GetDisplayName() string {
 }
 
 // LLMConfig holds LLM backend settings.
-// Authentication is handled separately via a named credential profile in
-// ~/.config/zlaw/credentials.toml — no secrets belong in agent.toml.
-//
-// Two configuration patterns are supported:
-//   - New (inline): Backend + Config map with env-var references ($VAR)
-//   - Legacy: Backend name with runtime lookup + individual field overrides
+// No secrets in agent.toml — use env-var references ($VAR) in client_config.
 type LLMConfig struct {
-	// Backend is the wire protocol ("openai" or "anthropic") for the new pattern,
-	// or a preset name ("minimax", "anthropic") for legacy lookup.
+	// Backend is the wire protocol ("openai" or "anthropic").
 	Backend string `toml:"backend"`
 
-	// Config holds inline configuration values for the new pattern.
-	// Includes base_url, model, api_key, max_tokens, etc.
-	// Values can contain env-var references ($VAR or ${VAR}) that are
-	// expanded at config load time using os.ExpandEnv.
-	// Example: "api_key": "$MINIMAX_API_KEY"
-	Config map[string]any `toml:"config"`
+	// ClientConfig holds config for client construction (base_url, api_key).
+	// Env-var references ($VAR) expanded at load time.
+	ClientConfig map[string]any `toml:"client_config"`
 
-	// APIFormat overrides the wire protocol from the preset ("openai" or "anthropic").
-	// Leave empty to use the preset default.
-	APIFormat string `toml:"api_format"`
+	// Model is the model name (e.g., "claude-sonnet-4-20250514").
+	Model string `toml:"model"`
 
-	// BaseURL overrides the endpoint URL from the preset.
-	// Leave empty to use the preset default.
-	BaseURL string `toml:"base_url"`
-
-	Model       string `toml:"model"`        // e.g. "MiniMax-Text-01"
-	AuthProfile string `toml:"auth_profile"` // profile name in credentials.toml
-	MaxTokens   int    `toml:"max_tokens"`
-	TimeoutSec  int    `toml:"timeout_sec"`
+	// ModelConfig holds provider-specific behavior defaults.
+	// Includes max_tokens, timeout_sec, prompt_caching, etc.
+	ModelConfig map[string]any `toml:"model_config"`
 
 	// ContextTokenBudget is the maximum estimated token count of the message
 	// history sent to the LLM. Oldest conversation turns are pruned when the
@@ -155,19 +131,12 @@ type LLMConfig struct {
 
 	// ContextPruneLevels is an ordered list of pruning strategies applied after
 	// summarization. Supported values: "strip_thinking", "strip_tool_results",
-	// "drop_pairs". Empty defaults to ["drop_pairs"] for backward compatibility.
+	// "drop_pairs". Empty defaults to ["drop_pairs"].
 	ContextPruneLevels []string `toml:"context_prune_levels"`
 
 	// ContextSummarizeModel is the model to use for summarization. When set,
-	// summarization uses this model (same backend and auth profile) instead of
-	// the main model. Useful for routing summarization to a cheaper/faster model.
-	// Defaults to Model if empty.
+	// summarization uses this model instead of the main model.
 	ContextSummarizeModel string `toml:"context_summarize_model"`
-
-	// PromptCaching controls whether the system prompt is sent with
-	// cache_control on the Anthropic backend. Nil or true = enabled (default);
-	// explicitly false = disabled. Other backends ignore this field.
-	PromptCaching *bool `toml:"prompt_caching"`
 
 	// MaxMemoryTokens is the maximum number of tokens to include in the
 	// injected [Memories] block appended to the system prompt. Memories are
@@ -184,12 +153,11 @@ type ToolsConfig struct {
 
 // AdapterInstanceConfig configures a single adapter instance.
 type AdapterInstanceConfig struct {
-	// Type is the adapter type (e.g., "telegram", "fizzy", "cli").
-	Type string `toml:"type"`
-	// AuthProfile is the credentials.toml profile name for this adapter.
-	// The profile's Data map contains adapter-specific keys (e.g.,
-	// "telegram_bot_token", "fizzy_api_key").
-	AuthProfile string `toml:"auth_profile"`
+	// Backend is the adapter protocol (e.g., "telegram", "fizzy", "slack").
+	Backend string `toml:"backend"`
+	// ClientConfig holds adapter-specific config (e.g., bot_token, api_key).
+	// Env-var references ($VAR) expanded at load time.
+	ClientConfig map[string]any `toml:"client_config"`
 }
 
 // Personality holds the raw contents of SOUL.md and IDENTITY.md.
@@ -487,10 +455,13 @@ func loadTOML(path string) (AgentConfig, error) {
 	if _, err := toml.Decode(expanded, &cfg); err != nil {
 		return AgentConfig{}, fmt.Errorf("parse %s: %w", path, err)
 	}
-	// Expand env vars in nested Config maps (for new inline pattern).
-	cfg.LLM.Config = expandConfigMap(cfg.LLM.Config)
-	cfg.Memory.Embedder.BaseURL = os.ExpandEnv(cfg.Memory.Embedder.BaseURL)
-	syncAuthProfiles(&cfg)
+	// Expand env vars in nested Config maps.
+	cfg.LLM.ClientConfig = expandConfigMap(cfg.LLM.ClientConfig)
+	cfg.LLM.ModelConfig = expandConfigMap(cfg.LLM.ModelConfig)
+	for i := range cfg.Adapter {
+		cfg.Adapter[i].ClientConfig = expandConfigMap(cfg.Adapter[i].ClientConfig)
+	}
+	cfg.Memory.Embedder.ClientConfig = expandConfigMap(cfg.Memory.Embedder.ClientConfig)
 	return cfg, nil
 }
 
@@ -511,29 +482,6 @@ func expandConfigMap(cfg map[string]any) map[string]any {
 		}
 	}
 	return result
-}
-
-// syncAuthProfiles derives AuthProfiles from LLM + Memory + Adapter configs
-// and populates AgentMeta.AuthProfiles. This ensures hub gets auth profile
-// names at registration without reading agent.toml directly.
-func syncAuthProfiles(cfg *AgentConfig) {
-	seen := make(map[string]struct{})
-	var profiles []string
-	add := func(p string) {
-		if p == "" {
-			return
-		}
-		if _, ok := seen[p]; !ok {
-			seen[p] = struct{}{}
-			profiles = append(profiles, p)
-		}
-	}
-	add(cfg.LLM.AuthProfile)
-	add(cfg.Memory.Embedder.AuthProfile)
-	for _, adapter := range cfg.Adapter {
-		add(adapter.AuthProfile)
-	}
-	cfg.Agent.AuthProfiles = profiles
 }
 
 // loadPersonality reads SOUL.md and IDENTITY.md; missing files are silently

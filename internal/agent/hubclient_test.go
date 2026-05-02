@@ -59,7 +59,6 @@ func TestHubClient_RoundTrip(t *testing.T) {
 		"worker", "test",
 		[]string{"task"},
 		nil, // roles
-		nil, // authProfiles
 		"",  // seedPath
 		cm,
 		runner,
@@ -133,7 +132,7 @@ func TestHubClient_ConcurrentMessages(t *testing.T) {
 
 	logger := slog.New(slog.DiscardHandler)
 	client := agent.NewHubClient(
-		"worker", "test", nil, nil, nil, "", cm, runner,
+		"worker", "test", nil, nil, "", cm, runner,
 		func() string { return "" }, logger,
 	)
 
@@ -205,7 +204,7 @@ func TestHubClient_RunnerError(t *testing.T) {
 
 	logger := slog.New(slog.DiscardHandler)
 	client := agent.NewHubClient(
-		"worker", "test", nil, nil, nil, "", cm,
+		"worker", "test", nil, nil, "", cm,
 		runner,
 		func() string { return "" },
 		logger,
@@ -253,7 +252,7 @@ func TestHubClient_MissingReplyTo(t *testing.T) {
 
 	logger := slog.New(slog.DiscardHandler)
 	client := agent.NewHubClient(
-		"worker", "test", nil, nil, nil, "", cm, runner,
+		"worker", "test", nil, nil, "", cm, runner,
 		func() string { return "" }, logger,
 	)
 

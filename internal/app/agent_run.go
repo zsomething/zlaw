@@ -144,7 +144,7 @@ func buildToolRegistry(ctx context.Context, cfg config.AgentConfig, loader *conf
 	registry.Register(listAgentsTool)
 	registry.Register(&builtin.AgentGet{Registry: builtin.NewAgentRegistry(nil)})
 
-	memStore := buildMemoryStore(ctx, cfg, "", logger)
+	memStore := buildMemoryStore(ctx, cfg, logger)
 	if memStore != nil {
 		registry.Register(builtin.MemorySave{Store: memStore})
 		registry.Register(builtin.MemoryRecall{Store: memStore})
@@ -190,7 +190,7 @@ func buildAgent(
 		ag.SetSkillsSection(agent.BuildSkillsSection(discoveredSkills))
 	}
 
-	memStore := buildMemoryStore(ctx, cfg, "", logger)
+	memStore := buildMemoryStore(ctx, cfg, logger)
 	if memStore != nil {
 		ag.SetMemoryStore(memStore, cfg.LLM.MaxMemoryTokens)
 	}
@@ -203,7 +203,7 @@ func buildAgent(
 	return ag
 }
 
-func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath string, logger *slog.Logger) agent.MemoryStore {
+func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, logger *slog.Logger) agent.MemoryStore {
 	dir, err := agent.MemoryDir()
 	if err != nil {
 		logger.Warn("cannot resolve memory dir, memory tools disabled", "error", err)
@@ -212,11 +212,7 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 	logger.Info("memory store", "dir", dir)
 
 	if cfg.Memory.Embedder.Backend != "" {
-		emb := cfg.Memory.Embedder
-		if emb.AuthProfile == "" {
-			emb.AuthProfile = cfg.LLM.AuthProfile
-		}
-		embedFunc, err := agent.NewEmbeddingFunc(emb, credPath) //nolint:contextcheck // NewEmbeddingFunc does not take a context
+		embedFunc, err := agent.NewEmbeddingFunc(cfg.Memory.Embedder) //nolint:contextcheck // NewEmbeddingFunc does not take a context
 		if err != nil {
 			logger.Warn("failed to build embedder, falling back to keyword search", "error", err)
 			return agent.NewMarkdownFileStore(dir)
@@ -226,7 +222,7 @@ func buildMemoryStore(ctx context.Context, cfg config.AgentConfig, credPath stri
 			logger.Warn("failed to build semantic memory store, falling back to keyword search", "error", err)
 			return agent.NewMarkdownFileStore(dir)
 		}
-		logger.Info("semantic memory store ready", "backend", emb.Backend, "model", emb.Model)
+		logger.Info("semantic memory store ready", "backend", cfg.Memory.Embedder.Backend, "model", cfg.Memory.Embedder.Model)
 		return store
 	}
 

@@ -51,21 +51,25 @@ description = ""
 
 [llm]
 backend = "anthropic"
-config = {
+client_config = {
   base_url = "https://api.minimax.io/anthropic",
-  model = "MiniMax-Text-01",
   api_key = "$MINIMAX_API_KEY",
+}
+model = "MiniMax-Text-01"
+model_config = {
   max_tokens = 4096,
   timeout_sec = 60,
+  prompt_caching = true,
 }
 
 [tools]
 allowed = []
 
+
 # Configure adapters with secrets:
 # [[adapter]]
 # backend = "telegram"
-# config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
+# client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 `
 
 const ctlSoulMDTemplate = `You are a helpful personal assistant.

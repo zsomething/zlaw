@@ -13,7 +13,6 @@ import (
 	"github.com/zsomething/zlaw/internal/adapters/telegram"
 	"github.com/zsomething/zlaw/internal/agent"
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/cron"
 	"github.com/zsomething/zlaw/internal/identity"
 	"github.com/zsomething/zlaw/internal/llm"
@@ -95,7 +94,7 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	if err != nil {
 		return fmt.Errorf("create llm client: %w", err)
 	}
-	logger.Info("llm configured", "backend", cfg.LLM.Backend, "model", cfg.LLM.Model, "auth_profile", cfg.LLM.AuthProfile)
+	logger.Info("llm configured", "backend", cfg.LLM.Backend, "model", cfg.LLM.Model)
 
 	// cronWriter is created early so cron tools are registered before the
 	// allowlist is applied. The scheduler field is wired after construction.
@@ -138,9 +137,8 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 	pushRegistry := push.NewRegistry()
 
 	// Register adapters from config.
-	credPath := credentials.DefaultCredentialsPath()
 	for _, adapterCfg := range adaptersFromConfig(cfg) {
-		registerAdapterFromConfig(ctx, adapterCfg, sessionManager, history, pushRegistry, credPath, logger)
+		registerAdapterFromConfig(ctx, adapterCfg, sessionManager, history, pushRegistry, logger)
 	}
 
 	scheduler := cron.NewScheduler(
@@ -224,7 +222,6 @@ func ServeAgent(ctx context.Context, agentDir string, workspaceDir string, logge
 			version.Version,
 			caps,
 			cfg.Agent.Roles,
-			cfg.Agent.AuthProfiles,
 			identity.DefaultSeedPath(),
 			nm,
 			cronRunner{ag: ag, sysPromptFn: sysPromptFn},
@@ -252,51 +249,36 @@ func adaptersFromConfig(cfg config.AgentConfig) []config.AdapterInstanceConfig {
 	return cfg.Adapter
 }
 
-// registerAdapterFromConfig loads adapter credentials and registers the adapter.
+// registerAdapterFromConfig loads adapter config and registers the adapter.
 func registerAdapterFromConfig(
 	ctx context.Context,
 	adapterCfg config.AdapterInstanceConfig,
 	sessionManager *session.Manager,
 	history slashcmd.HistoryManager,
 	pushRegistry *push.Registry,
-	credPath string,
 	logger *slog.Logger,
 ) {
 	var token string
 
-	if adapterCfg.AuthProfile != "" {
-		profile, err := credentials.GetProfile(credPath, adapterCfg.AuthProfile)
-		if err != nil {
-			logger.Warn("adapter credential profile not found, skipping",
-				"adapter_type", adapterCfg.Type,
-				"auth_profile", adapterCfg.AuthProfile,
-				"err", err,
-			)
-			return
+	// Get token from ClientConfig.
+	if adapterCfg.ClientConfig != nil {
+		if v, ok := adapterCfg.ClientConfig["bot_token"].(string); ok && v != "" {
+			token = v
 		}
-
-		// Adapter-specific key lookup.
-		switch adapterCfg.Type {
-		case "telegram":
-			token = profile.GetData("telegram_bot_token")
-		case "fizzy":
-			token = profile.GetData("fizzy_api_key")
-		// Add other adapter types here as needed.
-		default:
-			logger.Debug("unknown adapter type for credential loading", "type", adapterCfg.Type)
-		}
-
-		if token == "" {
-			logger.Warn("adapter profile has no required credential",
-				"adapter_type", adapterCfg.Type,
-				"auth_profile", adapterCfg.AuthProfile,
-			)
-			return
+		if v, ok := adapterCfg.ClientConfig["api_key"].(string); ok && v != "" {
+			token = v
 		}
 	}
 
+	if token == "" {
+		logger.Warn("adapter token not found in client_config",
+			"adapter_backend", adapterCfg.Backend,
+		)
+		return
+	}
+
 	// Register the adapter.
-	switch adapterCfg.Type {
+	switch adapterCfg.Backend {
 	case "telegram":
 		tgAdapter := telegram.NewAdapter(token, sessionManager, logger)
 		tgAdapter.SetHistoryManager(history)
@@ -306,10 +288,9 @@ func registerAdapterFromConfig(
 				logger.Error("telegram adapter stopped", "error", err)
 			}
 		}()
-		logger.Info("telegram adapter registered", "auth_profile", adapterCfg.AuthProfile)
-	// Add other adapter types here.
+		logger.Info("telegram adapter registered")
 	default:
-		logger.Debug("adapter type not yet implemented", "type", adapterCfg.Type)
+		logger.Debug("adapter type not yet implemented", "backend", adapterCfg.Backend)
 	}
 }
 

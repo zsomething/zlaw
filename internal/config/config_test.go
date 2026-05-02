@@ -25,16 +25,15 @@ description = "A test agent"
 
 [llm]
 backend = "anthropic"
+client_config = { base_url = "https://api.anthropic.com" }
 model = "claude-haiku-4-5-20251001"
-auth_profile = "anthropic-default"
-max_tokens = 1024
-timeout_sec = 30
+model_config = { max_tokens = 1024, timeout_sec = 30 }
 
 [tools]
 allowed = ["echo", "current-time"]
 
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 	writeFile(t, dir, "SOUL.md", "You are a helpful assistant.")
 	writeFile(t, dir, "IDENTITY.md", "My name is Test.")
@@ -61,13 +60,13 @@ type = "cli"
 	if cfg.LLM.Backend != "anthropic" {
 		t.Errorf("llm.backend = %q, want %q", cfg.LLM.Backend, "anthropic")
 	}
-	if cfg.LLM.AuthProfile != "anthropic-default" {
-		t.Errorf("llm.auth_profile = %q, want %q", cfg.LLM.AuthProfile, "anthropic-default")
+	if cfg.LLM.Model != "claude-haiku-4-5-20251001" {
+		t.Errorf("llm.model = %q, want %q", cfg.LLM.Model, "claude-haiku-4-5-20251001")
 	}
 	if len(cfg.Tools.Allowed) != 2 {
 		t.Errorf("tools.allowed len = %d, want 2", len(cfg.Tools.Allowed))
 	}
-	if len(cfg.Adapter) != 1 || cfg.Adapter[0].Type != "cli" {
+	if len(cfg.Adapter) != 1 || cfg.Adapter[0].Backend != "cli" {
 		t.Errorf("adapter = %v, want [cli]", cfg.Adapter)
 	}
 	if p.Soul != "You are a helpful assistant." {
@@ -84,10 +83,10 @@ func TestLoad_MissingPersonalityFiles(t *testing.T) {
 [agent]
 name = "minimal"
 [llm]
-auth_profile = "default"
+backend = "anthropic"
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 	// No SOUL.md or IDENTITY.md
 
@@ -116,10 +115,9 @@ name = "runtime-test"
 [llm]
 backend = "anthropic"
 model = "claude-haiku-4-5-20251001"
-auth_profile = "default"
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 	writeFile(t, dir, "runtime.toml", `
 [llm]
@@ -145,11 +143,11 @@ func TestLoad_MissingRuntimeTOML(t *testing.T) {
 [agent]
 name = "no-runtime"
 [llm]
+backend = "anthropic"
 model = "claude-haiku-4-5-20251001"
-auth_profile = "default"
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 	// No runtime.toml — should succeed with static model.
 
@@ -172,11 +170,11 @@ func TestWriteRuntimeField_AndReload(t *testing.T) {
 [agent]
 name = "write-test"
 [llm]
+backend = "anthropic"
 model = "claude-haiku-4-5-20251001"
-auth_profile = "default"
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 
 	var gotModel string
@@ -208,10 +206,10 @@ func TestWriteRuntimeField_InvalidKey(t *testing.T) {
 [agent]
 name = "invalid-key-test"
 [llm]
-auth_profile = "default"
+backend = "anthropic"
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 	loader, err := config.NewLoader(dir, "", nil, nil)
 	if err != nil {
@@ -251,10 +249,10 @@ name = "env-test"
 [llm]
 backend = "anthropic"
 model = "${MY_MODEL}"
-auth_profile = "default"
+client_config = { base_url = "https://api.anthropic.com" }
 [tools]
 [[adapter]]
-type = "cli"
+backend = "cli"
 `)
 
 	loader, err := config.NewLoader(dir, "", nil, nil)
@@ -267,5 +265,33 @@ type = "cli"
 	}
 	if cfg.LLM.Model != "claude-opus-4-6" {
 		t.Errorf("llm.model = %q, want %q", cfg.LLM.Model, "claude-opus-4-6")
+	}
+}
+
+func TestLoad_ClientConfigExpansion(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("MY_API_KEY", "sk-test-key-123")
+	writeFile(t, dir, "agent.toml", `
+[agent]
+name = "client-config-test"
+[llm]
+backend = "anthropic"
+client_config = { base_url = "https://api.anthropic.com", api_key = "$MY_API_KEY" }
+model = "claude-haiku"
+[tools]
+[[adapter]]
+backend = "cli"
+`)
+
+	loader, err := config.NewLoader(dir, "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loader.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLM.ClientConfig["api_key"] != "sk-test-key-123" {
+		t.Errorf("llm.client_config.api_key = %q, want %q", cfg.LLM.ClientConfig["api_key"], "sk-test-key-123")
 	}
 }

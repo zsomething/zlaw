@@ -7,23 +7,23 @@ type AdapterPreset struct {
 	Name string
 	// Backend is the adapter protocol (e.g., "telegram", "slack", "fizzy").
 	Backend string
-	// Config contains default adapter-specific values.
-	Config map[string]any
+	// ClientConfig contains default adapter-specific values.
+	ClientConfig map[string]any
 }
 
 // adapterPresets is the internal registry of named adapters.
 var adapterPresets = map[string]AdapterPreset{
 	"telegram": {
-		Name:    "telegram",
-		Backend: "telegram",
-		Config: map[string]any{
+		Name:         "telegram",
+		Backend:      "telegram",
+		ClientConfig: map[string]any{
 			"parse_mode": "Markdown",
 		},
 	},
 	"slack": {
-		Name:    "slack",
-		Backend: "slack",
-		Config: map[string]any{
+		Name:         "slack",
+		Backend:      "slack",
+		ClientConfig: map[string]any{
 			"reaction": true,
 		},
 	},
@@ -38,7 +38,7 @@ func FindPreset(name string) (AdapterPreset, error) {
 	return AdapterPreset{
 		Name:    preset.Name,
 		Backend: preset.Backend,
-		Config:  copyConfig(preset.Config),
+		ClientConfig: copyConfig(preset.ClientConfig),
 	}, nil
 }
 

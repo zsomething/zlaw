@@ -11,8 +11,6 @@ import (
 	chromem "github.com/philippgille/chromem-go"
 
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/credentials"
-	"github.com/zsomething/zlaw/internal/llm"
 )
 
 const (
@@ -180,9 +178,8 @@ func contentHash(text string) string {
 }
 
 // NewEmbeddingFunc builds a chromem.EmbeddingFunc from the given embedder
-// config using the same preset and credentials infrastructure as the LLM client.
-// The auth token is resolved once at startup — suitable for static API keys.
-func NewEmbeddingFunc(cfg config.EmbedderConfig, credPath string) (chromem.EmbeddingFunc, error) {
+// config. Extracts base_url and api_key from ClientConfig.
+func NewEmbeddingFunc(cfg config.EmbedderConfig) (chromem.EmbeddingFunc, error) {
 	if cfg.Backend == "" {
 		return nil, fmt.Errorf("embedder: backend is required")
 	}
@@ -190,36 +187,27 @@ func NewEmbeddingFunc(cfg config.EmbedderConfig, credPath string) (chromem.Embed
 		return nil, fmt.Errorf("embedder: model is required")
 	}
 
-	preset, err := llm.LookupPreset(cfg.Backend)
-	if err != nil {
-		return nil, fmt.Errorf("embedder: %w", err)
-	}
+	// Get base_url from ClientConfig.
+	baseURL := getString(cfg.ClientConfig, "base_url", "")
 
-	// Get base_url from preset Config (new pattern) or use override.
-	baseURL := ""
-	if preset.Config != nil {
-		if v, ok := preset.Config["base_url"].(string); ok {
-			baseURL = v
-		}
-	}
-	if cfg.BaseURL != "" {
-		baseURL = cfg.BaseURL
-	}
-	// Strip any path suffix from the preset URL — embedding endpoints are
+	// Strip any path suffix from the URL — embedding endpoints are
 	// always at /v1/embeddings relative to the API root.
 	baseURL = strings.TrimRight(baseURL, "/")
 
-	if credPath == "" {
-		credPath = credentials.DefaultCredentialsPath()
-	}
-	src, err := credentials.NewTokenSourceFromStore(credPath, cfg.AuthProfile)
-	if err != nil {
-		return nil, fmt.Errorf("embedder: load auth profile %q: %w", cfg.AuthProfile, err)
-	}
-	token, err := src.Token(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("embedder: get token: %w", err)
+	// Get API key from ClientConfig.
+	apiKey := getString(cfg.ClientConfig, "api_key", "")
+	if apiKey == "" {
+		return nil, fmt.Errorf("embedder: api_key required in client_config")
 	}
 
-	return chromem.NewEmbeddingFuncOpenAICompat(baseURL, token, cfg.Model, nil), nil
+	return chromem.NewEmbeddingFuncOpenAICompat(baseURL, apiKey, cfg.Model, nil), nil
+}
+
+func getString(cfg map[string]any, key, fallback string) string {
+	if v, ok := cfg[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return fallback
 }

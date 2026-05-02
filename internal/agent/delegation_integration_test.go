@@ -25,7 +25,6 @@ func TestIntegration_AgentDelegation(t *testing.T) {
 		"worker", "v1",
 		[]string{"write", "critique"},
 		nil, // roles
-		nil, // authProfiles
 		"",  // seedPath
 		bus,
 		workerRunner,
@@ -38,7 +37,6 @@ func TestIntegration_AgentDelegation(t *testing.T) {
 		"manager", "v1",
 		[]string{"delegate"},
 		nil, // roles
-		nil, // authProfiles
 		"",  // seedPath
 		bus,
 		nil, // manager doesn't need a runner for this test
@@ -111,7 +109,6 @@ func TestIntegration_AgentNotFound(t *testing.T) {
 		"manager", "v1",
 		[]string{"delegate"},
 		nil, // roles
-		nil, // authProfiles
 		"",  // seedPath
 		bus,
 		managerRunner,
