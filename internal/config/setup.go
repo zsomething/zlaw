@@ -55,6 +55,46 @@ func writeAgentConfig(path string, cfg map[string]any) error {
 	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
 
+// WriteAdapterConfig writes adapter configuration to agent.toml.
+// Pass nil to clear the adapter config.
+func WriteAdapterConfig(agentDir string, adapter *AdapterInstanceConfig) error {
+	path := filepath.Join(agentDir, "agent.toml")
+
+	// Read existing config if present.
+	var existing map[string]any
+	if data, err := os.ReadFile(path); err == nil {
+		if _, err := toml.Decode(string(data), &existing); err != nil {
+			existing = make(map[string]any)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read agent.toml: %w", err)
+	}
+
+	if existing == nil {
+		existing = make(map[string]any)
+	}
+
+	if adapter == nil {
+		// Clear adapter config.
+		delete(existing, "adapter")
+	} else {
+		// Encode adapter config.
+		var buf bytes.Buffer
+		if err := toml.NewEncoder(&buf).Encode(map[string]any{"adapter": []AdapterInstanceConfig{*adapter}}); err != nil {
+			return fmt.Errorf("encode adapter config: %w", err)
+		}
+
+		var newAdapter map[string]any
+		if _, err := toml.Decode(buf.String(), &newAdapter); err != nil {
+			return fmt.Errorf("parse adapter config: %w", err)
+		}
+
+		existing["adapter"] = newAdapter["adapter"]
+	}
+
+	return writeAgentConfig(path, existing)
+}
+
 // SetAgentEnvVar adds or updates an env var mapping for an agent in zlaw.toml.
 func SetAgentEnvVar(agentID, envName, secretName string) error {
 	path := DefaultHubConfigPath()
@@ -158,4 +198,21 @@ func ListSecrets() []string {
 		names = append(names, k)
 	}
 	return names
+}
+
+// RemoveSecret deletes a secret by name.
+func RemoveSecret(name string) error {
+	secPath := filepath.Join(ZlawHome(), "secrets.toml")
+
+	store, err := LoadSecrets(secPath)
+	if err != nil {
+		return err
+	}
+
+	if _, exists := store[name]; !exists {
+		return fmt.Errorf("secret %q not found", name)
+	}
+
+	delete(store, name)
+	return SaveSecrets(secPath, store)
 }

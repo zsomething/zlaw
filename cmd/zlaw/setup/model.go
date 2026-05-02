@@ -18,6 +18,12 @@ type Model struct {
 	bootstrap *bootstrapState
 	agent     *agentScreenState
 	llm       *llmScreenState
+	adapter   *adapterScreenState
+	identity  *identityScreenState
+	soul      *soulScreenState
+	skills    *skillsScreenState
+	secrets   *secretsScreenState
+	summary   *summaryScreenState
 	errMsg    string
 }
 
@@ -86,6 +92,18 @@ func (m *Model) View() string {
 		return agentView(m)
 	case ScreenLLM, ScreenLLMSecret:
 		return llmView(m)
+	case ScreenAdapter, ScreenAdapterSecret:
+		return adapterView(m)
+	case ScreenIdentity:
+		return identityView(m)
+	case ScreenSoul:
+		return soulView(m)
+	case ScreenSkills:
+		return skillsView(m)
+	case ScreenSecrets:
+		return secretsView(m)
+	case ScreenSummary:
+		return summaryView(m)
 	default:
 		return placeholderView(m)
 	}
