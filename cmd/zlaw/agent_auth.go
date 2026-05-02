@@ -1,149 +1,109 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"text/tabwriter"
 
-	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/credentials"
+	"github.com/zsomething/zlaw/internal/secrets"
 )
 
 type AgentAuthCmd struct {
-	Set    AgentAuthSetCmd    `cmd:"" help:"set a credential value for a profile"`
-	List   AgentAuthListCmd   `cmd:"" help:"list credential profiles"`
-	Remove AgentAuthRemoveCmd `cmd:"" help:"remove a credential profile"`
+	Add    AgentAuthAddCmd    `cmd:"" help:"add a secret"`
+	List   AgentAuthListCmd   `cmd:"" help:"list secret names"`
+	Remove AgentAuthRemoveCmd `cmd:"" help:"remove a secret"`
 }
 
-// ── hub auth set ───────────────────────────────────────────────────────────────
+// ── zlaw auth add ──────────────────────────────────────────────────────────────
 
-type AgentAuthSetCmd struct {
-	Agent   string `required:"" help:"agent id"`
-	Profile string `required:"" help:"profile name (e.g., anthropic, telegram, fizzy)"`
-	Key     string `required:"" help:"credential value or secret key"`
+type AgentAuthAddCmd struct {
+	Name  string `arg:"true" help:"secret name (e.g., MINIMAX_API_KEY)"`
+	Value string `help:"secret value (will prompt if not provided)"`
 }
 
-func (c *AgentAuthSetCmd) Run() error {
-	agentDir := resolveAgentDir(c.Agent)
-	credsPath := agentDir + "/credentials.toml"
+func (c *AgentAuthAddCmd) Run() error {
+	path := secrets.DefaultSecretsPath()
 
-	// Load existing or create new store.
-	store, err := credentials.LoadStore(credsPath)
+	// Prompt for value if not provided
+	value := c.Value
+	if value == "" {
+		fmt.Printf("Enter secret value for %s: ", c.Name)
+		reader := bufio.NewReader(os.Stdin)
+		val, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("read secret: %w", err)
+		}
+		value = val[:len(val)-1] // trim newline
+	}
+
+	// Load existing or create new store
+	store, err := secrets.Load(path)
 	if err != nil {
-		return fmt.Errorf("load credentials: %w", err)
+		return fmt.Errorf("load secrets: %w", err)
 	}
 
-	// Determine the key name based on profile naming convention.
-	keyName := "api_key"
-	switch c.Profile {
-	case "anthropic", "openrouter", "openai":
-		keyName = "api_key"
-	case "telegram":
-		keyName = "telegram_bot_token"
-	case "fizzy":
-		keyName = "fizzy_api_key"
+	// Set the secret
+	store.Set(c.Name, value)
+
+	if err := secrets.Save(path, store); err != nil {
+		return fmt.Errorf("save secrets: %w", err)
 	}
 
-	// Upsert the profile.
-	profile := store.Profiles[c.Profile]
-	if profile.Name == "" {
-		profile.Name = c.Profile
-	}
-	if profile.Data == nil {
-		profile.Data = make(map[string]string)
-	}
-	profile.Data[keyName] = c.Key
-	store.Profiles[c.Profile] = profile
-
-	if err := credentials.SaveStore(credsPath, store); err != nil {
-		return fmt.Errorf("save credentials: %w", err)
-	}
-
-	fmt.Printf("Set %s.%s in %s\n", c.Profile, keyName, credsPath)
+	fmt.Printf("Added secret %q to %s\n", c.Name, path)
 	return nil
 }
 
-// ── hub auth list ─────────────────────────────────────────────────────────────
+// ── zlaw auth list ─────────────────────────────────────────────────────────
 
-type AgentAuthListCmd struct {
-	Agent string `required:"" help:"agent id"`
-}
+type AgentAuthListCmd struct{}
 
 func (c *AgentAuthListCmd) Run() error {
-	agentDir := resolveAgentDir(c.Agent)
-	credsPath := agentDir + "/credentials.toml"
+	path := secrets.DefaultSecretsPath()
 
-	store, err := credentials.LoadStore(credsPath)
+	store, err := secrets.Load(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("No credentials found for agent %q\n", c.Agent)
-			return nil
-		}
-		return fmt.Errorf("load credentials: %w", err)
+		return fmt.Errorf("load secrets: %w", err)
 	}
 
-	if len(store.Profiles) == 0 {
-		fmt.Printf("No credential profiles found for agent %q\n", c.Agent)
-		fmt.Printf("Credentials file: %s\n", credsPath)
+	if len(store) == 0 {
+		fmt.Println("No secrets found.")
+		fmt.Printf("Secrets file: %s\n", path)
 		return nil
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "PROFILE\tKEYS\n")
-	for name, p := range store.Profiles {
-		var keys []string
-		for k := range p.Data {
-			keys = append(keys, k)
-		}
-		fmt.Fprintf(w, "%s\t%s\n", name, join(keys, ", "))
+	fmt.Fprintln(w, "NAME")
+	for _, name := range store.List() {
+		fmt.Fprintf(w, "%s\n", name)
 	}
-	w.Flush()
-	return nil
+	return w.Flush()
 }
 
-// ── hub auth remove ───────────────────────────────────────────────────────────
+// ── zlaw auth remove ─────────────────────────────────────────────────────────
 
 type AgentAuthRemoveCmd struct {
-	Agent   string `required:"" help:"agent id"`
-	Profile string `required:"" help:"profile name to remove"`
+	Name string `arg:"true" help:"secret name to remove"`
 }
 
 func (c *AgentAuthRemoveCmd) Run() error {
-	agentDir := resolveAgentDir(c.Agent)
-	credsPath := agentDir + "/credentials.toml"
+	path := secrets.DefaultSecretsPath()
 
-	store, err := credentials.LoadStore(credsPath)
+	store, err := secrets.Load(path)
 	if err != nil {
-		return fmt.Errorf("load credentials: %w", err)
+		return fmt.Errorf("load secrets: %w", err)
 	}
 
-	if _, ok := store.Profiles[c.Profile]; !ok {
-		return fmt.Errorf("profile %q not found", c.Profile)
+	if _, ok := store[c.Name]; !ok {
+		return fmt.Errorf("secret %q not found", c.Name)
 	}
 
-	delete(store.Profiles, c.Profile)
+	delete(store, c.Name)
 
-	if err := credentials.SaveStore(credsPath, store); err != nil {
-		return fmt.Errorf("save credentials: %w", err)
+	if err := secrets.Save(path, store); err != nil {
+		return fmt.Errorf("save secrets: %w", err)
 	}
 
-	fmt.Printf("Removed profile %q from %s\n", c.Profile, credsPath)
+	fmt.Printf("Removed secret %q from %s\n", c.Name, path)
 	return nil
-}
-
-// resolveAgentDir returns the agent directory for a given agent name.
-func resolveAgentDir(agentName string) string {
-	home := config.ZlawHome()
-	return home + "/agents/" + agentName
-}
-
-func join(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
 }

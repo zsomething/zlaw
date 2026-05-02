@@ -5,6 +5,8 @@ package executor
 import (
 	"context"
 	"io"
+
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // Status represents the current state of an agent.
@@ -15,18 +17,23 @@ type Status struct {
 	Error   error
 }
 
+// EnvVarMapping maps env var name to secret name.
+// Defined in config package to share between zlaw.toml parsing and executor.
+// NOTE: This is a duplicate of config.EnvVarMapping for documentation.
+// The actual type is config.EnvVarMapping.
+
 // AgentConfig holds configuration for an agent executor.
 type AgentConfig struct {
 	ID            string
 	Dir           string
 	Binary        string
-	Executor      string   // "subprocess", "systemd", "docker"
-	Target        string   // "local", "ssh"
-	TargetSSH     string   // SSH connection string
-	RestartPolicy string   // "always", "on-failure", "never"
-	NATSURL       string   // NATS server URL (e.g., nats://127.0.0.1:4222)
-	NATSToken     string   // NATS credentials token (optional)
-	AuthProfiles  []string // Credential profiles to inject
+	Executor      string                 // "subprocess", "systemd", "docker"
+	Target        string                 // "local", "ssh"
+	TargetSSH     string                 // SSH connection string
+	RestartPolicy string                 // "always", "on-failure", "never"
+	NATSURL       string                 // NATS server URL (e.g., nats://127.0.0.1:4222)
+	NATSToken     string                 // NATS credentials token (optional)
+	EnvVars       []config.EnvVarMapping // secrets to inject from secrets.toml
 }
 
 // Executor is the interface for spawning and managing agent processes.

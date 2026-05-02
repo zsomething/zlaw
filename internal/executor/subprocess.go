@@ -13,8 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/credentials"
+	"github.com/zsomething/zlaw/internal/secrets"
 )
 
 const (
@@ -214,13 +213,17 @@ func (s *SubprocessExecutor) buildCmd(cfg AgentConfig) (*exec.Cmd, error) {
 	env = setEnv(env, "ZLAW_LOG_FORMAT", "json")
 	env = setEnv(env, "ZLAW_AGENT_HOME", agentDir)
 
-	// Inject credentials.
-	if len(cfg.AuthProfiles) > 0 {
-		runtimeCredsPath := filepath.Join(config.ZlawHome(), "run", "credentials", cfg.ID+".toml")
-		if err := injectCredentials(cfg.AuthProfiles, runtimeCredsPath); err != nil {
-			return nil, fmt.Errorf("credential injection for agent %q: %w", cfg.ID, err)
+	// Load secrets and inject.
+	sec, err := secrets.Load(secrets.DefaultSecretsPath())
+	if err != nil {
+		return nil, fmt.Errorf("load secrets: %w", err)
+	}
+	for _, ev := range cfg.EnvVars {
+		value := sec.Get(ev.FromSecret)
+		if value == "" {
+			return nil, fmt.Errorf("secret %q not found", ev.FromSecret)
 		}
-		env = setEnv(env, "ZLAW_CREDENTIALS_FILE", runtimeCredsPath)
+		env = setEnv(env, ev.Name, value)
 	}
 
 	// Inject NATS token if provided.
@@ -263,32 +266,4 @@ func setEnv(env []string, key, value string) []string {
 		}
 	}
 	return append(env, prefix+value)
-}
-
-func injectCredentials(profiles []string, runtimeCredsPath string) error {
-	globalCredsPath := filepath.Join(config.ZlawHome(), "credentials.toml")
-	store, err := credentials.LoadStore(globalCredsPath)
-	if err != nil {
-		return fmt.Errorf("load global credentials: %w", err)
-	}
-
-	// Filter to only needed profiles.
-	filtered := credentials.CredentialStore{
-		Profiles: make(map[string]credentials.CredentialProfile, len(profiles)),
-	}
-	for _, name := range profiles {
-		profile, ok := store.Profiles[name]
-		if !ok {
-			return fmt.Errorf("auth profile %q not found in global credentials", name)
-		}
-		filtered.Profiles[name] = profile
-	}
-
-	// Write filtered credentials to runtime dir.
-	runDir := filepath.Join(config.ZlawHome(), "run", "credentials")
-	if err := os.MkdirAll(runDir, 0o700); err != nil {
-		return fmt.Errorf("create runtime credentials dir: %w", err)
-	}
-
-	return credentials.SaveStore(runtimeCredsPath, filtered)
 }

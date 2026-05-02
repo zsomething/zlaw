@@ -10,6 +10,14 @@ import (
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
+// secretsTOMLTemplate is the initial secrets.toml content.
+const secretsTOMLTemplate = `# Secrets are managed by ctl. Agents receive values via env vars.
+# Format: KEY = "value"
+# Example:
+# MINIMAX_API_KEY = "sk-..."
+# ANTHROPIC_API_KEY = "sk-ant-..."
+`
+
 // zlawTOMLTemplate has the absolute agent dir substituted for %s.
 const zlawTOMLTemplate = `[hub]
 name = "main"
@@ -70,6 +78,7 @@ func (c *InitCmd) initWorkspace() error {
 
 	files := []fileEntry{
 		{filepath.Join(home, "zlaw.toml"), fmt.Sprintf(zlawTOMLTemplate, managerDir), 0o600},
+		{filepath.Join(home, "secrets.toml"), secretsTOMLTemplate, 0o600},
 		{filepath.Join(managerDir, "SOUL.md"), soulMDTemplate, 0o644},
 		{filepath.Join(managerDir, "IDENTITY.md"), fmt.Sprintf(identityMDTemplate, "Manager"), 0o644},
 	}

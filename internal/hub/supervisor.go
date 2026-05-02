@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/credentials"
 	"github.com/zsomething/zlaw/internal/messaging"
 )
 
@@ -420,24 +419,8 @@ func (s *Supervisor) buildCmd(entry config.AgentEntry) (*exec.Cmd, error) {
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderrWriter
 
-	// Inject credentials from the global credentials.toml.
-	// Hub reads from $ZLAW_HOME/credentials.toml and writes filtered profiles
-	// to $ZLAW_HOME/run/credentials/<id>.toml for injection.
-	// Auth profiles are sourced from AgentEntry (zlaw.toml) with registry fallback.
-	profiles := entry.AuthProfiles
-	if len(profiles) == 0 && s.registry != nil {
-		if regEntry, ok := s.registry.Get(entry.ID); ok {
-			profiles = regEntry.AuthProfiles
-		}
-	}
-
-	if len(profiles) > 0 {
-		runtimeCredsPath := filepath.Join(config.ZlawHome(), "run", "credentials", entry.ID+".toml")
-		if err := injectCredentialsFromGlobal(profiles, runtimeCredsPath); err != nil {
-			return nil, fmt.Errorf("credential injection for agent %q: %w", entry.ID, err)
-		}
-		env = SetEnv(env, "ZLAW_CREDENTIALS_FILE", runtimeCredsPath)
-	}
+	// Note: Secret injection is handled by ctl via executor.
+	// Hub supervisor retained for backward compat only.
 
 	// Inject the NATS token for this agent so NATSMessenger can authenticate.
 	if token, ok := s.agentTokens[entry.ID]; ok && token != "" {
@@ -479,36 +462,6 @@ func BackoffDelay(attempt int) time.Duration {
 		return backoffMax
 	}
 	return d
-}
-
-// injectCredentialsFromGlobal reads the named auth profiles from the global
-// credentials.toml and writes a filtered copy to runtimeCredsPath.
-func injectCredentialsFromGlobal(profiles []string, runtimeCredsPath string) error {
-	globalCredsPath := filepath.Join(config.ZlawHome(), "credentials.toml")
-	store, err := credentials.LoadStore(globalCredsPath)
-	if err != nil {
-		return fmt.Errorf("load global credentials: %w", err)
-	}
-
-	// Filter to only needed profiles.
-	filtered := credentials.CredentialStore{
-		Profiles: make(map[string]credentials.CredentialProfile, len(profiles)),
-	}
-	for _, name := range profiles {
-		profile, ok := store.Profiles[name]
-		if !ok {
-			return fmt.Errorf("auth profile %q not found in global credentials", name)
-		}
-		filtered.Profiles[name] = profile
-	}
-
-	// Write filtered credentials to runtime dir.
-	runDir := filepath.Join(config.ZlawHome(), "run", "credentials")
-	if err := os.MkdirAll(runDir, 0o700); err != nil {
-		return fmt.Errorf("create runtime credentials dir: %w", err)
-	}
-
-	return credentials.SaveStore(runtimeCredsPath, filtered)
 }
 
 // resolveAgentDir returns the agent directory from entry.Dir.

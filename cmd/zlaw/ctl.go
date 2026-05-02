@@ -50,32 +50,19 @@ restart_policy = "on-failure"
 description = ""
 
 [llm]
-backend = "anthropic"
-model = "claude-sonnet-4-5"
-auth_profile = "anthropic"
+backend = "minimax"
+model = "minimax-2.7"
+secret = { api_key = "$MINIMAX_API_KEY" }
 max_tokens = 4096
 timeout_sec = 60
 
 [tools]
 allowed = []
 
-# Uncomment and configure adapters after setting up credentials:
+# Configure adapters with secrets:
 # [[adapter]]
 # type = "telegram"
-# auth_profile = "telegram"
-`
-
-const credentialsTOMLTemplate = `[profiles.anthropic]
-name = "anthropic"
-data = { api_key = "${ANTHROPIC_API_KEY}" }
-
-[profiles.telegram]
-name = "telegram"
-data = { telegram_bot_token = "${TELEGRAM_BOT_TOKEN}" }
-
-[profiles.fizzy]
-name = "fizzy"
-data = { fizzy_api_key = "${FIZZY_API_KEY}" }
+# secret = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 `
 
 const ctlSoulMDTemplate = `You are a helpful personal assistant.
@@ -392,7 +379,6 @@ func (c *CtlCreateAgentCmd) Run(ctx context.Context, _ *slog.Logger) error {
 	}
 	files := []scaffold{
 		{filepath.Join(agentHome, "agent.toml"), agentToml, 0o600},
-		{filepath.Join(agentHome, "credentials.toml"), credentialsTOMLTemplate, 0o600},
 		{filepath.Join(agentHome, "SOUL.md"), ctlSoulMDTemplate, 0o644},
 		{filepath.Join(agentHome, "IDENTITY.md"), fmt.Sprintf(ctlIdentityMDTemplate, c.Name), 0o644},
 	}
@@ -472,7 +458,7 @@ func (c *CtlStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 				TargetSSH:     agent.TargetSSH,
 				RestartPolicy: string(agent.RestartPolicy),
 				NATSURL:       natsURL,
-				AuthProfiles:  agent.AuthProfiles,
+				EnvVars:       agent.EnvVars,
 			}
 
 			if err := exec.Start(ctx, agentCfg); err != nil {
@@ -542,7 +528,7 @@ func (c *CtlAgentStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		TargetSSH:     agent.TargetSSH,
 		RestartPolicy: string(agent.RestartPolicy),
 		NATSURL:       "nats://127.0.0.1:4222",
-		AuthProfiles:  agent.AuthProfiles,
+		EnvVars:       agent.EnvVars,
 	}
 
 	if err := exec.Start(ctx, agentCfg); err != nil {

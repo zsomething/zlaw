@@ -34,18 +34,19 @@ Implement fully functional multi-agent system with ctl-managed lifecycle. Agents
 | `02-ctl-lifecycle.md` | Phase 2: ctl lifecycle commands |
 | `03-bootstrapping.md` | Phase 3: Agent bootstrapping |
 | `04-verification.md` | Phase 4: Testing |
+| `05-secrets.md` | Phase 5: Secrets refactor |
 
 ## Current State
 
 ### Implemented
-- `internal/executor/` package (interface + subprocess/systemd/docker stubs)
-- `executor`, `target`, `target_ssh` fields in `AgentEntry`
+- Phase 1-3: Executor, ctl lifecycle, bootstrapping ✅
+- `internal/executor/` package
+- AgentEntry fields (executor, target, target_ssh)
 
 ### Not Implemented
-- ctl start/stop commands
-- ctl agent start/stop/restart/delete --prune
-- Executor integration (currently in hub, needs to move to ctl)
-- Updated templates
+- Phase 4: Verification (manual testing)
+- Phase 5: Secrets refactor
+- `env_vars` in AgentEntry (currently `AuthProfiles`)
 
 ## Design References
 

@@ -44,13 +44,21 @@ const (
 	RestartNever RestartPolicy = "never"
 )
 
+// EnvVarMapping maps an env var name to a secret name.
+type EnvVarMapping struct {
+	// Name is the env var name injected to agent.
+	Name string `toml:"name"`
+	// FromSecret is the key in secrets.toml.
+	FromSecret string `toml:"from_secret"`
+}
+
 // AgentEntry describes a single agent supervised by the hub.
 // Hub knows only what it needs to manage the process lifecycle.
 type AgentEntry struct {
 	// ID is the stable machine-readable agent identifier.
 	ID string `toml:"id"`
 	// Dir is the absolute path to the agent's self-contained root (ZLAW_AGENT_HOME).
-	// Contains agent.toml, credentials.toml, SOUL.md, sessions/, memories/, workspace/.
+	// Contains agent.toml, SOUL.md, sessions/, memories/, workspace/.
 	// When empty, defaults to $ZLAW_HOME/agents/<id>.
 	Dir string `toml:"dir"`
 	// Binary is the path to the agent executable.
@@ -70,9 +78,8 @@ type AgentEntry struct {
 	RestartPolicy RestartPolicy `toml:"restart_policy"`
 	// Disabled prevents the hub from spawning or respawning this agent.
 	Disabled bool `toml:"disabled,omitempty"`
-	// AuthProfiles lists the credential profile names required by this agent.
-	// The hub injects these from the global credentials.toml at spawn time.
-	AuthProfiles []string `toml:"auth_profiles,omitempty"`
+	// EnvVars lists the env vars to inject from secrets.toml.
+	EnvVars []EnvVarMapping `toml:"env_vars,omitempty"`
 }
 
 // NATSConfig holds embedded NATS server settings.
@@ -167,6 +174,9 @@ func (c HubConfig) AddAgent(entry AgentEntry) error {
 	if entry.Disabled {
 		newEntry["disabled"] = true
 	}
+	if len(entry.EnvVars) > 0 {
+		newEntry["env_vars"] = entry.EnvVars
+	}
 	agents = append(agents, newEntry)
 	raw["agents"] = agents
 
@@ -218,8 +228,8 @@ func (c HubConfig) SaveTo(path string) error {
 		if a.Disabled {
 			entry["disabled"] = true
 		}
-		if len(a.AuthProfiles) > 0 {
-			entry["auth_profiles"] = a.AuthProfiles
+		if len(a.EnvVars) > 0 {
+			entry["env_vars"] = a.EnvVars
 		}
 		agents[i] = entry
 	}
