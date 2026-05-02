@@ -189,15 +189,62 @@ func SaveSecrets(path string, store map[string]string) error {
 // ListSecrets returns secret names.
 func ListSecrets() []string {
 	path := filepath.Join(ZlawHome(), "secrets.toml")
-	store, err := LoadSecrets(path)
-	if err != nil {
-		return nil
-	}
+	store := LoadSecretsFrom(path)
 	names := make([]string, 0, len(store))
 	for k := range store {
 		names = append(names, k)
 	}
 	return names
+}
+
+// AddSecretTo adds a secret to secrets.toml in the given home directory.
+func AddSecretTo(name, value, home string) error {
+	secPath := filepath.Join(home, "secrets.toml")
+	store := LoadSecretsFrom(secPath)
+	store[name] = value
+	return SaveSecretsTo(secPath, store)
+}
+
+// LoadSecretsFrom loads secrets from a specific path.
+func LoadSecretsFrom(path string) map[string]string {
+	store, _ := loadSecretsFrom(path)
+	return store
+}
+
+// loadSecretsFrom is the internal loader that returns error.
+func loadSecretsFrom(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return make(map[string]string), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var store map[string]string
+	if _, err := toml.Decode(string(data), &store); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+// RemoveSecretFrom removes a secret from secrets.toml in the given home directory.
+func RemoveSecretFrom(name, home string) error {
+	secPath := filepath.Join(home, "secrets.toml")
+	store, err := loadSecretsFrom(secPath)
+	if err != nil {
+		return err
+	}
+	delete(store, name)
+	return SaveSecretsTo(secPath, store)
+}
+
+// SaveSecretsTo writes secrets store to a specific path.
+func SaveSecretsTo(path string, store map[string]string) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(store); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
 
 // RemoveSecret deletes a secret by name.

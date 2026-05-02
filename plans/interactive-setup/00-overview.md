@@ -90,22 +90,14 @@ This ensures consistent behavior across all entry points. See `docs/design/inter
 
 ## Current State
 
-### Implemented
-- Agent creation via `zlaw init --agent <id>` (uses `internal/config/bootstrap.go`)
-- Secret management via `zlaw auth add/list/remove`
-- LLM presets in `internal/llm/presets.go`
-- Adapter presets in `internal/adapter/preset.go`
-- Setup config package: `internal/config/bootstrap.go` (BootstrapConfig, SetupAgentConfig)
-- `zlaw setup` command (phases 01-04 complete)
-- Bubble Tea wizard with main menu and bootstrap screen
+### Implemented (All Phases Complete)
+- Setup config package: `internal/config/bootstrap.go`, `internal/config/setup.go`
+- `zlaw setup` command with all screens (phases 01-11)
+- Bubble Tea wizard with main menu, bootstrap, agent, LLM, adapter, identity, soul, skills, secrets, summary screens
+- `cmd/zlaw/setup/setup_test.go` integration tests
 
-### Not Implemented (Phases 05-11)
-- Agent creation/deletion screens
-- LLM configuration + secret setup screen
-- Adapter configuration + secret setup screen
-- Edit identity/soul, manage skills screens
-- Secrets management screen
-- Summary screen
+### Not Implemented
+- None — all phases complete!
 
 ## Design References
 
