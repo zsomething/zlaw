@@ -16,6 +16,7 @@ type Model struct {
 
 	// Screen-specific state.
 	bootstrap *bootstrapState
+	agent     *agentScreenState
 	errMsg    string
 }
 
@@ -80,6 +81,8 @@ func (m *Model) View() string {
 		return menuView(m)
 	case ScreenBootstrap:
 		return bootstrapView(m)
+	case ScreenCreateAgent, ScreenDeleteAgent:
+		return agentView(m)
 	default:
 		return placeholderView(m)
 	}
