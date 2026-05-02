@@ -4,61 +4,113 @@
 
 Implement `zlaw setup` — a menu-based TUI for configuring zlaw. Single main menu shows all actions with state. Sub-screens handle individual configuration flows.
 
-## Goals
+## Design Principle: Shared Config Management
 
-1. **Menu-based navigation** — single menu, sub-screens replace menu
-2. **State visibility** — every item shows current state (configured, missing, etc.)
-3. **Agent isolation** — agent items only visible when agent selected
-4. **Bubble Tea TUI** — interactive with keyboard navigation
+All setup and configuration operations are implemented in `internal/config/` for reuse:
+
+| Entry Point | Uses |
+|-------------|------|
+| `zlaw setup` (interactive TUI) | `internal/config/bootstrap.go` |
+| `zlaw init` (non-interactive CLI) | `internal/config/bootstrap.go` |
+
+This ensures consistent behavior across all entry points. See `docs/design/interactive_setup.md` for full design.
+
+## Menu Structure
+
+```
+┌────────────────────────────────────────────┐
+│  zlaw setup                                │
+│                                             │
+│  Bootstrap                                 │
+│  ────────                                  │
+│  ▶ Bootstrap Zlaw Home                     │
+│    /home/user/.config/zlaw                  │
+│    ✅ configured                           │
+│                                             │
+│  Agents                                    │
+│  ──────                                    │
+│  Agent: [assistant ▼]  (3)                 │
+│  ─────────────────────                      │
+│  ● Configure LLM                          │
+│    minimax                                 │
+│    ⚠️ missing                              │
+│  ● Configure adapter                      │
+│    telegram                                │
+│    ✅ configured                           │
+│  ● Edit identity                          │
+│    ✅ configured                           │
+│  ● Edit soul                              │
+│    ✅ configured                           │
+│  ● Manage skills                          │
+│    3 installed                             │
+│                                             │
+│  Global                                    │
+│  ──────                                    │
+│  ● Manage secrets                         │
+│    2 secrets                               │
+│  ● Summary                                │
+│    view                                    │
+│                                             │
+│  ───────────────────────────────────────── │
+│  [Q] Quit                                   │
+└────────────────────────────────────────────┘
+```
 
 ## Scope
 
 ### In Scope
-- New `cmd/zlaw/setup/` package with Bubble Tea wizard
+- `cmd/zlaw/setup/` package
 - `zlaw setup` command
 - Main menu with Bootstrap, Agents, Global sections
-- Agent selector dropdown
-- Sub-screens: bootstrap, create agent, configure LLM, configure adapter, edit files, manage skills, manage secrets, summary
-- Bubble Tea dependency (`github.com/charmbracelet/bubbletea`)
+- Agent selector dropdown with count
+- Sub-screens: bootstrap, create agent, configure LLM, configure adapter, edit identity/soul, manage skills, manage secrets, summary
+- Bubble Tea (`github.com/charmbracelet/bubbletea`)
 
 ### Out of Scope
 - Non-interactive mode
 - cli adapter preset
-- Model fetch API (manual entry fallback)
+- Model fetch API (defer)
 - Multi-agent batch operations
 
-## Files
+## Phases
 
-| File | Contents |
-|------|----------|
-| `00-overview.md` | This file |
-| `01-dependencies.md` | Phase 1: Add Bubble Tea dependency |
-| `02-project-structure.md` | Phase 2: Project structure, state types |
-| `03-main-menu.md` | Phase 3: Main menu screen |
-| `04-bootstrap.md` | Phase 4: Bootstrap screen |
-| `05-agent.md` | Phase 5: Agent creation |
-| `06-llm.md` | Phase 6: LLM configuration |
-| `07-adapter.md` | Phase 7: Adapter configuration |
-| `08-agent-files.md` | Phase 8: Edit identity/soul, manage skills |
-| `09-secrets.md` | Phase 9: Secrets management |
-| `10-summary.md` | Phase 10: Summary screen |
-| `11-integration.md` | Phase 11: CLI wiring, integration test |
+| Phase | File | Contents |
+|-------|------|----------|
+| 01 | `01-dependencies.md` | Add Bubble Tea to go.mod |
+| 02 | `02-project-structure.md` | Package layout, shared state types |
+| 03 | `03-main-menu.md` | Main menu screen with sections |
+| 04 | `04-bootstrap.md` | Bootstrap screen |
+| 05 | `05-agent.md` | Agent creation/deletion |
+| 06 | `06-llm.md` | LLM configuration + secret setup |
+| 07 | `07-adapter.md` | Adapter configuration + secret setup |
+| 08 | `08-agent-files.md` | Edit identity/soul, manage skills |
+| 09 | `09-secrets.md` | Secrets management |
+| 10 | `10-summary.md` | Summary screen |
+| 11 | `11-integration.md` | CLI wiring, integration test |
 
 ## Current State
 
 ### Implemented
-- Agent creation via `zlaw init --agent <id>`
+- Agent creation via `zlaw init --agent <id>` (uses `internal/config/bootstrap.go`)
 - Secret management via `zlaw auth add/list/remove`
 - LLM presets in `internal/llm/presets.go`
 - Adapter presets in `internal/adapter/preset.go`
-- Skills directory in `cmd/zlaw/init.go`
+- Setup config package: `internal/config/bootstrap.go` (BootstrapConfig, SetupAgentConfig)
+- `zlaw setup` command (phases 01-04 complete)
+- Bubble Tea wizard with main menu and bootstrap screen
 
-### Not Implemented
-- `zlaw setup` command
-- Bubble Tea wizard
-- Menu navigation model
-- Sub-screens
+### Not Implemented (Phases 05-11)
+- Agent creation/deletion screens
+- LLM configuration + secret setup screen
+- Adapter configuration + secret setup screen
+- Edit identity/soul, manage skills screens
+- Secrets management screen
+- Summary screen
 
-## Design Reference
+## Design References
 
-- `docs/design/interactive_setup.md`
+- `docs/design/interactive_setup.md` — menu structure, item states, flows
+- `docs/design/llm_presets.md` — LLM preset pattern
+- `docs/design/agent_secrets.md` — secrets injection
+- `docs/design/channel_adapter.md` — adapter presets
+- `docs/design/agent_lifecycle.md` — agent home structure
