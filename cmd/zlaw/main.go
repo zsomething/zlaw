@@ -9,15 +9,17 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/zsomething/zlaw/cmd/zlaw/setup"
 	"github.com/zsomething/zlaw/internal/dotenv"
 	"github.com/zsomething/zlaw/internal/logging"
 )
 
 var cli struct {
-	Init  InitCmd  `cmd:"" help:"bootstrap $ZLAW_HOME or create a named agent workspace"`
-	Hub   HubCmd   `cmd:"" help:"manage the zlaw hub"`
-	Agent AgentCmd `cmd:"" help:"manage and run agents"`
-	Ctl   CtlCmd   `cmd:"" help:"operational commands (hub must be running)"`
+	Init  InitCmd        `cmd:"" help:"bootstrap $ZLAW_HOME or create a named agent workspace"`
+	Hub   HubCmd         `cmd:"" help:"manage the zlaw hub"`
+	Agent AgentCmd       `cmd:"" help:"manage and run agents"`
+	Ctl   CtlCmd         `cmd:"" help:"operational commands (hub must be running)"`
+	Setup setup.SetupCmd `cmd:"" help:"interactive setup wizard"`
 }
 
 func main() {
