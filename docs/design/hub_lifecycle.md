@@ -29,7 +29,7 @@ When an agent connects to hub:
 
 ## Secret Injection
 
-Handled by ctl via executor at spawn. See [agent_credentials.md](./agent_credentials.md) for details.
+Handled by ctl via executor at spawn. See [agent_secrets.md](./agent_secrets.md) for details.
 
 ## Agent Disconnection
 
@@ -52,3 +52,5 @@ When ctl stops hub:
 - [ctl_supervisor.md](./ctl_supervisor.md) — ctl and executor design
 - [agent_lifecycle.md](./agent_lifecycle.md) — agent lifecycle
 - [hub.md](./hub.md) — hub's role in message routing
+- [agent_secrets.md](./agent_secrets.md) — secrets and env var injection
+- [llm_presets.md](./llm_presets.md) — LLM backend presets

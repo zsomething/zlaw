@@ -165,3 +165,5 @@ Hard constraint. ctl talks to hub and agents via control sockets only.
 - [agent_lifecycle.md](./agent_lifecycle.md) — agent lifecycle, executor + target matrix
 - [hub_lifecycle.md](./hub_lifecycle.md) — hub's role during lifecycle
 - [command_line.md](./command_line.md) — CLI commands
+- [llm_presets.md](./llm_presets.md) — LLM backend presets
+- [agent_secrets.md](./agent_secrets.md) — secret injection

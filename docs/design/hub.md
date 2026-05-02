@@ -81,3 +81,5 @@ Managed by ctl via executor. See [ctl_supervisor.md](./ctl_supervisor.md).
 - [overview.md](./overview.md) — high-level architecture
 - [agent_delegation.md](./agent_delegation.md) — P2P delegation
 - [constraints.md](./constraints.md) — separation of concerns
+- [agent_secrets.md](./agent_secrets.md) — secrets
+- [llm_presets.md](./llm_presets.md) — LLM backend presets

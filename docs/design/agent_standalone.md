@@ -120,7 +120,7 @@ Agent does NOT know about `ZLAW_HOME` or `secrets.toml`.
 
 ## See Also
 
-- [agent_credentials.md](./agent_credentials.md) — secrets design
+- [agent_secrets.md](./agent_secrets.md) — secrets design
 - [agent_contexts.md](./agent_contexts.md) — context engineering details
 - [agent_tools.md](./agent_tools.md) — built-in tools reference
 - [agent_skills.md](./agent_skills.md) — markdown-based skills

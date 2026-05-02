@@ -114,5 +114,6 @@ ctl → Hub (control socket)
 - [user_journey.md](./user_journey.md) — day 0, day 1, day N workflows
 - [agent_standalone.md](./agent_standalone.md) — standalone agent internals
 - [hub.md](./hub.md) — hub internals
-- [agent_credentials.md](./agent_credentials.md) — secrets design
+- [agent_secrets.md](./agent_secrets.md) — secrets design
 - [agent_delegation.md](./agent_delegation.md) — P2P delegation design
+- [llm_presets.md](./llm_presets.md) — LLM backend presets and config

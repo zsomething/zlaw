@@ -132,3 +132,4 @@ $ZLAW_HOME/agents/{agent_id}/
 - [ctl_supervisor.md](./ctl_supervisor.md) — ctl and executor design
 - [hub_lifecycle.md](./hub_lifecycle.md) — hub's role at spawn
 - [security.md](./security.md) — secret injection, subprocess filtering
+- [llm_presets.md](./llm_presets.md) — LLM backend presets and agent config

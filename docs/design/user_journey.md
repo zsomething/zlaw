@@ -62,5 +62,5 @@ zlaw ctl agent delete <id> --prune        # stop + remove + delete home director
 
 - [agent_lifecycle.md](./agent_lifecycle.md) — executor + target matrix
 - [ctl_supervisor.md](./ctl_supervisor.md) — supervisor design
-- [agent_credentials.md](./agent_credentials.md) — secrets design
+- [agent_secrets.md](./agent_secrets.md) — secrets design
 - [security.md](./security.md) — security model

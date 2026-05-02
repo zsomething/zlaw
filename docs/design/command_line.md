@@ -81,4 +81,4 @@ zlaw init -a <name>     # Single agent scaffold only
 - [ctl_supervisor.md](./ctl_supervisor.md) — supervisor design
 - [agent_lifecycle.md](./agent_lifecycle.md) — executor + target matrix
 - [user_journey.md](./user_journey.md) — day 0/1/N command usage
-- [agent_credentials.md](./agent_credentials.md) — secrets design
+- [agent_secrets.md](./agent_secrets.md) — secrets design

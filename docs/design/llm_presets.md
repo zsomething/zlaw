@@ -279,6 +279,6 @@ bot_token = "$TELEGRAM_BOT_TOKEN"
 
 ## See Also
 
-- [agent_credentials.md](./agent_credentials.md) — secrets and env var injection
+- [agent_secrets.md](./agent_secrets.md) — secrets and env var injection
 - [agent_lifecycle.md](./agent_lifecycle.md) — agent spawning
 - [channel_adapter.md](./channel_adapter.md) — adapter architecture

@@ -35,7 +35,7 @@ Flow:
 3. Injects env vars: `MINIMAX_API_KEY=sk-...`, etc.
 4. Agent receives only env vars — no file path exposed
 
-See [agent_credentials.md](./agent_credentials.md) for details.
+See [agent_secrets.md](./agent_secrets.md) for details.
 
 ## Subprocess Isolation (Planned)
 
@@ -63,5 +63,6 @@ Agents cannot publish outside ACL, cannot impersonate others.
 
 ## See Also
 
-- [agent_credentials.md](./agent_credentials.md) — secret injection design
+- [agent_secrets.md](./agent_secrets.md) — secret injection design
+- [llm_presets.md](./llm_presets.md) — LLM config and env-var expansion
 - [constraints.md](./constraints.md) — hard rules
