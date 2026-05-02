@@ -13,6 +13,10 @@ type Model struct {
 	screen Screen
 	quit   bool
 	cursor int // cursor position in the current screen's item list
+
+	// Screen-specific state.
+	bootstrap *bootstrapState
+	errMsg    string
 }
 
 // Init implements tea.Model.
@@ -74,6 +78,8 @@ func (m *Model) View() string {
 	switch m.screen {
 	case ScreenMainMenu:
 		return menuView(m)
+	case ScreenBootstrap:
+		return bootstrapView(m)
 	default:
 		return placeholderView(m)
 	}
