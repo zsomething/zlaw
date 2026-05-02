@@ -43,26 +43,20 @@ func secretsView(m *Model) string {
 		m.secretsInit()
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-		Styles.Heading.Render("Secrets"),
-		"",
-	}
+	var content strings.Builder
+	var help string
 
 	secrets := config.ListSecrets()
 
 	switch m.secrets.mode {
 	case secretsModeList:
-		lines = append(lines, Styles.Item.Render("Manage secrets"))
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, "")
+		content.WriteString(Styles.Item.Render("Manage secrets") + "\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n\n")
 
 		if len(secrets) == 0 {
-			lines = append(lines, Styles.Dim.Render("  No secrets defined."))
-			lines = append(lines, "")
+			content.WriteString(Styles.ItemDim.Render("  No secrets defined.") + "\n\n")
 		} else {
-			lines = append(lines, Styles.Item.Render("  Secret names:"))
+			content.WriteString(Styles.Item.Render("  Secret names:") + "\n")
 			for i, name := range secrets {
 				prefix := "  "
 				cursorMark := "  "
@@ -71,72 +65,68 @@ func secretsView(m *Model) string {
 					cursorMark = "*"
 				}
 				if m.secrets.cursor == i {
-					lines = append(lines, Styles.Selected.Render(prefix+cursorMark+" "+name))
+					content.WriteString(Styles.Selected.Render(prefix+cursorMark+" "+name) + "\n")
 				} else {
-					lines = append(lines, Styles.Item.Render(prefix+cursorMark+" "+name))
+					content.WriteString(Styles.Item.Render(prefix+cursorMark+" "+name) + "\n")
 				}
 			}
+			content.WriteString("\n")
+			content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
 		}
-
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[A] Add  [D] Delete  [B] Back"))
+		help = "[A] Add  [D] Delete  [B] Back"
 
 	case secretsModeAdd:
-		lines = append(lines, Styles.Item.Render("Add new secret"))
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, "")
+		content.WriteString(Styles.Item.Render("Add new secret") + "\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n\n")
 
 		if m.secrets.focused == 0 {
-			lines = append(lines, Styles.Selected.Render("> Name: ")+Styles.Item.Render(m.secrets.name+"_"))
+			content.WriteString(Styles.Selected.Render("> Name: ") + Styles.Item.Render(m.secrets.name+"_") + "\n")
 		} else {
-			lines = append(lines, Styles.Item.Render("  Name: ")+Styles.Item.Render(m.secrets.name))
+			content.WriteString(Styles.Item.Render("  Name: ") + Styles.Item.Render(m.secrets.name) + "\n")
 		}
 
-		lines = append(lines, "")
+		content.WriteString("\n")
 
 		if m.secrets.focused == 1 {
 			if m.secrets.value == "" {
-				lines = append(lines, Styles.Selected.Render("> Value: ")+Styles.Dim.Render("[empty]"))
+				content.WriteString(Styles.Selected.Render("> Value: ") + Styles.ItemDim.Render("[empty]") + "\n")
 			} else {
-				lines = append(lines, Styles.Selected.Render("> Value: ")+Styles.Item.Render(strings.Repeat("*", 8)))
+				content.WriteString(Styles.Selected.Render("> Value: ") + Styles.Item.Render(strings.Repeat("*", 8)) + "\n")
 			}
 		} else {
 			if m.secrets.value == "" {
-				lines = append(lines, Styles.Item.Render("  Value: ")+Styles.Dim.Render("[empty]"))
+				content.WriteString(Styles.Item.Render("  Value: ") + Styles.ItemDim.Render("[empty]") + "\n")
 			} else {
-				lines = append(lines, Styles.Item.Render("  Value: ")+Styles.Item.Render(strings.Repeat("*", 8)))
+				content.WriteString(Styles.Item.Render("  Value: ") + Styles.Item.Render(strings.Repeat("*", 8)) + "\n")
 			}
 		}
 
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[Tab] Switch field  [Enter] Save  [B] Cancel"))
+		content.WriteString("\n")
+		content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
+		help = "[Tab] Switch field  [Enter] Save  [B] Cancel"
 
 	case secretsModeConfirm:
 		if m.secrets.confirmIdx >= 0 && m.secrets.confirmIdx < len(secrets) {
 			name := secrets[m.secrets.confirmIdx]
-			lines = append(lines, Styles.Item.Render("Delete secret?"))
-			lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-			lines = append(lines, "")
-			lines = append(lines, Styles.Selected.Render("  > "+name))
-			lines = append(lines, "")
-			lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-			lines = append(lines, Styles.Footer.Render("[Enter] Confirm  [B] Cancel"))
+			content.WriteString(Styles.Item.Render("Delete secret?") + "\n")
+			content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n\n")
+			content.WriteString(Styles.Selected.Render("  > "+name) + "\n\n")
+			content.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 32)) + "\n")
 		}
+		help = "[Enter] Confirm  [B] Cancel"
 	}
 
 	if m.secrets.errMsg != "" {
-		lines = append(lines, "")
-		lines = append(lines, Styles.StatusErr.Render("Error: "+m.secrets.errMsg))
+		content.WriteString("\n")
+		content.WriteString(Styles.StatusErr.Render("Error: " + m.secrets.errMsg))
 	}
 
 	if m.secrets.successMsg != "" {
-		lines = append(lines, "")
-		lines = append(lines, Styles.StatusOK.Render(m.secrets.successMsg))
+		content.WriteString("\n")
+		content.WriteString(Styles.StatusOK.Render(m.secrets.successMsg))
 	}
 
-	return strings.Join(lines, "\n")
+	return windowView("Secrets", content.String(), help)
 }
 
 // updateSecrets handles keyboard events for the secrets management screen.

@@ -53,61 +53,63 @@ func skillsView(m *Model) string {
 		m.skillsInit()
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-		Styles.Heading.Render("Manage Skills — " + m.state.SelectedAgent),
-		"",
-	}
+	var contentLines []string
+	var helpText string
 
 	switch m.skills.mode {
 	case "list":
+		contentLines = append(contentLines, Styles.Heading.Render("Manage Skills — "+m.state.SelectedAgent))
+		contentLines = append(contentLines, "")
 		if len(m.skills.skills) == 0 {
-			lines = append(lines, Styles.Dim.Render("No skills installed."))
-			lines = append(lines, Styles.Dim.Render("Press [A] to add a skill."))
+			contentLines = append(contentLines, Styles.ItemDim.Render("No skills installed."))
+			contentLines = append(contentLines, Styles.ItemDim.Render("Press [A] to add a skill."))
 		} else {
-			lines = append(lines, Styles.Item.Render("Installed skills:"))
-			lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+			contentLines = append(contentLines, Styles.Item.Render("Installed skills:"))
+			contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
 			for i, name := range m.skills.skills {
 				prefix := "  "
 				if m.skills.cursor == i {
 					prefix = "> "
-					lines = append(lines, Styles.Selected.Render(prefix+itoa(i+1)+". "+name))
+					contentLines = append(contentLines, Styles.Selected.Render(prefix+itoa(i+1)+". "+name))
 				} else {
-					lines = append(lines, Styles.Item.Render(prefix+itoa(i+1)+". "+name))
+					contentLines = append(contentLines, Styles.Item.Render(prefix+itoa(i+1)+". "+name))
 				}
 			}
 		}
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[A] Add  [R] Remove  [B] Back"))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		helpText = "[A] Add  [R] Remove  [B] Back"
 
 	case "add":
-		lines = append(lines, Styles.Item.Render("Add new skill:"))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Selected.Render("> Skill name: ")+Styles.Item.Render(m.skills.newSkillName+"_"))
-		lines = append(lines, Styles.Dim.Render("  Creates: skills/<name>.md"))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[Enter] Create  [B] Cancel"))
+		contentLines = append(contentLines, Styles.Heading.Render("Add Skill"))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.Item.Render("Enter skill name:"))
+		contentLines = append(contentLines, Styles.Selected.Render("> "+m.skills.newSkillName)+"_")
+		contentLines = append(contentLines, Styles.ItemDim.Render("  Creates: skills/<name>.md"))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		helpText = "[Enter] Create  [B] Cancel"
 
 	case "confirm":
-		lines = append(lines, Styles.Item.Render("Delete skill?"))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Heading.Render("  "+m.skills.deleteTarget))
-		lines = append(lines, "")
-		lines = append(lines, Styles.StatusErr.Render("  This action cannot be undone."))
-		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, Styles.Footer.Render("[D] Delete  [B] Cancel"))
+		contentLines = append(contentLines, Styles.Heading.Render("Delete Skill"))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.Item.Render("Delete skill?"))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.StatusErr.Render("  "+m.skills.deleteTarget))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.StatusErr.Render("  This action cannot be undone."))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
+		helpText = "[D] Delete  [B] Cancel"
 	}
 
 	if m.skills.errMsg != "" {
-		lines = append(lines, "")
-		lines = append(lines, Styles.StatusErr.Render("Error: "+m.skills.errMsg))
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, Styles.StatusErr.Render("Error: "+m.skills.errMsg))
 	}
 
-	return strings.Join(lines, "\n")
+	content := strings.Join(contentLines, "\n")
+	return windowView("zlaw setup", content, helpText)
 }
 
 // updateSkills handles keyboard events for the skills management screen.

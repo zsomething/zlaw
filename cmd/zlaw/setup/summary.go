@@ -21,14 +21,9 @@ func summaryView(m *Model) string {
 		m.summary = &summaryScreenState{}
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-	}
+	lines := []string{}
 
-	lines = append(lines, Styles.Heading.Render("Configuration Summary"))
-	lines = append(lines, "")
-	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 40)))
+	lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 40)))
 	lines = append(lines, "")
 
 	// Zlaw Home path.
@@ -39,7 +34,7 @@ func summaryView(m *Model) string {
 	agents := m.state.Config.Agents
 	agentCount := len(agents)
 	if agentCount == 0 {
-		lines = append(lines, Styles.Item.Render("Agents: ")+Styles.Dim.Render("None configured"))
+		lines = append(lines, Styles.Item.Render("Agents: ")+Styles.ItemDim.Render("None configured"))
 	} else {
 		lines = append(lines, Styles.Item.Render(fmt.Sprintf("Agents (%d):", agentCount)))
 		for i, agent := range agents {
@@ -61,7 +56,7 @@ func summaryView(m *Model) string {
 	if agentCount > 0 && m.summary.cursor < agentCount {
 		agent := agents[m.summary.cursor]
 		lines = append(lines, Styles.Heading.Render("Agent: "+agent.ID))
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
+		lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
 		lines = append(lines, "")
 
 		// Get agent dir.
@@ -119,10 +114,11 @@ func summaryView(m *Model) string {
 	lines = append(lines, Styles.Item.Render("Secrets: ")+Styles.Item.Render(fmt.Sprintf("%d stored", len(secrets))))
 
 	lines = append(lines, "")
-	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 40)))
-	lines = append(lines, Styles.Footer.Render("[↑/↓] Select agent  [B] Back  [Q] Quit"))
+	lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 40)))
 
-	return strings.Join(lines, "\n")
+	content := strings.Join(lines, "\n")
+	helpText := "[↑/↓] Select agent  [←] Back  [Q] Quit"
+	return windowView("Configuration Summary", content, helpText)
 }
 
 // updateSummary handles keyboard events for the summary screen.
