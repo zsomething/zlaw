@@ -11,37 +11,21 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 │  zlaw setup                                │
 │                                             │
 │  Bootstrap                                 │
-│  ────────                                  │
+│  ─────────────────────                      │
 │  ▶ Bootstrap Zlaw Home                     │
-│    /home/user/.config/zlaw                  │
-│    ✅ configured                           │
+│    configured                             │
 │                                             │
 │  Agents                                    │
-│  ──────                                    │
-│  Agent: [assistant ▼]  (3)           │
 │  ─────────────────────                      │
-│  ● Configure LLM                          │
-│    minimax                                 │
-│    ⚠️ missing                              │
-│  ● Configure adapter                      │
-│    telegram                                │
-│    ✅ configured                           │
-│  ● Edit identity                          │
-│    ✅ configured                           │
-│  ● Edit soul                              │
-│    ✅ configured                           │
-│  ● Manage skills                          │
-│    3 installed                             │
+│  ▶ Create Agent                            │
 │                                             │
 │  Global                                    │
-│  ──────                                    │
-│  ● Manage secrets                         │
-│    2 secrets                               │
-│  ● Summary                                │
-│    view                                    │
+│  ─────────────────────                      │
+│  ▶ Manage secrets  0 secrets               │
+│  ▶ Summary view                            │
 │                                             │
 │  ───────────────────────────────────────── │
-│  [Q] Quit                                   │
+│  [↑↓] Navigate  [Enter] Select  [Q] Quit     │
 └────────────────────────────────────────────┘
 ```
 
@@ -50,8 +34,8 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 | Section | Always Visible | Agent-specific Items |
 |---------|----------------|----------------------|
 | Bootstrap | Yes | No |
-| Agents | Yes | No |
-| Agent items | No (hidden) | Yes, require agent |
+| Agents | Yes (if bootstrapped) | No |
+| Agent items | No (hidden) | Yes, require agent selected |
 | Global | Yes | No |
 
 ### Item States
@@ -68,18 +52,38 @@ Provide an interactive TUI (`zlaw setup`) for configuring zlaw. Single menu show
 
 | Item | Show When |
 |------|-----------|
-| Agent section selector | At least one agent exists |
+| Agent section | Home bootstrapped |
 | Agent items | Agent selected |
-| "No agents configured. Create one first." | No agents exist |
+| Create Agent | No agents exist, home bootstrapped |
+| Agent selector | At least one agent exists |
 
 ### Keyboard Navigation
 
 | Key | Action |
 |-----|--------|
-| `↑/↓` | Navigate menu |
-| `Enter` | Select item |
+| `↑/↓` or `j/k` | Navigate menu |
+| `Enter` | Select item / confirm action |
+| `←` or `h` | Back (previous screen) |
+| `Esc` | Back (same as ←) |
+| `Tab` | Next field (in forms) |
 | `Q` | Quit (sticky, always shown) |
-| `B` | Back (sub-screens only) |
+
+### Text Input Handling
+
+When typing in input fields (e.g., Agent ID, Secret name):
+- Letter keys are consumed as text input, **not** as shortcuts
+- Only `Backspace` and navigation keys interrupt input
+- This prevents letters like 'b' being caught as "Back" shortcut
+
+### Visual Design
+
+**Window-style layout:**
+- Blue title bar header (`zlaw setup`, `Bootstrap`, etc.)
+- `▶` prefix for selected items (no numbers)
+- `Selected` style: blue background with white text
+- `ItemDim` style for inactive/secondary text
+
+**No inline shortcuts:** All keyboard actions shown only in footer help bar. Avoids conflicts with text input fields.
 
 ## Shared Config Management
 
@@ -199,21 +203,18 @@ Selecting "Create one first" opens agent creation flow.
 
 **Flow:**
 ```
-│  Create Agent                              │
+│  Setup                                    │
 │                                             │
 │  Agent ID: _                                │
-│  > lowercase, alphanumeric + dash          │
+│    lowercase, alphanumeric + dash          │
 │                                             │
 │  Executor: [subprocess ▼]                   │
-│  > [subprocess] [systemd] [docker]          │
 │                                             │
 │  Target: [local ▼]                          │
-│  > [local] [ssh]                           │
 │                                             │
 │  Restart policy: [on-failure ▼]             │
-│  > [always] [on-failure] [never]           │
 │                                             │
-│  [C] Create   [B] Back                      │
+│  [↑↓] Navigate  [Enter] Create  [←] Back       │
 └────────────────────────────────────────────┘
 ```
 
@@ -236,8 +237,8 @@ All agent items show: label, current value/status, state indicator.
 ### Configure LLM
 
 **States:**
-- Missing: `⚠️ missing`
-- Configured: `✅ configured` + backend name
+- Missing: `missing`
+- Configured: `configured` + backend name
 
 **Flow:**
 ```
@@ -245,12 +246,11 @@ All agent items show: label, current value/status, state indicator.
 │                                             │
 │  Select LLM preset:                        │
 │  ─────────────────────                      │
-│  1. minimax     — MiniMax API (Global)    │
-│  2. minimax-cn  — MiniMax API (China)     │
-│  3. anthropic   — Anthropic Claude        │
-│  4. openai      — OpenAI GPT               │
+│  ▶ minimax     —  MiniMax API (Global)     │
+│    anthropic   —  Anthropic Claude          │
+│    openai     —  OpenAI GPT                │
 │                                             │
-│  [B] Back                                   │
+│  [↑↓] Navigate  [Enter] Select  [←] Back       │
 └────────────────────────────────────────────┘
 ```
 
@@ -280,8 +280,8 @@ All agent items show: label, current value/status, state indicator.
 ### Configure Adapter
 
 **States:**
-- Missing: `⚠️ no adapter`
-- Configured: `✅ telegram` (or other)
+- Missing: `missing`
+- Configured: `configured` + adapter name
 
 **Flow:**
 ```
@@ -289,15 +289,15 @@ All agent items show: label, current value/status, state indicator.
 │                                             │
 │  Select adapter:                           │
 │  ─────────────────                         │
-│  1. telegram  — Telegram Bot API          │
-│  2. slack     — Slack webhook             │
-│  3. None     — NATS only (no adapter)     │
+│  ▶ telegram   —  Telegram Bot API          │
+│    slack      —  Slack webhook             │
+│    none       —  NATS only (no adapter)    │
 │                                             │
-│  [B] Back                                   │
+│  [↑↓] Navigate  [Enter] Select  [←] Back       │
 └────────────────────────────────────────────┘
 ```
 
-**After selection — Secret Setup (if needed):**
+**After selection — Secret Setup:**
 ```
 │  Adapter: telegram                         │
 │                                             │
@@ -306,7 +306,7 @@ All agent items show: label, current value/status, state indicator.
 │                                             │
 │  Secret: [Create new ▼]                    │
 │                                             │
-│  [C] Configure   [B] Back                   │
+│  [↑↓] Navigate  [Tab] Next field  [Enter] Done  [←] Back │
 └────────────────────────────────────────────┘
 ```
 
@@ -336,19 +336,16 @@ Opens `SOUL.md` in `$EDITOR`.
 
 Shows list of skills, allows adding/removing.
 
+
 **Display:**
 ```
-│  ● Manage skills                          │
-│    skills/                                │
-│    3 installed                            │
+│  Manage Skills — assistant                 │
 │                                             │
-│  skills:                                   │
-│  ──────                                    │
-│  1. weather                                │
-│  2. calendar                               │
-│  3. slack-notify                           │
+│  ▶ weather                                │
+│    calendar                                │
+│    slack-notify                            │
 │                                             │
-│  [A] Add skill   [R] Remove   [B] Back    │
+│  [↑↓] Navigate  [Enter] Add  [←] Back         │
 └────────────────────────────────────────────┘
 ```
 
@@ -359,15 +356,12 @@ Shows list of skills, allows adding/removing.
 View, add, remove secrets in `secrets.toml`.
 
 ```
-│  Manage Secrets                           │
+│  Manage secrets                            │
 │                                             │
-│  secrets.toml                              │
-│  2 secrets                                 │
-│  ──────────                                │
-│  1. MINIMAX_API_KEY          set           │
-│  2. TELEGRAM_BOT_TOKEN      set           │
+│  ▶ MINIMAX_API_KEY                        │
+│    TELEGRAM_BOT_TOKEN                     │
 │                                             │
-│  [A] Add secret   [R] Remove   [B] Back  │
+│  [↑↓] Navigate  [Enter] Add/Delete  [←] Back │
 └────────────────────────────────────────────┘
 ```
 
@@ -380,24 +374,20 @@ Read-only view of current configuration.
 │                                             │
 │  Bootstrap                                 │
 │  ──────────                                │
-│  zlaw_home:  /home/user/.config/zlaw       │
-│  status:     ✅ configured                │
+│  zlaw_home:  ~/.config/zlaw                │
+│  status:     configured                   │
 │                                             │
 │  Agent: assistant                         │
 │  ───────────────                           │
-│  LLM:       minimax     ✅ configured      │
-│  Adapter:   telegram    ✅ configured     │
-│  Identity:  IDENTITY.md  ✅ configured    │
-│  Soul:      SOUL.md      ✅ configured    │
+│  LLM:       minimax     configured         │
+│  Adapter:   telegram    configured        │
+│  Identity:  IDENTITY.md  configured        │
+│  Soul:      SOUL.md      configured        │
 │  Skills:    3                             │
 │                                             │
 │  Secrets:   2 configured                  │
 │                                             │
-│  Next steps:                               │
-│  $ zlaw ctl start                          │
-│    → Start hub + agents                    │
-│                                             │
-│  [B] Back                                   │
+│  [↑↓] Navigate  [←] Back                     │
 └────────────────────────────────────────────┘
 ```
 
@@ -405,12 +395,40 @@ Read-only view of current configuration.
 
 ### TUI Framework
 
-**Dependency:** `github.com/charmbracelet/bubbletea`
+**Dependencies:**
+- `github.com/charmbracelet/bubbletea` — main TUI framework
+- `github.com/charmbracelet/bubbles` — pre-built components
 
-Bubble Tea model:
-- Each screen (main menu, LLM config, adapter config, etc.) is a separate `tea.Model`
-- Screens return to main menu via `tea.Quit` + state update
-- Global state (selected agent, config cache) passed via initial model
+**Use bubbles components, don't invent your own.** The bubbles library provides well-tested, accessible components:
+
+| Component | Use |
+|-----------|-----|
+| `textinput` | Form fields (Agent ID, Secret name/value) |
+| `textarea` | Multi-line editors |
+| `spinner` | Loading states |
+| `viewport` | Scrollable content |
+| `progressbar` | Long operations |
+| `keymap` | Declarative key bindings |
+| `table` | Tabular data display |
+| `ticker` | Periodic updates |
+| `viewport` | Scrollable content |
+
+**Why bubbles?**
+- Handles input correctly (e.g., letter keys don't trigger shortcuts while typing)
+- Accessible by default
+- Consistent behavior across screens
+- Battle-tested in production
+
+**Anti-pattern to avoid:**
+```go
+// DON'T: Build custom text input handling
+if msg.Runes[0] >= 'a' && msg.Runes[0] <= 'z' {
+    m.input += string(msg.Runes[0])
+}
+
+// DO: Use textinput component
+tea.Model with bubbles/textinput.Model
+```
 
 ### Project Structure
 
