@@ -25,10 +25,10 @@ func (m *Model) identityInit() {
 	if !ok {
 		return
 	}
-	dir := agentDir(m.state.Home, agent)
+	agentPath := agentHomeDir(m.state.Home, agent)
 	m.identity = &identityScreenState{
-		agentDir: dir,
-		path:     filepath.Join(dir, "IDENTITY.md"),
+		agentDir: agentPath,
+		path:     filepath.Join(agentPath, "IDENTITY.md"),
 		status:   "ready",
 	}
 }
@@ -40,7 +40,7 @@ func identityView(m *Model) string {
 	}
 
 	lines := []string{
-		Styles.Title.Render("zlaw setup"),
+		Styles.TitleBar.Render("zlaw setup"),
 		"",
 		Styles.Heading.Render("Edit Identity — " + m.state.SelectedAgent),
 		"",
@@ -49,7 +49,7 @@ func identityView(m *Model) string {
 	if m.identity.path != "" {
 		lines = append(lines, Styles.Item.Render("File: "+m.identity.path))
 	} else {
-		lines = append(lines, Styles.Dim.Render("File: (no agent selected)"))
+		lines = append(lines, Styles.ItemDim.Render("File: (no agent selected)"))
 	}
 
 	lines = append(lines, "")
@@ -58,14 +58,14 @@ func identityView(m *Model) string {
 
 	// Show whether file exists.
 	if _, err := os.Stat(m.identity.path); os.IsNotExist(err) {
-		lines = append(lines, Styles.Dim.Render("File does not exist yet."))
+		lines = append(lines, Styles.ItemDim.Render("File does not exist yet."))
 	} else if err == nil {
 		lines = append(lines, Styles.StatusOK.Render("File exists."))
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-	lines = append(lines, Styles.Footer.Render("[E] Open editor  [B] Back"))
+	lines = append(lines, Styles.ItemDim.Render(strings.Repeat("─", 32)))
+	lines = append(lines, Styles.Help.Render("[E] Open editor  [B] Back"))
 
 	return strings.Join(lines, "\n")
 }

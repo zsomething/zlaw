@@ -11,10 +11,10 @@ import (
 // bootstrapState holds the state for the bootstrap screen.
 type bootstrapState struct {
 	configured bool
-	cursor     int // 0 = first option, 1 = second option, etc.
+	cursor     int
 }
 
-// Init bootstraps the state.
+// bootstrapInit initializes the state.
 func (m *Model) bootstrapInit() {
 	m.bootstrap = &bootstrapState{
 		configured: m.state.IsConfigured(),
@@ -24,51 +24,57 @@ func (m *Model) bootstrapInit() {
 
 // bootstrapView renders the bootstrap screen.
 func bootstrapView(m *Model) string {
-	// Initialize bootstrap state on first view.
 	if m.bootstrap == nil {
 		m.bootstrapInit()
 	}
 
-	lines := []string{
-		Styles.Title.Render("zlaw setup"),
-		"",
-	}
+	var lines []string
+	lines = append(lines, Styles.Heading.Render("Zlaw Home"))
 
 	if m.bootstrap.configured {
-		lines = append(lines, Styles.Heading.Render("Zlaw Home already exists at:"))
-		lines = append(lines, Styles.Item.Render(m.state.Home))
 		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, bootstrapOption(m, "Re-create", 'R', 0))
-		lines = append(lines, bootstrapOption(m, "Keep", 'K', 1))
-		lines = append(lines, bootstrapOption(m, "Cancel", 'N', 2))
+		lines = append(lines, Styles.ItemDim.Render("  Location:"))
+		lines = append(lines, Styles.Item.Render("  "+m.state.Home))
+		lines = append(lines, "")
+		lines = append(lines, Styles.StatusOK.Render("  ✓ Already configured"))
+		lines = append(lines, "")
+		lines = append(lines, Styles.Divider.Render(strings.Repeat("─", 40)))
+		lines = append(lines, "")
+		lines = append(lines, optionItem("Re-create zlaw home", m.bootstrap.cursor == 0, "[R]"))
+		lines = append(lines, optionItem("Keep existing", m.bootstrap.cursor == 1, "[K]"))
+		lines = append(lines, optionItem("Cancel", m.bootstrap.cursor == 2, "[N]"))
 	} else {
-		lines = append(lines, Styles.Heading.Render("Create Zlaw Home?"))
-		lines = append(lines, Styles.Item.Render("Path: "+m.state.Home))
 		lines = append(lines, "")
-		lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-		lines = append(lines, bootstrapOption(m, "Create", 'Y', 0))
-		lines = append(lines, bootstrapOption(m, "Cancel", 'N', 1))
+		lines = append(lines, Styles.ItemDim.Render("  This will create:"))
+		lines = append(lines, Styles.Item.Render("  • zlaw.toml"))
+		lines = append(lines, Styles.Item.Render("  • secrets.toml"))
+		lines = append(lines, Styles.Item.Render("  • agents/ directory"))
+		lines = append(lines, "")
+		lines = append(lines, Styles.Divider.Render(strings.Repeat("─", 40)))
+		lines = append(lines, "")
+		lines = append(lines, optionItem("Create", m.bootstrap.cursor == 0, "[Y]"))
+		lines = append(lines, optionItem("Cancel", m.bootstrap.cursor == 1, "[N]"))
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, Styles.Dim.Render(strings.Repeat("─", 32)))
-	lines = append(lines, Styles.Footer.Render("[Q] Quit  [←] Back"))
-
-	return strings.Join(lines, "\n")
+	content := strings.Join(lines, "\n")
+	return windowView("Bootstrap", content, "[←] Back  [Q] Quit")
 }
 
-// bootstrapOption renders a single option.
-func bootstrapOption(m *Model, label string, key rune, idx int) string {
-	if m.bootstrap.cursor == idx {
-		return Styles.Selected.Render("> "+label) + "  [" + string(key) + "]"
+// optionItem renders a selectable option.
+func optionItem(label string, selected bool, shortcut string) string {
+	prefix := "  "
+	if selected {
+		prefix = "▶ "
 	}
-	return Styles.Item.Render(label) + "  [" + string(key) + "]"
+
+	if selected {
+		return Styles.Selected.Render(prefix+label) + "  " + Styles.Help.Render(shortcut)
+	}
+	return Styles.Item.Render(prefix+label) + "  " + Styles.ItemDim.Render(shortcut)
 }
 
 // updateBootstrap handles keyboard events for the bootstrap screen.
 func updateBootstrap(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Initialize bootstrap state on first update.
 	if m.bootstrap == nil {
 		m.bootstrapInit()
 	}
@@ -92,26 +98,16 @@ func updateBootstrap(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "left", "h":
-			// Back to menu.
+		case "left", "h", "b", "B":
 			m.screen = ScreenMainMenu
 			m.bootstrap = nil
 			return m, nil
 
-		case "enter", "right", "l":
+		case "enter", "l", "r", "R", "y", "Y":
 			m2, cmd := bootstrapConfirm(m)
 			return m2, cmd
 
-		case "r", "R":
-			if m.bootstrap.configured {
-				m.bootstrap.cursor = 0
-				m2, cmd := bootstrapConfirm(m)
-				return m2, cmd
-			}
-			return m, nil
-
-		case "n", "N":
-			// Cancel - go back to menu.
+		case "n", "N", "escape", "esc":
 			m.screen = ScreenMainMenu
 			m.bootstrap = nil
 			return m, nil
@@ -127,30 +123,20 @@ func updateBootstrap(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 // bootstrapConfirm performs the action based on current cursor position.
 func bootstrapConfirm(m *Model) (tea.Model, tea.Cmd) {
 	if m.bootstrap.configured {
-		// Re-create or Keep.
-		switch m.bootstrap.cursor {
-		case 0: // Re-create
+		if m.bootstrap.cursor == 0 {
 			cfg := config.BootstrapConfig{Home: m.state.Home, Force: true}
 			if err := cfg.CreateZlawHome(); err != nil {
 				m.errMsg = err.Error()
 				return m, nil
 			}
-		case 1: // Keep
-			// Do nothing, just go back.
-		default:
-			return m, nil
 		}
 	} else {
-		// Create or Cancel.
-		switch m.bootstrap.cursor {
-		case 0: // Create
+		if m.bootstrap.cursor == 0 {
 			cfg := config.BootstrapConfig{Home: m.state.Home}
 			if err := cfg.CreateZlawHome(); err != nil {
 				m.errMsg = err.Error()
 				return m, nil
 			}
-		default:
-			return m, nil
 		}
 	}
 
