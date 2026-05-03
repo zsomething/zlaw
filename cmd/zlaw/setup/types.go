@@ -17,6 +17,21 @@ const (
 	ScreenSummary
 )
 
+// MenuCursor represents focus position in generic menu screens.
+type MenuCursor int
+
+const (
+	MenuItem0 MenuCursor = iota // first menu item
+	MenuItem1                   // second menu item
+	MenuItem2                   // third menu item
+	MenuItem3                   // fourth menu item
+	MenuItem4                   // fifth menu item
+	MenuItem5                   // sixth menu item
+)
+
+// Menu cursor positions for consistent menu navigation.
+// Use these named constants instead of raw integers.
+
 func (s ScreenType) String() string {
 	switch s {
 	case ScreenMainMenu:
@@ -92,3 +107,14 @@ func (s ItemState) String() string {
 		return ""
 	}
 }
+
+// SecretCursor represents the focus position in the secret phase screen.
+type SecretCursor int
+
+const (
+	SecretCursorDropdown  SecretCursor = iota // existing secrets dropdown
+	SecretCursorUseSecret                     // "Use Secret" button
+	SecretCursorKey                           // secret key textinput
+	SecretCursorValue                         // secret value textinput
+	SecretCursorCreate                        // "Create Secret" button
+)

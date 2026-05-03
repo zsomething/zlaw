@@ -68,15 +68,15 @@ func (m *Model) viewBootstrap() string {
 	if m.state.BootstrapStatus == BootstrapReady {
 		b.WriteString(Styles.StatusOK.Render("✓ Already configured") + "\n\n")
 		b.WriteString("What would you like to do?\n\n")
-		b.WriteString(m.option("Reset", m.bootstrap.cursor == 0) + "\n")
-		b.WriteString(m.option("Keep", m.bootstrap.cursor == 1) + "\n")
-		b.WriteString(m.option("Cancel", m.bootstrap.cursor == 2))
+		b.WriteString(m.option("Reset", m.bootstrap.cursor == MenuItem0) + "\n")
+		b.WriteString(m.option("Keep", m.bootstrap.cursor == MenuItem1) + "\n")
+		b.WriteString(m.option("Cancel", m.bootstrap.cursor == MenuItem2))
 	} else {
 		// Not bootstrapped or incomplete
 		statusText, statusStyle := bootstrapStatusText(m.state.BootstrapStatus)
 		b.WriteString(statusStyle.Render(statusText) + "\n\n")
-		b.WriteString(m.option("Create", m.bootstrap.cursor == 0) + "\n")
-		b.WriteString(m.option("Cancel", m.bootstrap.cursor == 1))
+		b.WriteString(m.option("Create", m.bootstrap.cursor == MenuItem0) + "\n")
+		b.WriteString(m.option("Cancel", m.bootstrap.cursor == MenuItem1))
 	}
 
 	// Error message
@@ -95,16 +95,16 @@ func (m *Model) viewConfirmReset() string {
 	b.WriteString(Styles.StatusWarn.Render("⚠️ Reset Bootstrap?") + "\n\n")
 	b.WriteString("This will recreate the zlaw home structure.\n")
 	b.WriteString("Existing files will be preserved where possible.\n\n")
-	b.WriteString(m.option("Yes, Reset", m.bootstrap.cursor == 0) + "\n")
-	b.WriteString(m.option("No, Cancel", m.bootstrap.cursor == 1))
+	b.WriteString(m.option("Yes, Reset", m.bootstrap.cursor == MenuItem0) + "\n")
+	b.WriteString(m.option("No, Cancel", m.bootstrap.cursor == MenuItem1))
 	return b.String()
 }
 
 func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Determine max cursor based on state
-	maxCursor := 1 // Create, Cancel
+	maxCursor := MenuItem1 // Create, Cancel
 	if m.state.BootstrapStatus == BootstrapReady {
-		maxCursor = 2 // Reset, Keep, Cancel
+		maxCursor = MenuItem2 // Reset, Keep, Cancel
 	}
 
 	// Handle confirmation dialog mode
@@ -116,7 +116,7 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up":
-			if m.bootstrap.cursor > 0 {
+			if m.bootstrap.cursor > MenuItem0 {
 				m.bootstrap.cursor--
 			}
 		case "down":
@@ -127,18 +127,18 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.bootstrap.errMsg = ""
 			if m.state.BootstrapStatus == BootstrapReady {
 				switch m.bootstrap.cursor {
-				case 0: // Reset - show confirmation
+				case MenuItem0: // Reset - show confirmation
 					m.bootstrap.confirming = true
 					m.bootstrap.cursor = 0
 					return m, nil
-				case 1: // Keep
+				case MenuItem1: // Keep
 					m.popScreen()
-				case 2: // Cancel
+				case MenuItem2: // Cancel
 					m.popScreen()
 				}
 			} else {
 				switch m.bootstrap.cursor {
-				case 0: // Create
+				case MenuItem0: // Create
 					cfg := config.BootstrapConfig{
 						Home:  m.state.HomePath,
 						Force: m.state.BootstrapStatus == BootstrapIncomplete,
@@ -150,7 +150,7 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state.BootstrapStatus = BootstrapReady
 					m.popScreen()
 					return m, nil
-				case 1: // Cancel
+				case MenuItem1: // Cancel
 					m.popScreen()
 				}
 			}
@@ -166,15 +166,15 @@ func (m *Model) updateBootstrapConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up":
-			if m.bootstrap.cursor > 0 {
+			if m.bootstrap.cursor > MenuItem0 {
 				m.bootstrap.cursor--
 			}
 		case "down":
-			if m.bootstrap.cursor < 1 {
+			if m.bootstrap.cursor < MenuItem1 {
 				m.bootstrap.cursor++
 			}
 		case "enter":
-			if m.bootstrap.cursor == 0 {
+			if m.bootstrap.cursor == MenuItem0 {
 				cfg := config.BootstrapConfig{
 					Home:  m.state.HomePath,
 					Force: true,
@@ -211,20 +211,20 @@ func (m *Model) viewAgentCreate() string {
 	b.WriteString(m.agent.agentID.View() + "\n\n")
 
 	b.WriteString(Styles.Item.Render("Executor") + "\n")
-	b.WriteString(m.option("subprocess", m.agent.cursor == 1) + "\n\n")
+	b.WriteString(m.option("subprocess", m.agent.cursor == MenuItem1) + "\n\n")
 
 	b.WriteString(Styles.Item.Render("Target") + "\n")
-	b.WriteString(m.option("local", m.agent.cursor == 2) + "\n\n")
+	b.WriteString(m.option("local", m.agent.cursor == MenuItem2) + "\n\n")
 
 	b.WriteString(Styles.Item.Render("Restart Policy") + "\n")
-	b.WriteString(m.option("on-failure", m.agent.cursor == 3) + "\n\n")
+	b.WriteString(m.option("on-failure", m.agent.cursor == MenuItem3) + "\n\n")
 
 	if m.agent.errMsg != "" {
 		b.WriteString(Styles.StatusErr.Render("⚠ "+m.agent.errMsg) + "\n\n")
 	}
 
-	b.WriteString(m.option("Create Agent", m.agent.cursor == 4) + "   ")
-	b.WriteString(m.option("Cancel", m.agent.cursor == 5))
+	b.WriteString(m.option("Create Agent", m.agent.cursor == MenuItem4) + "   ")
+	b.WriteString(m.option("Cancel", m.agent.cursor == MenuItem5))
 
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[↑↓] Navigate   [Tab] Next   [Enter] Select   [←] Back   [Q] Quit"))
@@ -248,11 +248,11 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch keyStr {
 		case "up":
-			if m.agent.cursor > 0 {
+			if m.agent.cursor > MenuItem0 {
 				m.agent.cursor--
 			}
 		case "down":
-			if m.agent.cursor < 5 {
+			if m.agent.cursor < MenuItem5 {
 				m.agent.cursor++
 			}
 		case "tab":
@@ -260,7 +260,7 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.agent.errMsg = ""
 			switch m.agent.cursor {
-			case 4: // Create
+			case MenuItem4: // Create
 				agentID := strings.TrimSpace(m.agent.agentID.Value())
 				if agentID == "" {
 					m.agent.errMsg = "Agent ID is required"
@@ -384,7 +384,7 @@ func (m *Model) viewLLMConfigPhase1() string {
 	for i, name := range llmPresets {
 		prefix := "  "
 		style := Styles.Item
-		if m.llm.cursor == i {
+		if m.llm.cursor == MenuCursor(i) {
 			prefix = "▸ "
 			style = Styles.ItemSelected
 		}
@@ -425,28 +425,24 @@ func (m *Model) viewLLMSecretPhase() string {
 
 	b.WriteString(envVarName + " is required\n\n")
 
-	b.WriteString("Use existing secret:\n")
 	if len(m.llm.existingSecrets) > 0 {
+		b.WriteString("Use existing secret:\n")
 		selectedSecret := "(none)"
 		if m.llm.selectedSecretIdx >= 0 && m.llm.selectedSecretIdx < len(m.llm.existingSecrets) {
 			selectedSecret = m.llm.existingSecrets[m.llm.selectedSecretIdx]
 		}
 		prefix := "  "
-		if m.llm.secretCursor == 0 {
+		if m.llm.secretCursor == SecretCursorDropdown {
 			prefix = "▸ "
 		}
 		b.WriteString(Styles.Item.Render(prefix+"["+selectedSecret+" ▼]") + "\n")
-	} else {
-		b.WriteString(Styles.ItemDim.Render("  (no secrets saved)") + "\n")
+		b.WriteString(m.option("Use Secret", m.llm.secretCursor == SecretCursorUseSecret) + "\n\n")
+		b.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 40)) + "\n\n")
 	}
-	b.WriteString(m.option("Use Secret", m.llm.secretCursor == 1) + "\n\n")
-
-	b.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 40)) + "\n\n")
-
 	b.WriteString("Or create new secret:\n\n")
 	b.WriteString("Key\n")
 	prefix := "  "
-	if m.llm.secretCursor == 2 {
+	if m.llm.secretCursor == SecretCursorKey {
 		prefix = "▸ "
 	}
 	b.WriteString(Styles.Item.Render(prefix))
@@ -455,14 +451,14 @@ func (m *Model) viewLLMSecretPhase() string {
 
 	b.WriteString("Value\n")
 	prefix = "  "
-	if m.llm.secretCursor == 3 {
+	if m.llm.secretCursor == SecretCursorValue {
 		prefix = "▸ "
 	}
 	b.WriteString(Styles.Item.Render(prefix))
 	b.WriteString(m.llm.secretValueInput.View())
 	b.WriteString("\n\n")
 
-	b.WriteString(m.option("Create Secret", m.llm.secretCursor == 4))
+	b.WriteString(m.option("Create Secret", m.llm.secretCursor == SecretCursorCreate))
 
 	if m.llm.errMsg != "" {
 		b.WriteString("\n\n")
@@ -487,7 +483,7 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.llm.cursor--
 			}
 		case "down":
-			if m.llm.cursor < len(llmPresets)-1 {
+			if m.llm.cursor < MenuCursor(len(llmPresets)-1) {
 				m.llm.cursor++
 			}
 		case "enter":
@@ -507,7 +503,7 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Enter secret phase
 			m.llm.secretPhase = true
-			m.llm.secretCursor = 2
+			m.llm.secretCursor = SecretCursorKey
 			m.llm.selectedSecretIdx = -1
 			m.llm.secretKeyInput.Placeholder = envVarName
 			m.llm.secretKeyInput.SetValue("")
@@ -528,9 +524,9 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyStr != "up" && keyStr != "down" &&
 			keyStr != "left" && keyStr != "escape" &&
 			keyStr != "enter" && keyStr != "tab" && keyStr != "q" && keyStr != "Q" {
-			if m.llm.secretCursor == 2 {
+			if m.llm.secretCursor == SecretCursorKey {
 				m.llm.secretKeyInput, _ = m.llm.secretKeyInput.Update(msg)
-			} else if m.llm.secretCursor == 3 {
+			} else if m.llm.secretCursor == SecretCursorValue {
 				m.llm.secretValueInput, _ = m.llm.secretValueInput.Update(msg)
 			}
 		}
@@ -544,22 +540,24 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up":
-			if m.llm.secretCursor > 0 {
+			if m.llm.secretCursor > SecretCursorDropdown {
 				m.llm.secretCursor--
 			}
 		case "down":
-			if noSecret {
-				if m.llm.secretCursor < 1 {
+			if len(m.llm.existingSecrets) == 0 {
+				// No existing secrets: skip dropdown (cursor 0), navigate Key->Value->Create
+				maxCursor := SecretCursorCreate
+				if m.llm.secretCursor >= SecretCursorUseSecret && m.llm.secretCursor < maxCursor {
 					m.llm.secretCursor++
 				}
 			} else {
-				if m.llm.secretCursor < 4 {
+				if m.llm.secretCursor < SecretCursorCreate {
 					m.llm.secretCursor++
 				}
 			}
 		case "left", "escape":
 			m.llm.secretPhase = false
-			m.llm.secretCursor = 0
+			m.llm.secretCursor = SecretCursorDropdown
 		case "enter":
 			m.llm.errMsg = ""
 			if noSecret {
@@ -573,14 +571,14 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			switch m.llm.secretCursor {
-			case 0:
+			case SecretCursorDropdown:
 				if len(m.llm.existingSecrets) > 0 {
 					m.llm.selectedSecretIdx = (m.llm.selectedSecretIdx + 1) % (len(m.llm.existingSecrets) + 1)
 					if m.llm.selectedSecretIdx == len(m.llm.existingSecrets) {
 						m.llm.selectedSecretIdx = -1
 					}
 				}
-			case 1:
+			case SecretCursorUseSecret:
 				if m.llm.selectedSecretIdx >= 0 {
 					secretName := m.llm.existingSecrets[m.llm.selectedSecretIdx]
 					if err := m.configureLLMWithPreset(presetName, envVarName, secretName); err != nil {
@@ -590,11 +588,11 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state.LLMStatus = StateConfigured
 					m.popScreen()
 				}
-			case 2:
+			case SecretCursorKey:
 				m.llm.secretKeyInput.Focus()
-			case 3:
+			case SecretCursorValue:
 				m.llm.secretValueInput.Focus()
-			case 4:
+			case SecretCursorCreate:
 				key := m.llm.secretKeyInput.Value()
 				value := m.llm.secretValueInput.Value()
 				if key == "" || value == "" {
@@ -618,9 +616,9 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.llm.secretCursor = (m.llm.secretCursor + 1) % 5
 				// Focus appropriate textinput
-				if m.llm.secretCursor == 2 {
+				if m.llm.secretCursor == SecretCursorKey {
 					m.llm.secretKeyInput.Focus()
-				} else if m.llm.secretCursor == 3 {
+				} else if m.llm.secretCursor == SecretCursorValue {
 					m.llm.secretValueInput.Focus()
 				}
 			}

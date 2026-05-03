@@ -153,24 +153,24 @@ func (m *Model) placeholder() string {
 
 // Screen state types.
 type bootstrapState struct {
-	cursor     int
+	cursor     MenuCursor
 	errMsg     string
 	confirming bool
 }
 
 type agentScreenState struct {
-	cursor  int
+	cursor  MenuCursor
 	agentID textinput.Model
 	errMsg  string
 }
 
 type llmScreenState struct {
-	cursor int
+	cursor MenuCursor
 	errMsg string
 
 	// Secret phase
 	secretPhase       bool
-	secretCursor      int
+	secretCursor      SecretCursor
 	selectedSecretIdx int
 	secretKeyInput    textinput.Model
 	secretValueInput  textinput.Model
