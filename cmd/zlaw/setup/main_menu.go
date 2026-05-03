@@ -77,15 +77,15 @@ func (m *Model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(items)-1 {
 				m.cursor++
 			}
-		case "enter", "right", "l":
+		case "enter":
 			item := items[m.cursor]
 			if item.screen != -1 {
 				if item.disabled {

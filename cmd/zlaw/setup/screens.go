@@ -115,11 +115,11 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.bootstrap.cursor > 0 {
 				m.bootstrap.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.bootstrap.cursor < maxCursor {
 				m.bootstrap.cursor++
 			}
@@ -154,7 +154,7 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.popScreen()
 				}
 			}
-		case "escape", "left", "h":
+		case "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -165,11 +165,11 @@ func (m *Model) updateBootstrapConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.bootstrap.cursor > 0 {
 				m.bootstrap.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.bootstrap.cursor < 1 {
 				m.bootstrap.cursor++
 			}
@@ -192,7 +192,7 @@ func (m *Model) updateBootstrapConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.bootstrap.confirming = false
 				m.bootstrap.cursor = 0
 			}
-		case "n", "N", "escape", "left", "h":
+		case "n", "N", "escape", "left":
 			m.bootstrap.confirming = false
 			m.bootstrap.cursor = 0
 		}
@@ -236,8 +236,8 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Don't update textinput on navigation/action keys
 		keyStr := msg.String()
-		if keyStr != "up" && keyStr != "k" && keyStr != "down" && keyStr != "j" &&
-			keyStr != "left" && keyStr != "h" && keyStr != "escape" &&
+		if keyStr != "up" && keyStr != "down" &&
+			keyStr != "left" && keyStr != "escape" &&
 			keyStr != "enter" && keyStr != "tab" && keyStr != "q" && keyStr != "Q" {
 			var cmd tea.Cmd
 			m.agent.agentID, cmd = m.agent.agentID.Update(msg)
@@ -247,11 +247,11 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch keyStr {
-		case "up", "k":
+		case "up":
 			if m.agent.cursor > 0 {
 				m.agent.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.agent.cursor < 5 {
 				m.agent.cursor++
 			}
@@ -290,7 +290,7 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				m.agent.cursor = 4
 			}
-		case "escape", "left", "h":
+		case "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -349,17 +349,17 @@ func (m *Model) updateAgentConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 				m.state.SelectedAgent = m.state.Agents[m.cursor]
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.state.Agents)-1 {
 				m.cursor++
 				m.state.SelectedAgent = m.state.Agents[m.cursor]
 			}
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -482,11 +482,11 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.llm.cursor > 0 {
 				m.llm.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.llm.cursor < len(llmPresets)-1 {
 				m.llm.cursor++
 			}
@@ -513,7 +513,7 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.llm.secretKeyInput.SetValue("")
 			m.llm.secretValueInput.SetValue("")
 			m.llm.secretKeyInput.Focus()
-		case "escape", "left", "h":
+		case "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -525,8 +525,8 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		keyStr := keyMsg.String()
 		// Don't update textinput on navigation or action keys
-		if keyStr != "up" && keyStr != "k" && keyStr != "down" && keyStr != "j" &&
-			keyStr != "left" && keyStr != "h" && keyStr != "escape" &&
+		if keyStr != "up" && keyStr != "down" &&
+			keyStr != "left" && keyStr != "escape" &&
 			keyStr != "enter" && keyStr != "tab" && keyStr != "q" && keyStr != "Q" {
 			if m.llm.secretCursor == 2 {
 				m.llm.secretKeyInput, _ = m.llm.secretKeyInput.Update(msg)
@@ -543,11 +543,11 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			if m.llm.secretCursor > 0 {
 				m.llm.secretCursor--
 			}
-		case "down", "j":
+		case "down":
 			if noSecret {
 				if m.llm.secretCursor < 1 {
 					m.llm.secretCursor++
@@ -557,7 +557,7 @@ func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.llm.secretCursor++
 				}
 			}
-		case "left", "h", "escape":
+		case "left", "escape":
 			m.llm.secretPhase = false
 			m.llm.secretCursor = 0
 		case "enter":
@@ -670,7 +670,7 @@ func (m *Model) updateAdapterConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -698,7 +698,7 @@ func (m *Model) updateIdentityEdit(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -726,7 +726,7 @@ func (m *Model) updateSoulEdit(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -756,7 +756,7 @@ func (m *Model) updateSkills(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -783,7 +783,7 @@ func (m *Model) updateSecrets(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}
@@ -839,7 +839,7 @@ func (m *Model) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "escape", "left", "h":
+		case "enter", "escape", "left":
 			m.popScreen()
 		}
 	}

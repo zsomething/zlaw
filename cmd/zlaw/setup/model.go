@@ -30,8 +30,8 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "Q", "ctrl+c":
+		// Only ctrl+c for quit - don't intercept letter keys so textinputs work
+		if msg.String() == "ctrl+c" {
 			m.quit = true
 			return m, tea.Quit
 		}
