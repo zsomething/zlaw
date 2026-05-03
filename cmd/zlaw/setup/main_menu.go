@@ -19,8 +19,8 @@ func (m *Model) viewMainMenu() string {
 	statusText, statusStyle := bootstrapStatusText(m.state.BootstrapStatus)
 	b.WriteString(m.menuItem("Bootstrap Zlaw Home", statusText, statusStyle, m.cursor == 0) + "\n\n")
 
-	// Agents section (show when bootstrapped AND agent selected)
-	if m.state.BootstrapStatus == BootstrapReady && m.state.SelectedAgent != "" {
+	// Agents section (show when bootstrapped)
+	if m.state.BootstrapStatus == BootstrapReady {
 		b.WriteString(Styles.SectionLabel.Render("AGENTS") + "\n")
 
 		items := m.agentMenuItems()
@@ -106,13 +106,14 @@ func (m *Model) items() []menuItemDef {
 
 	// Agents section (if bootstrapped)
 	if m.state.BootstrapStatus == BootstrapReady {
+		// Create Agent - always visible when bootstrapped
 		items = append(items, menuItemDef{
 			label:  "Create Agent",
 			screen: ScreenAgentCreate,
 			state:  StateView,
 		})
 
-		// Select Agent (only if agents exist)
+		// Select Agent - only if agents exist
 		if len(m.state.Agents) > 0 {
 			items = append(items, menuItemDef{
 				label:  "Select Agent",
@@ -121,7 +122,7 @@ func (m *Model) items() []menuItemDef {
 			})
 		}
 
-		// Agent config items (only if agent selected)
+		// Agent config items - only if agent selected
 		if m.state.SelectedAgent != "" {
 			items = append(items, menuItemDef{
 				label:  "Configure LLM",
@@ -166,7 +167,7 @@ func (m *Model) items() []menuItemDef {
 	return items
 }
 
-// agentMenuItems returns just the agent-related menu items.
+// agentMenuItems returns just the agent-related menu items (for view rendering).
 func (m *Model) agentMenuItems() []menuItemDef {
 	items := m.items()
 
