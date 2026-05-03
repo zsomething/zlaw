@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/zsomething/zlaw/internal/config"
 )
@@ -56,13 +57,28 @@ func LoadAppState() *AppState {
 	// Check if ZLAW_HOME env var is set
 	envVarSet := os.Getenv("ZLAW_HOME") != ""
 
-	// Load agents
+	// Load agents and detect per-agent status
 	var agents []string
+	var selectedAgent string
+	var llmStatus, adapterStatus, identityStatus, soulStatus ItemState
+	var skillsCount int
 	if status == BootstrapReady {
 		hub, err := config.LoadHubConfig(zlawPath)
 		if err == nil {
 			for _, a := range hub.Agents {
 				agents = append(agents, a.ID)
+			}
+			// Set first agent as default selected
+			if len(agents) > 0 {
+				selectedAgent = agents[0]
+
+				// Load per-agent status
+				agentDir := filepath.Join(home, "agents", selectedAgent)
+				llmStatus = detectLLMStatus(agentDir)
+				adapterStatus = detectAdapterStatus(agentDir)
+				identityStatus = detectIdentityStatus(agentDir)
+				soulStatus = detectSoulStatus(agentDir)
+				skillsCount = detectSkillsCount(agentDir)
 			}
 		}
 	}
@@ -78,16 +94,76 @@ func LoadAppState() *AppState {
 	return &AppState{
 		HomePath:        home,
 		BootstrapStatus: status,
-		SelectedAgent:   "",
+		SelectedAgent:   selectedAgent,
 		Agents:          agents,
-		LLMStatus:       StateMissing,
-		AdapterStatus:   StateMissing,
-		IdentityStatus:  StateMissing,
-		SoulStatus:      StateMissing,
+		LLMStatus:       llmStatus,
+		AdapterStatus:   adapterStatus,
+		IdentityStatus:  identityStatus,
+		SoulStatus:      soulStatus,
 		SecretsCount:    secretsCount,
-		SkillsCount:     0,
+		SkillsCount:     skillsCount,
 		EnvVarSet:       envVarSet,
 	}
+}
+
+// detectLLMStatus checks if agent.toml has [llm] section.
+func detectLLMStatus(agentDir string) ItemState {
+	cfgPath := filepath.Join(agentDir, "agent.toml")
+	if _, err := os.Stat(cfgPath); err != nil {
+		return StateMissing
+	}
+	cfg, err := config.LoadAgentConfigFile(cfgPath)
+	if err != nil || cfg.LLM.Backend == "" {
+		return StateMissing
+	}
+	return StateConfigured
+}
+
+// detectAdapterStatus checks if agent.toml has [adapter] section.
+func detectAdapterStatus(agentDir string) ItemState {
+	cfgPath := filepath.Join(agentDir, "agent.toml")
+	if _, err := os.Stat(cfgPath); err != nil {
+		return StateMissing
+	}
+	cfg, err := config.LoadAgentConfigFile(cfgPath)
+	if err != nil || len(cfg.Adapter) == 0 {
+		return StateMissing
+	}
+	return StateConfigured
+}
+
+// detectIdentityStatus checks if IDENTITY.md exists.
+func detectIdentityStatus(agentDir string) ItemState {
+	identityPath := filepath.Join(agentDir, "IDENTITY.md")
+	if _, err := os.Stat(identityPath); err == nil {
+		return StateConfigured
+	}
+	return StateMissing
+}
+
+// detectSoulStatus checks if SOUL.md exists.
+func detectSoulStatus(agentDir string) ItemState {
+	soulPath := filepath.Join(agentDir, "SOUL.md")
+	if _, err := os.Stat(soulPath); err == nil {
+		return StateConfigured
+	}
+	return StateMissing
+}
+
+// detectSkillsCount counts .md files in skills/ directory.
+func detectSkillsCount(agentDir string) int {
+	skillsDir := filepath.Join(agentDir, "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			count++
+		}
+	}
+	return count
 }
 
 // DefaultAppState returns a stub state for testing (no actual config).

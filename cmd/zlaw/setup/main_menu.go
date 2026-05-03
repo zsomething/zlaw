@@ -19,8 +19,8 @@ func (m *Model) viewMainMenu() string {
 	statusText, statusStyle := bootstrapStatusText(m.state.BootstrapStatus)
 	b.WriteString(m.menuItem("Bootstrap Zlaw Home", statusText, statusStyle, m.cursor == 0) + "\n\n")
 
-	// Agents section
-	if m.state.BootstrapStatus == BootstrapReady {
+	// Agents section (show when bootstrapped AND agent selected)
+	if m.state.BootstrapStatus == BootstrapReady && m.state.SelectedAgent != "" {
 		b.WriteString(Styles.SectionLabel.Render("AGENTS") + "\n")
 
 		items := m.agentMenuItems()
