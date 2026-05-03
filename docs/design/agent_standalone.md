@@ -7,9 +7,9 @@ A standalone agent is a self-contained process that runs the agentic loop indepe
 ## Startup Sequence
 
 ```
-1. Load config via `-c` flag → config (model, backend, secret references)
-2. Load SOUL.md          → system prompt component (personality)
-3. Load IDENTITY.md      → system prompt component (role definition)
+1. Load config via -c flag or ZLAW_AGENT_CONFIG env var  → config (model, backend)
+2. Load SOUL.md (from config path or agent home)         → system prompt component (personality)
+3. Load IDENTITY.md (from config path or agent home)     → system prompt component (role definition)
 4. Restore history       → sessions/<id>/ (JSONL files)
 5. Register tools        → from tools/ dir and skills/
 6. Connect to LLM        → via configured backend (Minimax, OpenRouter, Anthropic)
@@ -19,36 +19,51 @@ A standalone agent is a self-contained process that runs the agentic loop indepe
 ## Filesystem
 
 ```
-$ZLAW_AGENT_HOME/           # set by ZLAW_AGENT_HOME env var
-├── agent.toml             # configuration (secret references, not values)
-├── runtime.toml           # runtime overrides (watched, hot-reloaded)
-├── cron.toml              # scheduled tasks
-├── SOUL.md                # personality (hot-reload on change)
-├── IDENTITY.md            # role definition (hot-reload on change)
-├── skills/               # per-agent skill files
-├── sessions/             # conversation history
-│   └── <session-id>.jsonl # per-session turn log
-├── memories/             # long-term memory
-│   ├── <topic>.md        # memory files
-│   └── vector.db         # semantic index (if enabled)
-└── workspace/            # agent's working directory
+$ZLAW_HOME/
+├── agent-assistant.toml    # ctl-owned agent configuration
+├── agent-dev.toml
+└── agents/                 # agent runtime data
+    ├── assistant/
+    │   ├── SOUL.md         # personality (hot-reload on change)
+    │   ├── IDENTITY.md     # role definition (hot-reload on change)
+    │   ├── skills/         # per-agent skill files
+    │   ├── sessions/      # conversation history
+    │   │   └── <session-id>.jsonl
+    │   ├── memories/      # long-term memory
+    │   │   ├── <topic>.md
+    │   │   └── vector.db
+    │   └── workspace/      # agent's working directory
+    └── dev/
+        └── ...
+
+$ZLAW_AGENT_HOME/           # set by ZLAW_AGENT_HOME env var (points to agents/{id}/)
+├── runtime.toml            # runtime overrides
+├── SOUL.md
+├── IDENTITY.md
+├── skills/
+├── sessions/
+├── memories/
+└── workspace/
 ```
 
-Agent only knows `ZLAW_AGENT_HOME`, not `ZLAW_HOME` (ctl's home).
+**Config vs Runtime:**
+- Agent config (`llm`, `adapter`, etc.) is owned by ctl at `$ZLAW_HOME/agent-{id}.toml`
+- Agent runtime data (SOUL.md, IDENTITY.md, sessions, memories, workspace) is in `$ZLAW_HOME/agents/{id}/`
 
-## Configuration (agent.toml)
+Agent receives config file path via `-c` flag or `ZLAW_AGENT_CONFIG` env var at spawn. Agent only knows `ZLAW_AGENT_HOME`, not `ZLAW_HOME` parent.
+
+## Configuration (agent-{id}.toml)
 
 See [docs/users/configuration.md](../users/configuration.md) for full reference.
 
 Key sections:
-- `[agent]` — ID, name, description, roles
-- `[llm]` — backend, model, secret reference, context_budget
+- `[llm]` — backend, model, context_budget
 - `[tools]` — allowed list, max_result_bytes
 - `[adapter]` — adapter instances (telegram, fizzy, etc)
 - `[sticky]` — system prompt injection rules
 - `[memory]` — memory backend configuration
 
-Secret references use env var names:
+Note: Secret references use env var names (`$VAR_NAME`). Values injected by ctl at spawn.
 
 ```toml
 [llm]
@@ -67,8 +82,6 @@ model_config = {
 backend = "telegram"
 client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 ```
-
-No values in config — only `$VAR_NAME` references. Values injected by ctl at spawn.
 
 ## Context Building
 
@@ -114,8 +127,9 @@ See [agent_tools.md](./agent_tools.md) and [agent_skills.md](./agent_skills.md).
 
 | Var | Source | Purpose |
 |-----|--------|---------|
-| `ZLAW_AGENT_HOME` | ctl injects at spawn | Root for all agent files |
+| `ZLAW_AGENT_HOME` | ctl injects at spawn | Root for agent runtime files |
 | `ZLAW_AGENT_ID` | ctl injects | Agent ID |
+| `ZLAW_AGENT_CONFIG` | ctl injects | Path to agent config file |
 | `ZLAW_NATS_URL` | ctl injects | NATS connection (standalone: not set) |
 | `MINIMAX_API_KEY` | ctl injects | From secrets.toml (via env_vars mapping) |
 | `ANTHROPIC_API_KEY` | ctl injects | From secrets.toml |
@@ -131,3 +145,4 @@ Agent does NOT know about `ZLAW_HOME` or `secrets.toml`.
 - [agent_contexts.md](./agent_contexts.md) — context engineering details
 - [agent_tools.md](./agent_tools.md) — built-in tools reference
 - [agent_skills.md](./agent_skills.md) — markdown-based skills
+- [Agent Config Ownership Refactoring](../plans/refactor/06-agent-config-ownership.md)

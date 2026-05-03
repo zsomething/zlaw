@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move agent configuration (`llm`, `adapter`, etc.) out of per-agent `agent.toml` files in `$ZLAW_HOME/agents/<id>/` to be owned and managed by ctl, similar to how `zlaw.toml` and `secrets.toml` are owned.
+Move agent configuration (`llm`, `adapter`, etc.) from per-agent home directory to be owned and managed by ctl, similar to how `zlaw.toml` and `secrets.toml` are owned.
 
 ## Rationale
 
@@ -17,31 +17,40 @@ Move agent configuration (`llm`, `adapter`, etc.) out of per-agent `agent.toml` 
 3. **Secret references in agent home**: Even if agent only gets env vars at runtime, config file still exposes `$VAR_NAME` references
 
 ### Benefits
-1. **Sandboxed isolation**: Agent receives config via process arguments (`-c agent.toml`) or env var, not filesystem access
+1. **Sandboxed isolation**: Agent receives config via process arguments or env var, not filesystem access
 2. **Centralized management**: All configs under ctl control
 3. **Clean separation**: Agent is just a process, doesn't need filesystem knowledge
-4. **Flexibility**: For local subprocess executor, agent CAN still access its config file (via `-c` path). For sandboxed executors, config is passed differently.
 
 ## Design
 
-### New Config Structure
+### Config File Location
+
+By convention, agent configs live at `$ZLAW_HOME/agent-{id}.toml`:
 
 ```
 $ZLAW_HOME/
 ├── zlaw.toml              # hub config + agent metadata (owned by ctl)
 ├── secrets.toml           # secrets (owned by ctl)
-└── agent-configs/          # agent configuration files (owned by ctl)
-    ├── agent-assistant.toml
-    ├── agent-dev-agent.toml
-    └── agent-master.toml
+├── agent-assistant.toml   # agent config (owned by ctl)
+├── agent-dev.toml         # agent config (owned by ctl)
+└── agents/                # agent runtime data (owned by agent)
+    ├── assistant/
+    │   ├── SOUL.md
+    │   ├── IDENTITY.md
+    │   └── ...
+    └── dev/
+        ├── SOUL.md
+        └── ...
 ```
+
+The path is configurable via `zlaw.toml`, but convention is `$ZLAW_HOME/agent-{id}.toml`.
 
 ### zlaw.toml Agent Entry
 
 ```toml
 [[agents]]
 id = "assistant"
-config_file = "agent-configs/agent-assistant.toml"
+config = "agent-assistant.toml"  # path relative to $ZLAW_HOME, or absolute path
 executor = "subprocess"
 target = "local"
 restart_policy = "on-failure"
@@ -51,7 +60,7 @@ from_secret = "MINIMAX_API_KEY"
 name = "MINIMAX_API_KEY"
 ```
 
-### Agent Config File (agent-configs/agent-assistant.toml)
+### Agent Config File ($ZLAW_HOME/agent-assistant.toml)
 
 ```toml
 # LLM configuration
@@ -66,8 +75,8 @@ backend = "telegram"
 client_config = { bot_token = "$TELEGRAM_BOT_TOKEN" }
 
 # Identity (optional, or keep in agent home for hot-reload)
-identity = "IDENTITY.md"
-soul = "SOUL.md"
+identity = "agents/assistant/IDENTITY.md"
+soul = "agents/assistant/SOUL.md"
 
 # Skills
 skills = ["skill-read", "skill-write"]
@@ -75,7 +84,7 @@ skills = ["skill-read", "skill-write"]
 
 Note: No `$VAR_NAME` references for secrets. Secrets are injected by ctl at spawn time based on `env_vars` mapping in `zlaw.toml`.
 
-### Executor Interface Change
+### Executor Interface
 
 ```go
 type AgentConfig struct {
@@ -96,71 +105,46 @@ type Executor interface {
 ### Subprocess Executor Behavior
 
 For `executor = "subprocess"`:
-- ctl passes `-c <config_file_path>` to agent binary
-- Agent reads config from CLI arg, not from `$ZLAW_AGENT_HOME/agent.toml`
-- For backwards compatibility during transition, if no `-c` provided, fall back to `$ZLAW_AGENT_HOME/agent.toml`
+- ctl passes config path via environment variable `ZLAW_AGENT_CONFIG` or `-c` flag
+- Agent reads config from the specified path
+- Agent home is for runtime data (SOUL.md, IDENTITY.md, sessions, etc.)
 
 ```bash
 # ctl spawns agent with:
-zlaw-agent run -c $ZLAW_HOME/agent-configs/agent-assistant.toml
+ZLAW_AGENT_CONFIG=$ZLAW_HOME/agent-assistant.toml zlaw-agent run
+# or
+zlaw-agent run -c $ZLAW_HOME/agent-assistant.toml
 ```
 
-### Future: Sandboxed Executors
+## Implementation
 
-For sandboxed executors (containers, etc.):
-- Config file is passed as argument but may not be mounted into sandbox
-- Agent receives config content via environment variable or stdin
-- Design TBD per executor type
+### Changes
 
-## Implementation Phases
+1. **zlaw.toml** — add `config` field to agent entries (path to agent config file)
+2. **Agent binary** — accept `-c` flag or `ZLAW_AGENT_CONFIG` env var for config file path
+3. **ctl** — write agent configs to `$ZLAW_HOME/agent-{id}.toml` instead of `$ZLAW_HOME/agents/<id>/agent.toml`
+4. **Interactive Setup** — update to write configs to new location
+5. **Agent home** — no longer contains `agent.toml`
 
-### Phase 1: Config File Separation
-- Create `agent-configs/` directory in `$ZLAW_HOME`
-- Add `config_file` field to agent entries in `zlaw.toml`
-- Modify `CreateAgent()` to write config to `agent-configs/` instead of agent home
-- Modify agent binary to accept `-c` flag
-- Update ctl to pass `-c` flag when spawning
+### Files Affected
 
-### Phase 2: Update Interactive Setup
-- Modify Configure LLM/Adapter to write to `agent-configs/` directory
-- Remove write access to `agent home/agent.toml` for config sections
-- Keep `SOUL.md`, `IDENTITY.md` in agent home (user-editable content)
+| File | Change |
+|------|--------|
+| `internal/config/hub.go` | Add `Config` field to AgentConfig struct |
+| `cmd/zlaw/setup/` | Write configs to `$ZLAW_HOME/agent-{id}.toml` |
+| `cmd/zlaw-agent/` | Accept `-c` flag / `ZLAW_AGENT_CONFIG` env var |
+| `internal/config/load.go` | Load config from file path |
+| `internal/executor/subprocess.go` | Set `ZLAW_AGENT_CONFIG` env var when spawning |
 
-### Phase 3: Remove Legacy Support
-- Remove fallback to `$ZLAW_AGENT_HOME/agent.toml`
-- Clean up agent home directory structure (remove `agent.toml` from agent homes)
+### Doc Updates
 
-## Files Affected
+- `agent_lifecycle.md` — remove `agent.toml` from agent home structure
+- `agent_standalone.md` — update startup sequence
+- `interactive_setup.md` — update config paths
 
-### Config Management
-- `internal/config/hub.go` — add `config_file` to AgentConfig struct
-- `internal/config/config.go` — add `AgentConfigDir()` function
-- `cmd/zlaw/setup/` — update to write configs to new location
+## No Migration Path
 
-### Agent Binary
-- `cmd/zlaw-agent/` — accept `-c` flag for config file path
-- `internal/config/load.go` — load config from file path
-
-### Executor
-- `internal/executor/subprocess.go` — pass `-c` flag when spawning
-- `internal/executor/` — interface updates (if needed)
-
-### Documentation
-- `docs/design/agent_lifecycle.md` — update agent home structure
-- `docs/design/agent_standalone.md` — update startup sequence
-- `docs/design/interactive_setup.md` — update config paths
-
-## Migration Path
-
-1. New agents: config in `agent-configs/`, no `agent.toml` in agent home
-2. Existing agents: continue reading `agent.toml` from agent home (backwards compat)
-3. Migration script: move existing `agent.toml` to `agent-configs/`, update `zlaw.toml`
-
-## Open Questions
-
-1. Should agent home still exist? For what? (SOUL.md, IDENTITY.md, sessions, memories, workspace)
-2. How does migration work for existing setups?
-3. For sandboxed executors, how is config passed (env var, stdin, mounted file)?
+No existing users. Fresh implementation only.
 
 ## See Also
 
