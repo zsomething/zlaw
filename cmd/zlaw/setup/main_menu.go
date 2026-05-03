@@ -30,6 +30,20 @@ func (m *Model) viewMainMenu() string {
 			b.WriteString(m.menuItem(item.label, itemText, itemStyle, m.cursor == idx) + "\n")
 		}
 		b.WriteString("\n")
+
+		// Agent-scoped section (show when agent selected)
+		if m.state.SelectedAgent != "" {
+			b.WriteString(Styles.SectionLabel.Render("AGENT: "+m.state.SelectedAgent) + "\n")
+			agentItems := m.agentScopedItems()
+			// Calculate offset: bootstrap(1) + agents(agentItems count)
+			offset := 1 + len(m.agentMenuItems())
+			for i, item := range agentItems {
+				idx := offset + i
+				itemText, itemStyle := itemStatus(item.state)
+				b.WriteString(m.menuItem(item.label, itemText, itemStyle, m.cursor == idx) + "\n")
+			}
+			b.WriteString("\n")
+		}
 	}
 
 	// Global section
@@ -74,7 +88,6 @@ func (m *Model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", "right", "l":
 			item := items[m.cursor]
 			if item.screen != -1 {
-				// Check if item is disabled
 				if item.disabled {
 					return m, nil
 				}
@@ -115,8 +128,13 @@ func (m *Model) items() []menuItemDef {
 
 		// Select Agent - only if agents exist
 		if len(m.state.Agents) > 0 {
+			// Show currently selected agent name
+			selectLabel := "Select Agent"
+			if m.state.SelectedAgent != "" {
+				selectLabel = "Select Agent: " + m.state.SelectedAgent
+			}
 			items = append(items, menuItemDef{
-				label:  "Select Agent",
+				label:  selectLabel,
 				screen: ScreenAgentConfig,
 				state:  StateView,
 			})
@@ -167,26 +185,63 @@ func (m *Model) items() []menuItemDef {
 	return items
 }
 
-// agentMenuItems returns just the agent-related menu items (for view rendering).
+// agentMenuItems returns agent creation/selection items.
 func (m *Model) agentMenuItems() []menuItemDef {
-	items := m.items()
-
-	// Find the start of agents section (after bootstrap)
-	agentStart := 1
-	if m.state.BootstrapStatus == BootstrapReady {
-		// Skip bootstrap, collect until we hit global section
-		var agentItems []menuItemDef
-		for i := agentStart; i < len(items); i++ {
-			item := items[i]
-			// Stop at global section
-			if item.screen == ScreenSecrets || item.screen == ScreenSummary {
-				break
-			}
-			agentItems = append(agentItems, item)
-		}
-		return agentItems
+	if m.state.BootstrapStatus != BootstrapReady {
+		return nil
 	}
-	return nil
+	var items []menuItemDef
+	items = append(items, menuItemDef{
+		label:  "Create Agent",
+		screen: ScreenAgentCreate,
+		state:  StateView,
+	})
+	if len(m.state.Agents) > 0 {
+		selectLabel := "Select Agent"
+		if m.state.SelectedAgent != "" {
+			selectLabel = "Select Agent: " + m.state.SelectedAgent
+		}
+		items = append(items, menuItemDef{
+			label:  selectLabel,
+			screen: ScreenAgentConfig,
+			state:  StateView,
+		})
+	}
+	return items
+}
+
+// agentScopedItems returns agent-scoped configuration items.
+func (m *Model) agentScopedItems() []menuItemDef {
+	if m.state.SelectedAgent == "" {
+		return nil
+	}
+	var items []menuItemDef
+	items = append(items, menuItemDef{
+		label:  "Configure LLM",
+		screen: ScreenLLMConfig,
+		state:  m.state.LLMStatus,
+	})
+	items = append(items, menuItemDef{
+		label:  "Configure Adapter",
+		screen: ScreenAdapterConfig,
+		state:  m.state.AdapterStatus,
+	})
+	items = append(items, menuItemDef{
+		label:  "Edit Identity",
+		screen: ScreenIdentityEdit,
+		state:  m.state.IdentityStatus,
+	})
+	items = append(items, menuItemDef{
+		label:  "Edit Soul",
+		screen: ScreenSoulEdit,
+		state:  m.state.SoulStatus,
+	})
+	items = append(items, menuItemDef{
+		label:  "Manage Skills",
+		screen: ScreenSkills,
+		state:  StateView,
+	})
+	return items
 }
 
 // itemStatus returns the status text and style for a menu item state.

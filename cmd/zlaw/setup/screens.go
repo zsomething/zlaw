@@ -115,7 +115,6 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.bootstrap.errMsg = ""
 			if m.state.BootstrapStatus == BootstrapReady {
-				// Bootstrapped - handle Reset/Keep/Cancel
 				switch m.bootstrap.cursor {
 				case 0: // Reset - show confirmation
 					m.bootstrap.confirming = true
@@ -127,7 +126,6 @@ func (m *Model) updateBootstrap(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.popScreen()
 				}
 			} else {
-				// Not bootstrapped or incomplete - Create/Cancel
 				switch m.bootstrap.cursor {
 				case 0: // Create
 					cfg := config.BootstrapConfig{
@@ -166,7 +164,6 @@ func (m *Model) updateBootstrapConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if m.bootstrap.cursor == 0 {
-				// Yes, Reset
 				cfg := config.BootstrapConfig{
 					Home:  m.state.HomePath,
 					Force: true,
@@ -181,7 +178,6 @@ func (m *Model) updateBootstrapConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popScreen()
 				return m, nil
 			} else {
-				// No, Cancel - close dialog
 				m.bootstrap.confirming = false
 				m.bootstrap.cursor = 0
 			}
@@ -225,7 +221,6 @@ func (m *Model) viewAgentCreate() string {
 }
 
 func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Bubble up text input.
 	var cmd tea.Cmd
 	m.agent.agentID, cmd = m.agent.agentID.Update(msg)
 	if cmd != nil {
@@ -262,7 +257,6 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.agent.errMsg = err.Error()
 					return m, nil
 				}
-				// Add to agents list in zlaw.toml
 				if err := addAgentToHub(agentID); err != nil {
 					m.agent.errMsg = err.Error()
 					return m, nil
@@ -273,7 +267,7 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case 5: // Cancel
 				m.popScreen()
 			default:
-				m.agent.cursor = 4 // Focus Create button
+				m.agent.cursor = 4
 			}
 		case "escape", "left", "h":
 			m.popScreen()
@@ -283,18 +277,13 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func addAgentToHub(agentID string) error {
-	// Load existing hub config
 	hub, err := config.LoadHubConfig(config.DefaultHubConfigPath())
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("load hub config: %w", err)
 	}
-
-	// Add agent entry
 	hub.Agents = append(hub.Agents, config.AgentEntry{
 		ID: agentID,
 	})
-
-	// Save back
 	return hub.Save()
 }
 
@@ -321,6 +310,14 @@ func (m *Model) viewAgentConfig() string {
 }
 
 func (m *Model) updateAgentConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Sync cursor with selected agent
+	for i, name := range m.state.Agents {
+		if name == m.state.SelectedAgent {
+			m.cursor = i
+			break
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -389,15 +386,11 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.llm.errMsg = ""
 			presetName := llmPresets[m.llm.cursor]
-
-			// Get preset info
 			preset, err := llm.LookupPreset(presetName)
 			if err != nil {
 				m.llm.errMsg = err.Error()
 				return m, nil
 			}
-
-			// Build LLM config
 			agentDir := filepath.Join(m.state.HomePath, "agents", m.state.SelectedAgent)
 			llmCfg := config.LLMConfig{
 				Backend: preset.Backend,
@@ -406,13 +399,10 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 					"base_url": preset.ClientConfig["base_url"],
 				},
 			}
-
 			if err := config.WriteLLMConfig(agentDir, llmCfg); err != nil {
 				m.llm.errMsg = err.Error()
 				return m, nil
 			}
-
-			// Update state
 			m.state.LLMStatus = StateConfigured
 			m.popScreen()
 		case "escape", "left", "h":
@@ -428,11 +418,8 @@ func (m *Model) viewAdapterConfig() string {
 	var b strings.Builder
 	b.WriteString(headerView("Configure Adapter"))
 	b.WriteString("\n\n")
-
 	b.WriteString(Styles.ItemDim.Render("  Not implemented yet") + "\n\n")
-
 	b.WriteString(m.option("Back", true))
-
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[Enter] Back   [Q] Quit"))
 	return b.String()
@@ -455,15 +442,12 @@ func (m *Model) viewIdentityEdit() string {
 	var b strings.Builder
 	b.WriteString(headerView("Edit Identity"))
 	b.WriteString("\n\n")
-
 	b.WriteString("Agent: ")
 	b.WriteString(Styles.ItemSelected.Render(m.state.SelectedAgent))
 	b.WriteString("\n\n")
 	b.WriteString(Styles.Item.Render("File: IDENTITY.md") + "\n\n")
 	b.WriteString(Styles.ItemDim.Render("  Not implemented yet") + "\n\n")
-
 	b.WriteString(m.option("Back", true))
-
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[Enter] Back   [Q] Quit"))
 	return b.String()
@@ -486,15 +470,12 @@ func (m *Model) viewSoulEdit() string {
 	var b strings.Builder
 	b.WriteString(headerView("Edit Soul"))
 	b.WriteString("\n\n")
-
 	b.WriteString("Agent: ")
 	b.WriteString(Styles.ItemSelected.Render(m.state.SelectedAgent))
 	b.WriteString("\n\n")
 	b.WriteString(Styles.Item.Render("File: SOUL.md") + "\n\n")
 	b.WriteString(Styles.ItemDim.Render("  Not implemented yet") + "\n\n")
-
 	b.WriteString(m.option("Back", true))
-
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[Enter] Back   [Q] Quit"))
 	return b.String()
@@ -517,18 +498,14 @@ func (m *Model) viewSkills() string {
 	var b strings.Builder
 	b.WriteString(headerView("Manage Skills"))
 	b.WriteString("\n\n")
-
 	b.WriteString("Agent: ")
 	b.WriteString(Styles.ItemSelected.Render(m.state.SelectedAgent))
 	b.WriteString("\n\n")
-
 	b.WriteString("Installed: ")
 	b.WriteString(Styles.Item.Render(itoa(m.state.SkillsCount)))
 	b.WriteString("\n\n")
 	b.WriteString(Styles.ItemDim.Render("  Not implemented yet") + "\n\n")
-
 	b.WriteString(m.option("Back", true))
-
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[Enter] Back   [Q] Quit"))
 	return b.String()
@@ -551,14 +528,11 @@ func (m *Model) viewSecrets() string {
 	var b strings.Builder
 	b.WriteString(headerView("Manage Secrets"))
 	b.WriteString("\n\n")
-
 	b.WriteString("Count: ")
 	b.WriteString(Styles.Item.Render(itoa(m.state.SecretsCount)))
 	b.WriteString("\n\n")
 	b.WriteString(Styles.ItemDim.Render("  Not implemented yet") + "\n\n")
-
 	b.WriteString(m.option("Back", true))
-
 	b.WriteString("\n\n" + divider())
 	b.WriteString(footer("[Enter] Back   [Q] Quit"))
 	return b.String()
@@ -582,13 +556,11 @@ func (m *Model) viewSummary() string {
 	b.WriteString(headerView("Configuration Summary"))
 	b.WriteString("\n\n")
 
-	// Bootstrap section
 	b.WriteString(Styles.SectionLabel.Render("BOOTSTRAP") + "\n")
 	b.WriteString(Styles.Item.Render("Path:     " + m.state.HomePath) + "\n")
 	bsText, bsStyle := bootstrapStatusText(m.state.BootstrapStatus)
 	b.WriteString(Styles.Item.Render("Status:  ") + bsStyle.Render(bsText) + "\n\n")
 
-	// Agents section
 	b.WriteString(Styles.SectionLabel.Render("AGENTS") + "\n")
 	for _, name := range m.state.Agents {
 		prefix := "  "
@@ -601,7 +573,6 @@ func (m *Model) viewSummary() string {
 	}
 	b.WriteString("\n")
 
-	// Selected agent details
 	if m.state.SelectedAgent != "" {
 		b.WriteString(Styles.SectionLabel.Render("AGENT: "+m.state.SelectedAgent) + "\n")
 		llmText, llmStyle := itemStatus(m.state.LLMStatus)
@@ -615,7 +586,6 @@ func (m *Model) viewSummary() string {
 		b.WriteString(Styles.Item.Render("Skills:   ") + Styles.Item.Render(itoa(m.state.SkillsCount)) + "\n\n")
 	}
 
-	// Secrets section
 	b.WriteString(Styles.SectionLabel.Render("SECRETS") + "\n")
 	b.WriteString(Styles.Item.Render("Count: ") + Styles.Item.Render(itoa(m.state.SecretsCount)) + "\n")
 
