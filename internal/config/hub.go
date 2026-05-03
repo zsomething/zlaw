@@ -212,6 +212,11 @@ func (c HubConfig) SaveTo(path string) error {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 
+	// Ensure agents section exists
+	if _, ok := raw["agents"].([]map[string]any); !ok {
+		raw["agents"] = []map[string]any{}
+	}
+
 	// Update agents section.
 	agents := make([]map[string]any, len(c.Agents))
 	for i, a := range c.Agents {

@@ -3,6 +3,7 @@ package setup
 import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/zsomething/zlaw/internal/config"
 )
 
 // Model is the root Bubble Tea model for the setup wizard.
@@ -119,7 +120,17 @@ func (m *Model) pushScreen(s ScreenType) {
 		m.agent.agentID.Focus()
 	case ScreenLLMConfig:
 		if m.llm == nil {
-			m.llm = &llmScreenState{cursor: 0}
+			ti := textinput.New()
+			ti.Placeholder = "ENV_VAR_NAME"
+			ti.Focus()
+			vi := textinput.New()
+			secrets := config.ListSecrets()
+			m.llm = &llmScreenState{
+				cursor:           0,
+				secretKeyInput:   ti,
+				secretValueInput: vi,
+				existingSecrets:  secrets,
+			}
 		}
 	}
 }
@@ -156,4 +167,12 @@ type agentScreenState struct {
 type llmScreenState struct {
 	cursor int
 	errMsg string
+
+	// Secret phase
+	secretPhase       bool
+	secretCursor      int
+	selectedSecretIdx int
+	secretKeyInput    textinput.Model
+	secretValueInput  textinput.Model
+	existingSecrets   []string
 }

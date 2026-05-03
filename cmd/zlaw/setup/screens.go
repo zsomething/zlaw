@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbletea"
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/llm"
@@ -50,7 +50,7 @@ func (m *Model) viewBootstrap() string {
 
 	// Path display
 	b.WriteString("Target path:\n\n")
-	b.WriteString(Styles.Item.Render("  " + m.state.HomePath) + "\n")
+	b.WriteString(Styles.Item.Render("  "+m.state.HomePath) + "\n")
 	if m.state.EnvVarSet {
 		b.WriteString(Styles.ItemDim.Render("  From ZLAW_HOME env var") + "\n")
 	}
@@ -232,15 +232,21 @@ func (m *Model) viewAgentCreate() string {
 }
 
 func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.agent.agentID, cmd = m.agent.agentID.Update(msg)
-	if cmd != nil {
-		return m, cmd
-	}
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		// Don't update textinput on navigation/action keys
+		keyStr := msg.String()
+		if keyStr != "up" && keyStr != "k" && keyStr != "down" && keyStr != "j" &&
+			keyStr != "left" && keyStr != "h" && keyStr != "escape" &&
+			keyStr != "enter" && keyStr != "tab" && keyStr != "q" && keyStr != "Q" {
+			var cmd tea.Cmd
+			m.agent.agentID, cmd = m.agent.agentID.Update(msg)
+			if cmd != nil {
+				return m, cmd
+			}
+		}
+
+		switch keyStr {
 		case "up", "k":
 			if m.agent.cursor > 0 {
 				m.agent.cursor--
@@ -303,7 +309,10 @@ func addAgentToHub(agentID string) error {
 	hub.Agents = append(hub.Agents, config.AgentEntry{
 		ID: agentID,
 	})
-	return hub.Save()
+	if err := hub.Save(); err != nil {
+		return fmt.Errorf("save hub: %w", err)
+	}
+	return nil
 }
 
 // === Agent Config ===
@@ -360,8 +369,15 @@ func (m *Model) updateAgentConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 // === LLM Config ===
 
 func (m *Model) viewLLMConfig() string {
+	if m.llm.secretPhase {
+		return m.viewLLMSecretPhase()
+	}
+	return m.viewLLMConfigPhase1()
+}
+
+func (m *Model) viewLLMConfigPhase1() string {
 	var b strings.Builder
-	b.WriteString(headerView("Configure LLM — "+m.state.SelectedAgent))
+	b.WriteString(headerView("Configure LLM — " + m.state.SelectedAgent))
 	b.WriteString("\n\n")
 
 	b.WriteString("Select LLM preset:\n\n")
@@ -382,7 +398,7 @@ func (m *Model) viewLLMConfig() string {
 
 	if m.llm.errMsg != "" {
 		b.WriteString("\n")
-		b.WriteString(Styles.StatusErr.Render("⚠ "+m.llm.errMsg))
+		b.WriteString(Styles.StatusErr.Render("⚠ " + m.llm.errMsg))
 	}
 
 	b.WriteString("\n" + divider())
@@ -390,7 +406,79 @@ func (m *Model) viewLLMConfig() string {
 	return b.String()
 }
 
+func (m *Model) viewLLMSecretPhase() string {
+	var b strings.Builder
+	b.WriteString(headerView("Configure LLM — " + m.state.SelectedAgent))
+	b.WriteString("\n\n")
+
+	presetName := llmPresets[m.llm.cursor]
+	envVarName := llmEnvVars[presetName]
+
+	if envVarName == "" {
+		b.WriteString("No secret required for " + presetName + ".\n\n")
+		b.WriteString(m.option("Configure", true) + "   ")
+		b.WriteString(m.option("Back", false) + "\n\n")
+		b.WriteString(divider())
+		b.WriteString(footer("[Enter] Configure   [←] Back   [Q] Quit"))
+		return b.String()
+	}
+
+	b.WriteString(envVarName + " is required\n\n")
+
+	b.WriteString("Use existing secret:\n")
+	if len(m.llm.existingSecrets) > 0 {
+		selectedSecret := "(none)"
+		if m.llm.selectedSecretIdx >= 0 && m.llm.selectedSecretIdx < len(m.llm.existingSecrets) {
+			selectedSecret = m.llm.existingSecrets[m.llm.selectedSecretIdx]
+		}
+		prefix := "  "
+		if m.llm.secretCursor == 0 {
+			prefix = "▸ "
+		}
+		b.WriteString(Styles.Item.Render(prefix+"["+selectedSecret+" ▼]") + "\n")
+	} else {
+		b.WriteString(Styles.ItemDim.Render("  (no secrets saved)") + "\n")
+	}
+	b.WriteString(m.option("Use Secret", m.llm.secretCursor == 1) + "\n\n")
+
+	b.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 40)) + "\n\n")
+
+	b.WriteString("Or create new secret:\n\n")
+	b.WriteString("Key\n")
+	prefix := "  "
+	if m.llm.secretCursor == 2 {
+		prefix = "▸ "
+	}
+	b.WriteString(Styles.Item.Render(prefix))
+	b.WriteString(m.llm.secretKeyInput.View())
+	b.WriteString("\n\n")
+
+	b.WriteString("Value\n")
+	prefix = "  "
+	if m.llm.secretCursor == 3 {
+		prefix = "▸ "
+	}
+	b.WriteString(Styles.Item.Render(prefix))
+	b.WriteString(m.llm.secretValueInput.View())
+	b.WriteString("\n\n")
+
+	b.WriteString(m.option("Create Secret", m.llm.secretCursor == 4))
+
+	if m.llm.errMsg != "" {
+		b.WriteString("\n\n")
+		b.WriteString(Styles.StatusErr.Render("⚠ " + m.llm.errMsg))
+	}
+
+	b.WriteString("\n\n" + divider())
+	b.WriteString(footer("[↑↓] Navigate   [Tab] Next   [Enter] Select   [←] Back   [Q] Quit"))
+	return b.String()
+}
+
 func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.llm.secretPhase {
+		return m.updateLLMSecretPhase(msg)
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -405,30 +493,164 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.llm.errMsg = ""
 			presetName := llmPresets[m.llm.cursor]
-			preset, err := llm.LookupPreset(presetName)
-			if err != nil {
-				m.llm.errMsg = err.Error()
+			envVarName := llmEnvVars[presetName]
+
+			if envVarName == "" {
+				if err := m.configureLLMWithPreset(presetName, "", ""); err != nil {
+					m.llm.errMsg = err.Error()
+					return m, nil
+				}
+				m.state.LLMStatus = StateConfigured
+				m.popScreen()
 				return m, nil
 			}
-			agentDir := filepath.Join(m.state.HomePath, "agents", m.state.SelectedAgent)
-			llmCfg := config.LLMConfig{
-				Backend: preset.Backend,
-				Model:   preset.DefaultModel,
-				ClientConfig: map[string]any{
-					"base_url": preset.ClientConfig["base_url"],
-				},
-			}
-			if err := config.WriteLLMConfig(agentDir, llmCfg); err != nil {
-				m.llm.errMsg = err.Error()
-				return m, nil
-			}
-			m.state.LLMStatus = StateConfigured
-			m.popScreen()
+
+			// Enter secret phase
+			m.llm.secretPhase = true
+			m.llm.secretCursor = 2
+			m.llm.selectedSecretIdx = -1
+			m.llm.secretKeyInput.Placeholder = envVarName
+			m.llm.secretKeyInput.SetValue("")
+			m.llm.secretValueInput.SetValue("")
+			m.llm.secretKeyInput.Focus()
 		case "escape", "left", "h":
 			m.popScreen()
 		}
 	}
 	return m, nil
+}
+
+func (m *Model) updateLLMSecretPhase(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Only update textinput on character input, not navigation keys
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		keyStr := keyMsg.String()
+		// Don't update textinput on navigation or action keys
+		if keyStr != "up" && keyStr != "k" && keyStr != "down" && keyStr != "j" &&
+			keyStr != "left" && keyStr != "h" && keyStr != "escape" &&
+			keyStr != "enter" && keyStr != "tab" && keyStr != "q" && keyStr != "Q" {
+			if m.llm.secretCursor == 2 {
+				m.llm.secretKeyInput, _ = m.llm.secretKeyInput.Update(msg)
+			} else if m.llm.secretCursor == 3 {
+				m.llm.secretValueInput, _ = m.llm.secretValueInput.Update(msg)
+			}
+		}
+	}
+
+	presetName := llmPresets[m.llm.cursor]
+	envVarName := llmEnvVars[presetName]
+	noSecret := envVarName == ""
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "up", "k":
+			if m.llm.secretCursor > 0 {
+				m.llm.secretCursor--
+			}
+		case "down", "j":
+			if noSecret {
+				if m.llm.secretCursor < 1 {
+					m.llm.secretCursor++
+				}
+			} else {
+				if m.llm.secretCursor < 4 {
+					m.llm.secretCursor++
+				}
+			}
+		case "left", "h", "escape":
+			m.llm.secretPhase = false
+			m.llm.secretCursor = 0
+		case "enter":
+			m.llm.errMsg = ""
+			if noSecret {
+				if err := m.configureLLMWithPreset(presetName, "", ""); err != nil {
+					m.llm.errMsg = err.Error()
+					return m, nil
+				}
+				m.state.LLMStatus = StateConfigured
+				m.popScreen()
+				return m, nil
+			}
+
+			switch m.llm.secretCursor {
+			case 0:
+				if len(m.llm.existingSecrets) > 0 {
+					m.llm.selectedSecretIdx = (m.llm.selectedSecretIdx + 1) % (len(m.llm.existingSecrets) + 1)
+					if m.llm.selectedSecretIdx == len(m.llm.existingSecrets) {
+						m.llm.selectedSecretIdx = -1
+					}
+				}
+			case 1:
+				if m.llm.selectedSecretIdx >= 0 {
+					secretName := m.llm.existingSecrets[m.llm.selectedSecretIdx]
+					if err := m.configureLLMWithPreset(presetName, envVarName, secretName); err != nil {
+						m.llm.errMsg = err.Error()
+						return m, nil
+					}
+					m.state.LLMStatus = StateConfigured
+					m.popScreen()
+				}
+			case 2:
+				m.llm.secretKeyInput.Focus()
+			case 3:
+				m.llm.secretValueInput.Focus()
+			case 4:
+				key := m.llm.secretKeyInput.Value()
+				value := m.llm.secretValueInput.Value()
+				if key == "" || value == "" {
+					m.llm.errMsg = "Key and value are required"
+					return m, nil
+				}
+				if err := config.AddSecret(key, value); err != nil {
+					m.llm.errMsg = err.Error()
+					return m, nil
+				}
+				if err := m.configureLLMWithPreset(presetName, key, key); err != nil {
+					m.llm.errMsg = err.Error()
+					return m, nil
+				}
+				m.state.LLMStatus = StateConfigured
+				m.popScreen()
+			}
+		case "tab":
+			if noSecret {
+				m.llm.secretCursor = (m.llm.secretCursor + 1) % 2
+			} else {
+				m.llm.secretCursor = (m.llm.secretCursor + 1) % 5
+				// Focus appropriate textinput
+				if m.llm.secretCursor == 2 {
+					m.llm.secretKeyInput.Focus()
+				} else if m.llm.secretCursor == 3 {
+					m.llm.secretValueInput.Focus()
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *Model) configureLLMWithPreset(presetName, envVarName, secretName string) error {
+	preset, err := llm.LookupPreset(presetName)
+	if err != nil {
+		return err
+	}
+	agentDir := filepath.Join(m.state.HomePath, "agents", m.state.SelectedAgent)
+	llmCfg := config.LLMConfig{
+		Backend: preset.Backend,
+		Model:   preset.DefaultModel,
+		ClientConfig: map[string]any{
+			"base_url": preset.ClientConfig["base_url"],
+		},
+	}
+	if err := config.WriteLLMConfig(agentDir, llmCfg); err != nil {
+		return err
+	}
+	if envVarName != "" && secretName != "" {
+		if err := config.SetAgentEnvVar(m.state.SelectedAgent, envVarName, secretName); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // === Adapter Config (stub) ===
@@ -576,7 +798,7 @@ func (m *Model) viewSummary() string {
 	b.WriteString("\n\n")
 
 	b.WriteString(Styles.SectionLabel.Render("BOOTSTRAP") + "\n")
-	b.WriteString(Styles.Item.Render("Path:     " + m.state.HomePath) + "\n")
+	b.WriteString(Styles.Item.Render("Path:     "+m.state.HomePath) + "\n")
 	bsText, bsStyle := bootstrapStatusText(m.state.BootstrapStatus)
 	b.WriteString(Styles.Item.Render("Status:  ") + bsStyle.Render(bsText) + "\n\n")
 

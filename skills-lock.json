@@ -39,6 +39,12 @@
       "skillPath": "go-release/SKILL.md",
       "computedHash": "468b9f4afcd5cf44f9b42c52893a5a843b6f18e7d69af6bd8b28914c08be0fc3"
     },
+    "headless-terminal": {
+      "source": "montanaflynn/headless-terminal",
+      "sourceType": "github",
+      "skillPath": "skills/headless-terminal/SKILL.md",
+      "computedHash": "cc78e4661f16cd4c086e2090507897735013d6907b795640efb7311af567b7d4"
+    },
     "htmx-skill": {
       "source": "DrZoot/htmx-skill",
       "sourceType": "github",

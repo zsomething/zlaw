@@ -1,0 +1,10 @@
+[llm]
+  backend = "anthropic"
+  context_summarize_model = ""
+  context_summarize_threshold = 0.0
+  context_summarize_turns = 0
+  context_token_budget = 0
+  max_memory_tokens = 0
+  model = "MiniMax-Text-01"
+  [llm.client_config]
+    base_url = "https://api.minimax.io/anthropic"
