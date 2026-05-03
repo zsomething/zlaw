@@ -109,16 +109,14 @@ func (m *Model) pushScreen(s ScreenType) {
 	case ScreenAgentCreate:
 		if m.agent == nil {
 			ti := textinput.New()
-			ti.Prompt = "  "
+			ti.Prompt = ""
 			ti.Placeholder = "agent-id"
 			ti.CharLimit = 32
 			ti.Width = 30
-			// Use bubbles textinput styles for consistent theming
-			ti.PromptStyle = Styles.Item
-			ti.TextStyle = Styles.Item
-			ti.PlaceholderStyle = Styles.ItemDim
 			m.agent = &agentScreenState{agentID: ti, cursor: 0}
 		}
+		// Always focus textinput when entering this screen
+		m.agent.agentID.Focus()
 	case ScreenLLMConfig:
 		if m.llm == nil {
 			m.llm = &llmScreenState{cursor: 0}
@@ -147,7 +145,6 @@ type bootstrapState struct {
 	cursor     int
 	errMsg     string
 	confirming bool
-	successMsg string
 }
 
 type agentScreenState struct {

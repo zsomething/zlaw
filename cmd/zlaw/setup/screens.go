@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/textinput"
 
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/llm"
@@ -28,6 +29,17 @@ var llmEnvVars = map[string]string{
 	"openai":     "OPENAI_API_KEY",
 	"openrouter": "OPENROUTER_API_KEY",
 	"ollama":     "", // no env var needed for local
+}
+
+// newAgentTextInput creates a fresh textinput for agent ID.
+func newAgentTextInput() textinput.Model {
+	ti := textinput.New()
+	ti.Prompt = ""
+	ti.Placeholder = "agent-id"
+	ti.CharLimit = 32
+	ti.Width = 30
+	ti.Focus()
+	return ti
 }
 
 // === Bootstrap ===
@@ -261,9 +273,13 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.agent.errMsg = err.Error()
 					return m, nil
 				}
+				// Update state and return to main menu
 				m.state.Agents = append(m.state.Agents, agentID)
 				m.state.SelectedAgent = agentID
-				m.popScreen()
+				m.clearAgentState() // Clean up agent screen state
+				m.screen = ScreenMainMenu
+				m.screenStack = nil // Clear stack to go directly to main
+				m.cursor = 0
 			case 5: // Cancel
 				m.popScreen()
 			default:
@@ -612,6 +628,10 @@ func (m *Model) option(label string, selected bool) string {
 		return Styles.ItemSelected.Render("▶ " + label)
 	}
 	return Styles.Item.Render("  " + label)
+}
+
+func (m *Model) clearAgentState() {
+	m.agent = nil
 }
 
 func itoa(n int) string {
