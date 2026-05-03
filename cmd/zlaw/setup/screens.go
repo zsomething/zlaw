@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
+
 	"github.com/zsomething/zlaw/internal/config"
 	"github.com/zsomething/zlaw/internal/llm"
 )
@@ -19,9 +20,6 @@ var llmPresets = []string{
 	"openrouter",
 	"ollama",
 }
-
-// Adapter presets.
-var adapterPresets = []string{"telegram", "slack", "none"}
 
 // Env vars required by each LLM preset.
 var llmEnvVars = map[string]string{
@@ -41,7 +39,7 @@ func (m *Model) viewBootstrap() string {
 
 	// Path display
 	b.WriteString("Target path:\n\n")
-	b.WriteString(Styles.Item.Render("  "+m.state.HomePath) + "\n")
+	b.WriteString(Styles.Item.Render("  " + m.state.HomePath) + "\n")
 	if m.state.EnvVarSet {
 		b.WriteString(Styles.ItemDim.Render("  From ZLAW_HOME env var") + "\n")
 	}
@@ -203,12 +201,7 @@ func (m *Model) viewAgentCreate() string {
 	b.WriteString("\n\n")
 
 	b.WriteString(Styles.Item.Render("Agent ID") + "\n")
-	agentID := m.agent.agentID.Value()
-	if agentID == "" {
-		b.WriteString(Styles.ItemDim.Render("  _ (required)") + "\n\n")
-	} else {
-		b.WriteString(Styles.ItemSelected.Render("  "+agentID) + "\n\n")
-	}
+	b.WriteString(m.agent.agentID.View() + "\n\n")
 
 	b.WriteString(Styles.Item.Render("Executor") + "\n")
 	b.WriteString(m.option("subprocess", m.agent.cursor == 1) + "\n\n")
@@ -352,7 +345,7 @@ func (m *Model) updateAgentConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) viewLLMConfig() string {
 	var b strings.Builder
-	b.WriteString(headerView("Configure LLM — " + m.state.SelectedAgent))
+	b.WriteString(headerView("Configure LLM — "+m.state.SelectedAgent))
 	b.WriteString("\n\n")
 
 	b.WriteString("Select LLM preset:\n\n")
@@ -373,7 +366,7 @@ func (m *Model) viewLLMConfig() string {
 
 	if m.llm.errMsg != "" {
 		b.WriteString("\n")
-		b.WriteString(Styles.StatusErr.Render("⚠ " + m.llm.errMsg))
+		b.WriteString(Styles.StatusErr.Render("⚠ "+m.llm.errMsg))
 	}
 
 	b.WriteString("\n" + divider())
@@ -591,7 +584,7 @@ func (m *Model) viewSummary() string {
 
 	// Bootstrap section
 	b.WriteString(Styles.SectionLabel.Render("BOOTSTRAP") + "\n")
-	b.WriteString(Styles.Item.Render("Path:     "+m.state.HomePath) + "\n")
+	b.WriteString(Styles.Item.Render("Path:     " + m.state.HomePath) + "\n")
 	bsText, bsStyle := bootstrapStatusText(m.state.BootstrapStatus)
 	b.WriteString(Styles.Item.Render("Status:  ") + bsStyle.Render(bsText) + "\n\n")
 

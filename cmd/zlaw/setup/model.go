@@ -17,12 +17,6 @@ type Model struct {
 	bootstrap *bootstrapState
 	agent     *agentScreenState
 	llm       *llmScreenState
-	adapter   *adapterScreenState
-	identity  *identityScreenState
-	soul      *soulScreenState
-	skills    *skillsScreenState
-	secrets   *secretsScreenState
-	summary   *summaryScreenState
 }
 
 // Init implements tea.Model.
@@ -115,23 +109,19 @@ func (m *Model) pushScreen(s ScreenType) {
 	case ScreenAgentCreate:
 		if m.agent == nil {
 			ti := textinput.New()
-			ti.Prompt = ""
+			ti.Prompt = "  "
 			ti.Placeholder = "agent-id"
 			ti.CharLimit = 32
 			ti.Width = 30
-			m.agent = &agentScreenState{agentID: ti}
+			// Use bubbles textinput styles for consistent theming
+			ti.PromptStyle = Styles.Item
+			ti.TextStyle = Styles.Item
+			ti.PlaceholderStyle = Styles.ItemDim
+			m.agent = &agentScreenState{agentID: ti, cursor: 0}
 		}
 	case ScreenLLMConfig:
 		if m.llm == nil {
 			m.llm = &llmScreenState{cursor: 0}
-		}
-	case ScreenSkills:
-		if m.skills == nil {
-			m.skills = &skillsScreenState{}
-		}
-	case ScreenSecrets:
-		if m.secrets == nil {
-			m.secrets = &secretsScreenState{}
 		}
 	}
 }
@@ -170,10 +160,3 @@ type llmScreenState struct {
 	cursor int
 	errMsg string
 }
-
-type adapterScreenState struct{}
-type identityScreenState struct{}
-type soulScreenState struct{}
-type skillsScreenState struct{}
-type secretsScreenState struct{}
-type summaryScreenState struct{}
