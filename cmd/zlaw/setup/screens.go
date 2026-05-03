@@ -2,7 +2,6 @@ package setup
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -261,15 +260,15 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.agent.errMsg = "Agent ID is required"
 					return m, nil
 				}
+				if err := addAgentToHub(agentID); err != nil {
+					m.agent.errMsg = err.Error()
+					return m, nil
+				}
 				cfg := config.SetupAgentConfig{
 					ID:   agentID,
 					Home: m.state.HomePath,
 				}
 				if err := cfg.CreateAgent(); err != nil {
-					m.agent.errMsg = err.Error()
-					return m, nil
-				}
-				if err := addAgentToHub(agentID); err != nil {
 					m.agent.errMsg = err.Error()
 					return m, nil
 				}
@@ -294,8 +293,12 @@ func (m *Model) updateAgentCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func addAgentToHub(agentID string) error {
 	hub, err := config.LoadHubConfig(config.DefaultHubConfigPath())
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
 		return fmt.Errorf("load hub config: %w", err)
+	}
+	// Check for duplicate ID in zlaw.toml (source of truth, not agent homes)
+	if _, found := hub.FindAgent(agentID); found {
+		return fmt.Errorf("agent %q already exists", agentID)
 	}
 	hub.Agents = append(hub.Agents, config.AgentEntry{
 		ID: agentID,
