@@ -1,126 +1,117 @@
 package setup
 
-import (
-	"strings"
+import "github.com/charmbracelet/lipgloss"
 
-	"github.com/charmbracelet/lipgloss"
+// Color palette from design spec.
+const (
+	ColorHeaderBg = "#1a1a2e"
+	ColorAccent   = "#00aaee"
+	ColorDim      = "#666666"
+	ColorText     = "#cccccc"
+	ColorSuccess  = "#00cc66"
+	ColorWarning  = "#ffaa00"
+	ColorError    = "#ff4444"
+	ColorBorder   = "#334455"
 )
 
-// Styles defines the visual styling for the setup wizard.
+// Global frame width for consistent layout.
+const FrameWidth = 58
+
+// Styles defines all visual styling.
 var Styles = struct {
-	// Window is the main container with border
-	Window lipgloss.Style
-
-	// Title bar styling
-	TitleBar   lipgloss.Style
-	TitleLeft  lipgloss.Style
-	TitleRight lipgloss.Style
-
-	// Content area
-	Heading lipgloss.Style
-	Item    lipgloss.Style
-	ItemDim lipgloss.Style
-
-	// Selected item
-	Selected lipgloss.Style
-
-	// Status indicators
-	StatusOK  lipgloss.Style
-	StatusErr lipgloss.Style
-	StatusDim lipgloss.Style
-
-	// Help text
-	Help lipgloss.Style
-
-	// Divider
-	Divider lipgloss.Style
+	Header       lipgloss.Style
+	Footer       lipgloss.Style
+	SectionLabel lipgloss.Style
+	Item         lipgloss.Style
+	ItemSelected lipgloss.Style
+	ItemDim      lipgloss.Style
+	StatusOK     lipgloss.Style
+	StatusWarn   lipgloss.Style
+	StatusErr    lipgloss.Style
+	StatusDim    lipgloss.Style
+	HelpKey      lipgloss.Style
+	Success      lipgloss.Style
 }{
-	Window: lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#3B82F6")).
-		Padding(0, 1).
-		Width(52).
-		Align(lipgloss.Center),
-
-	TitleBar: lipgloss.NewStyle().
-		Background(lipgloss.Color("#1E3A5F")).
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Bold(true).
-		Padding(0, 2).
-		Width(50),
-
-	TitleLeft: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
+	Header: lipgloss.NewStyle().
+		Background(lipgloss.Color(ColorHeaderBg)).
+		Foreground(lipgloss.Color("#ffffff")).
 		Bold(true),
 
-	TitleRight: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888")),
+	Footer: lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorDim)),
 
-	Heading: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#60A5FA")).
-		Bold(true).
-		MarginTop(1),
+	SectionLabel: lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorAccent)).
+		Bold(true),
 
 	Item: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E5E5E5")).
-		Padding(0, 1),
+		Foreground(lipgloss.Color(ColorText)),
+
+	ItemSelected: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color(ColorAccent)).
+		Bold(true),
 
 	ItemDim: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666")),
-
-	Selected: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#3B82F6")).
-		Padding(0, 1),
+		Foreground(lipgloss.Color(ColorDim)),
 
 	StatusOK: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#22C55E")),
+		Foreground(lipgloss.Color(ColorSuccess)),
+
+	StatusWarn: lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorWarning)),
 
 	StatusErr: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F59E0B")),
+		Foreground(lipgloss.Color(ColorError)),
 
 	StatusDim: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666")),
+		Foreground(lipgloss.Color(ColorDim)),
 
-	Help: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888")).
-		MarginTop(1),
+	HelpKey: lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorAccent)),
 
-	Divider: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#333333")).
-		MarginTop(1),
+	Success: lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorSuccess)),
 }
 
-// windowView wraps content in a window-like frame with header
-func windowView(title string, content string, help string) string {
-	var lines []string
-
-	// Title bar
-	lines = append(lines, Styles.TitleBar.Render("  "+title))
-	lines = append(lines, "")
-
-	// Content
-	lines = append(lines, content)
-
-	// Help text
-	if help != "" {
-		lines = append(lines, "")
-		lines = append(lines, Styles.Help.Render(help))
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// statusView renders a status indicator
-func statusView(state ItemState) string {
-	switch state {
-	case StateConfigured:
-		return Styles.StatusOK.Render("✓")
+// statusText returns the text for an ItemState.
+func statusText(s ItemState) string {
+	switch s {
 	case StateMissing:
-		return Styles.StatusErr.Render("✗")
+		return "missing"
+	case StateConfigured:
+		return "configured"
 	case StateInvalid:
-		return Styles.StatusErr.Render("✗")
+		return "invalid"
 	default:
-		return Styles.StatusDim.Render("·")
+		return ""
+	}
+}
+
+// statusStyle returns the lipgloss style for an ItemState.
+func statusStyle(s ItemState) lipgloss.Style {
+	switch s {
+	case StateMissing:
+		return Styles.StatusWarn
+	case StateConfigured:
+		return Styles.StatusOK
+	case StateInvalid:
+		return Styles.StatusErr
+	default:
+		return Styles.StatusDim
+	}
+}
+
+// bootstrapStatusText returns the status text for a BootstrapStatus.
+func bootstrapStatusText(s BootstrapStatus) (text string, style lipgloss.Style) {
+	switch s {
+	case BootstrapNotReady:
+		return "⚠️ not initialized", Styles.StatusWarn
+	case BootstrapReady:
+		return "✅ configured", Styles.StatusOK
+	case BootstrapIncomplete:
+		return "⚠️ incomplete setup", Styles.StatusWarn
+	default:
+		return "", Styles.StatusDim
 	}
 }

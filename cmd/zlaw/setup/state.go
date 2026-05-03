@@ -5,60 +5,104 @@ import (
 	"path/filepath"
 
 	"github.com/zsomething/zlaw/internal/config"
-	"github.com/zsomething/zlaw/internal/secrets"
 )
 
-// State holds the shared state for the setup wizard.
-// It is loaded once at startup and refreshed when returning from sub-screens.
-type State struct {
-	Home          string
-	Config        *config.HubConfig
-	Secrets       secrets.Store
-	SelectedAgent string // agent ID or ""
+// AppState holds the UI state.
+type AppState struct {
+	HomePath        string
+	BootstrapStatus BootstrapStatus // not initialized, configured, or incomplete
+	SelectedAgent   string
+	Agents          []string
+	LLMStatus       ItemState
+	AdapterStatus   ItemState
+	IdentityStatus  ItemState
+	SoulStatus      ItemState
+	SecretsCount    int
+	SkillsCount     int
+	EnvVarSet       bool // true if ZLAW_HOME env var is set
 }
 
-// LoadState reads the current configuration from disk.
-func LoadState() (*State, error) {
+// LoadAppState reads the actual zlaw configuration.
+func LoadAppState() *AppState {
 	home := config.ZlawHome()
 	zlawPath := filepath.Join(home, "zlaw.toml")
 
-	var cfg *config.HubConfig
-	if _, err := os.Stat(zlawPath); os.IsNotExist(err) {
-		cfg = nil
-	} else if err != nil {
-		return nil, err
-	} else {
-		loaded, err := config.LoadHubConfig(zlawPath)
-		if err != nil {
-			return nil, err
+	// Determine bootstrap status
+	var status BootstrapStatus
+	_, err := os.Stat(zlawPath)
+	if err == nil {
+		// zlaw.toml exists - check if valid
+		_, loadErr := config.LoadHubConfig(zlawPath)
+		if loadErr != nil {
+			status = BootstrapIncomplete
+		} else {
+			status = BootstrapReady
 		}
-		cfg = &loaded
+	} else {
+		// zlaw.toml doesn't exist - check if directory exists
+		if os.IsNotExist(err) {
+			// Directory may or may not exist - treat as not ready
+			status = BootstrapNotReady
+		} else {
+			// Some other error - check if directory exists
+			if _, dirErr := os.Stat(filepath.Dir(zlawPath)); dirErr == nil {
+				status = BootstrapIncomplete
+			} else {
+				status = BootstrapNotReady
+			}
+		}
 	}
 
-	sec, err := secrets.Load(secrets.DefaultSecretsPath())
-	if err != nil {
-		return nil, err
+	// Check if ZLAW_HOME env var is set
+	envVarSet := os.Getenv("ZLAW_HOME") != ""
+
+	// Load agents
+	var agents []string
+	if status == BootstrapReady {
+		hub, err := config.LoadHubConfig(zlawPath)
+		if err == nil {
+			for _, a := range hub.Agents {
+				agents = append(agents, a.ID)
+			}
+		}
 	}
 
-	return &State{
-		Home:          home,
-		Config:        cfg,
-		Secrets:       sec,
-		SelectedAgent: "",
-	}, nil
+	// Count secrets
+	secretsCount := 0
+	secretsPath := filepath.Join(home, "secrets.toml")
+	if _, err := os.Stat(secretsPath); err == nil {
+		// TODO: count actual entries
+		secretsCount = 1
+	}
+
+	return &AppState{
+		HomePath:        home,
+		BootstrapStatus: status,
+		SelectedAgent:   "",
+		Agents:          agents,
+		LLMStatus:       StateMissing,
+		AdapterStatus:   StateMissing,
+		IdentityStatus:  StateMissing,
+		SoulStatus:      StateMissing,
+		SecretsCount:    secretsCount,
+		SkillsCount:     0,
+		EnvVarSet:       envVarSet,
+	}
 }
 
-// IsConfigured returns true if zlaw.toml exists at Home.
-func (s *State) IsConfigured() bool {
-	if s.Config == nil {
-		return false
+// DefaultAppState returns a stub state for testing (no actual config).
+func DefaultAppState() *AppState {
+	return &AppState{
+		HomePath:        "/home/user/.config/zlaw",
+		BootstrapStatus: BootstrapReady,
+		SelectedAgent:   "assistant",
+		Agents:          []string{"assistant", "gpt4"},
+		LLMStatus:       StateConfigured,
+		AdapterStatus:   StateConfigured,
+		IdentityStatus:  StateConfigured,
+		SoulStatus:      StateConfigured,
+		SecretsCount:    2,
+		SkillsCount:     3,
+		EnvVarSet:       false,
 	}
-	path := filepath.Join(s.Home, "zlaw.toml")
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// HasAgents returns true if there is at least one agent.
-func (s *State) HasAgents() bool {
-	return s.Config != nil && len(s.Config.Agents) > 0
 }

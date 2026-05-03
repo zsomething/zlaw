@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "bubble-tea": {
+      "source": "fwojciec/diffstory",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/bubble-tea/SKILL.md",
+      "computedHash": "bd3be35cd33c27de048f1da766623d61c3ae87a89ce565543dd3fa0027c13605"
+    },
     "caveman": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",

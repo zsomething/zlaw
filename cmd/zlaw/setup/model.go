@@ -1,20 +1,19 @@
 package setup
 
 import (
-	"fmt"
-
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
 )
 
 // Model is the root Bubble Tea model for the setup wizard.
-// It delegates to screen-specific update functions based on the current screen.
 type Model struct {
-	state  *State
-	screen Screen
-	quit   bool
-	cursor int // cursor position in the current screen's item list
+	state       *AppState
+	screen      ScreenType
+	screenStack []ScreenType // history for back navigation
+	quit        bool
+	cursor      int
 
-	// Screen-specific state.
+	// Screen-specific state
 	bootstrap *bootstrapState
 	agent     *agentScreenState
 	llm       *llmScreenState
@@ -24,21 +23,15 @@ type Model struct {
 	skills    *skillsScreenState
 	secrets   *secretsScreenState
 	summary   *summaryScreenState
-	errMsg    string
 }
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	// Default to main menu if not configured, otherwise bootstrap
-	if m.state.IsConfigured() {
-		m.screen = ScreenMainMenu
-	} else {
-		m.screen = ScreenBootstrap
-	}
+	m.screen = ScreenMainMenu
 	return nil
 }
 
-// Update implements tea.Model by dispatching to the appropriate screen update.
+// Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -51,31 +44,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.screen {
 	case ScreenMainMenu:
-		return updateMenu(m, msg)
+		return m.updateMainMenu(msg)
 	case ScreenBootstrap:
-		return updateBootstrap(m, msg)
-	case ScreenCreateAgent:
-		return updateAgent(m, msg)
-	case ScreenSelectAgent:
-		return updateSelectAgent(m, msg)
-	case ScreenLLM:
-		return updateLLM(m, msg)
-	case ScreenLLMSecret:
-		return updateLLMSecret(m, msg)
-	case ScreenAdapter:
-		return updateAdapter(m, msg)
-	case ScreenAdapterSecret:
-		return updateAdapterSecret(m, msg)
-	case ScreenIdentity:
-		return updateIdentity(m, msg)
-	case ScreenSoul:
-		return updateSoul(m, msg)
+		return m.updateBootstrap(msg)
+	case ScreenAgentCreate:
+		return m.updateAgentCreate(msg)
+	case ScreenAgentConfig:
+		return m.updateAgentConfig(msg)
+	case ScreenLLMConfig:
+		return m.updateLLMConfig(msg)
+	case ScreenAdapterConfig:
+		return m.updateAdapterConfig(msg)
+	case ScreenIdentityEdit:
+		return m.updateIdentityEdit(msg)
+	case ScreenSoulEdit:
+		return m.updateSoulEdit(msg)
 	case ScreenSkills:
-		return updateSkills(m, msg)
+		return m.updateSkills(msg)
 	case ScreenSecrets:
-		return updateSecrets(m, msg)
+		return m.updateSecrets(msg)
 	case ScreenSummary:
-		return updateSummary(m, msg)
+		return m.updateSummary(msg)
 	}
 
 	return m, nil
@@ -85,32 +74,106 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) View() string {
 	switch m.screen {
 	case ScreenMainMenu:
-		return menuView(m)
+		return m.viewMainMenu()
 	case ScreenBootstrap:
-		return bootstrapView(m)
-	case ScreenCreateAgent:
-		return agentView(m)
-	case ScreenSelectAgent:
-		return selectAgentView(m)
-	case ScreenLLM, ScreenLLMSecret:
-		return llmView(m)
-	case ScreenAdapter, ScreenAdapterSecret:
-		return adapterView(m)
-	case ScreenIdentity:
-		return identityView(m)
-	case ScreenSoul:
-		return soulView(m)
+		return m.viewBootstrap()
+	case ScreenAgentCreate:
+		return m.viewAgentCreate()
+	case ScreenAgentConfig:
+		return m.viewAgentConfig()
+	case ScreenLLMConfig:
+		return m.viewLLMConfig()
+	case ScreenAdapterConfig:
+		return m.viewAdapterConfig()
+	case ScreenIdentityEdit:
+		return m.viewIdentityEdit()
+	case ScreenSoulEdit:
+		return m.viewSoulEdit()
 	case ScreenSkills:
-		return skillsView(m)
+		return m.viewSkills()
 	case ScreenSecrets:
-		return secretsView(m)
+		return m.viewSecrets()
 	case ScreenSummary:
-		return summaryView(m)
+		return m.viewSummary()
 	default:
-		return placeholderView(m)
+		return m.placeholder()
 	}
 }
 
-func placeholderView(m *Model) string {
-	return fmt.Sprintf("zlaw setup\n\n[Screen: %s]\n\nPress Q to quit.\n", m.screen)
+// pushScreen adds current screen to history and navigates to new screen.
+func (m *Model) pushScreen(s ScreenType) {
+	m.screenStack = append(m.screenStack, m.screen)
+	m.screen = s
+	m.cursor = 0
+
+	// Initialize screen-specific state
+	switch s {
+	case ScreenBootstrap:
+		if m.bootstrap == nil {
+			m.bootstrap = &bootstrapState{cursor: 0}
+		}
+	case ScreenAgentCreate:
+		if m.agent == nil {
+			ti := textinput.New()
+			ti.Prompt = ""
+			ti.Placeholder = "agent-id"
+			ti.CharLimit = 32
+			ti.Width = 30
+			m.agent = &agentScreenState{agentID: ti}
+		}
+	case ScreenLLMConfig:
+		if m.llm == nil {
+			m.llm = &llmScreenState{cursor: 0}
+		}
+	case ScreenSkills:
+		if m.skills == nil {
+			m.skills = &skillsScreenState{}
+		}
+	case ScreenSecrets:
+		if m.secrets == nil {
+			m.secrets = &secretsScreenState{}
+		}
+	}
 }
+
+// popScreen returns to previous screen.
+func (m *Model) popScreen() {
+	if len(m.screenStack) > 0 {
+		last := len(m.screenStack) - 1
+		m.screen = m.screenStack[last]
+		m.screenStack = m.screenStack[:last]
+		m.cursor = 0
+	} else {
+		m.screen = ScreenMainMenu
+	}
+}
+
+func (m *Model) placeholder() string {
+	return "zlaw setup\n\n[Screen: " + m.screen.String() + "]\n\nPress Q to quit.\n"
+}
+
+// Screen state types.
+type bootstrapState struct {
+	cursor     int
+	errMsg     string
+	confirming bool
+	successMsg string
+}
+
+type agentScreenState struct {
+	cursor  int
+	agentID textinput.Model
+	errMsg  string
+}
+
+type llmScreenState struct {
+	cursor int
+	errMsg string
+}
+
+type adapterScreenState struct{}
+type identityScreenState struct{}
+type soulScreenState struct{}
+type skillsScreenState struct{}
+type secretsScreenState struct{}
+type summaryScreenState struct{}
