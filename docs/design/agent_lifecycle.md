@@ -11,11 +11,17 @@ Agents are configured in `zlaw.toml`:
 ```toml
 [[agents]]
 id = "assistant"
+config_file = "agent-configs/agent-assistant.toml"
 executor = "subprocess"
 target = "local"
-target_ssh = ""
 restart_policy = "on-failure"
+
+[[agents.env_vars]]
+name = "MINIMAX_API_KEY"
+from_secret = "MINIMAX_API_KEY"
 ```
+
+**Key design decision:** Agent configuration (llm, adapter, etc.) is owned by ctl and stored in `$ZLAW_HOME/agent-configs/`, not in the agent's home directory. This enables sandboxed executors to isolate config from the agent process. See [agent config ownership refactoring](../plans/refactor/06-agent-config-ownership.md).
 
 ### Executor
 
@@ -74,32 +80,34 @@ Feasibility of each combination:
 
 ## Agent Home
 
-For local agents, the home directory structure:
+For local agents, the home directory contains user content and runtime data, **NOT configuration**:
 
 ```
 $ZLAW_HOME/agents/{agent_id}/
-├── agent.toml           # agent configuration
 ├── runtime.toml        # runtime overrides
-├── SOUL.md             # personality
-├── IDENTITY.md         # role definition
+├── SOUL.md             # personality (user content, hot-reload)
+├── IDENTITY.md         # role definition (user content, hot-reload)
 ├── skills/             # per-agent skill files
 ├── sessions/           # conversation history
 ├── memories/           # long-term memory
-└── workspace/         # agent's working directory
+└── workspace/          # agent's working directory
 ```
+
+**Note:** Agent configuration (llm, adapter) is stored in `$ZLAW_HOME/agent-configs/` and managed by ctl.
 
 ## Lifecycle Operations
 
 ### Create
 
-1. ctl scaffolds agent directory
-2. ctl creates executor-specific service (systemd unit, docker image, etc.)
-3. ctl adds agent entry to zlaw.toml with executor/target/restart_policy
+1. ctl creates agent config in `$ZLAW_HOME/agent-configs/agent-{id}.toml`
+2. ctl scaffolds agent directory
+3. ctl creates executor-specific service (systemd unit, docker image, etc.)
+4. ctl adds agent entry to zlaw.toml with executor/target/restart_policy and `config_file`
 
 ### Start
 
 1. ctl reads all agents from zlaw.toml
-2. ctl invokes executor.Start() for each agent
+2. ctl invokes executor.Start() for each agent (passing config_file path)
 3. All agents in zlaw.toml start
 
 ### Stop
@@ -118,14 +126,16 @@ $ZLAW_HOME/agents/{agent_id}/
 
 1. ctl invokes executor.Stop()
 2. ctl removes agent entry from zlaw.toml
-3. Executor removes service (systemd unit, docker container, etc.)
-4. **Agent home is preserved** (sessions, memories intact)
+3. ctl removes agent config from `$ZLAW_HOME/agent-configs/`
+4. Executor removes service (systemd unit, docker container, etc.)
+5. **Agent home is preserved** (sessions, memories intact)
 
 ### Delete --prune
 
 1. ctl invokes executor.Stop()
 2. ctl removes agent entry from zlaw.toml
-3. ctl deletes agent home directory
+3. ctl removes agent config from `$ZLAW_HOME/agent-configs/`
+4. ctl deletes agent home directory
 
 ## See Also
 
@@ -133,3 +143,4 @@ $ZLAW_HOME/agents/{agent_id}/
 - [hub_lifecycle.md](./hub_lifecycle.md) — hub's role at spawn
 - [security.md](./security.md) — secret injection, subprocess filtering
 - [llm_presets.md](./llm_presets.md) — LLM backend presets and agent config
+- [Agent Config Ownership Refactoring](../plans/refactor/06-agent-config-ownership.md) — detailed refactoring plan

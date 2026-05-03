@@ -247,8 +247,8 @@ Lipgloss for styling and layout composition.
 |----------|-------|
 | **Label** | `Configure LLM` |
 | **Visibility** | `SelectedAgent != ""` |
-| **Status: Missing** | `⚠️ missing` — no `[llm]` in agent.toml |
-| **Status: Configured** | `✅ configured` — valid `[llm]` section |
+| **Status: Missing** | `⚠️ missing` — no `[llm]` in `agent-configs/agent-{id}.toml` |
+| **Status: Configured** | `✅ configured` — valid `[llm]` section in agent-configs |
 | **Status: Invalid** | `❌ invalid` — config malformed |
 
 
@@ -316,8 +316,8 @@ Lipgloss for styling and layout composition.
 
  Action | Behavior |
 --------|----------|
- `Use Secret` | Add mapping to `zlaw.toml`. Write `agent.toml` with preset. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
- `Create Secret` | Save new secret to `secrets.toml`. Add mapping to `zlaw.toml`. Write `agent.toml` with preset. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
+ `Use Secret` | Add mapping to `zlaw.toml`. Write `agent-configs/agent-{id}.toml` with preset. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
+ `Create Secret` | Save new secret to `secrets.toml`. Add mapping to `zlaw.toml`. Write `agent-configs/agent-{id}.toml` with preset. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
  `Cancel` | `popScreen()` |
 
 <b>**Notes:</b>
@@ -393,7 +393,7 @@ Lipgloss for styling and layout composition.
 
  Action | Behavior |
 --------|----------|
- `Use Secret` | Add mapping to `zlaw.toml`. Write `agent.toml` with adapter. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
+ `Use Secret` | Add mapping to `zlaw.toml`. Write `agent-configs/agent-{id}.toml` with adapter. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
  `Create Secret` | Save to `secrets.toml`. Add mapping to `zlaw.toml`. Write `agent.toml`. → Success: `✓ Done` + `popScreen()` / Error: stay, show error inline |
  `Cancel` | `popScreen()` |
 

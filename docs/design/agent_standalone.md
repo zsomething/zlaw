@@ -7,7 +7,7 @@ A standalone agent is a self-contained process that runs the agentic loop indepe
 ## Startup Sequence
 
 ```
-1. Load agent.toml       → config (model, backend, secret references)
+1. Load config via `-c` flag → config (model, backend, secret references)
 2. Load SOUL.md          → system prompt component (personality)
 3. Load IDENTITY.md      → system prompt component (role definition)
 4. Restore history       → sessions/<id>/ (JSONL files)
