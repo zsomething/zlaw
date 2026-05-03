@@ -436,10 +436,13 @@ func (m *Model) viewLLMSecretPhase() string {
 			prefix = "▸ "
 		}
 		b.WriteString(Styles.Item.Render(prefix+"["+selectedSecret+" ▼]") + "\n")
+
 		b.WriteString(m.option("Use Secret", m.llm.secretCursor == SecretCursorUseSecret) + "\n\n")
 		b.WriteString(Styles.ItemDim.Render(strings.Repeat("─", 40)) + "\n\n")
+		b.WriteString("Or create new secret:\n\n")
+	} else {
+		b.WriteString("Create new secret:\n\n")
 	}
-	b.WriteString("Or create new secret:\n\n")
 	b.WriteString("Key\n")
 	prefix := "  "
 	if m.llm.secretCursor == SecretCursorKey {
@@ -505,8 +508,8 @@ func (m *Model) updateLLMConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.llm.secretPhase = true
 			m.llm.secretCursor = SecretCursorKey
 			m.llm.selectedSecretIdx = -1
-			m.llm.secretKeyInput.Placeholder = envVarName
-			m.llm.secretKeyInput.SetValue("")
+			m.llm.secretKeyInput.Placeholder = ""
+			m.llm.secretKeyInput.SetValue(envVarName)
 			m.llm.secretValueInput.SetValue("")
 			m.llm.secretKeyInput.Focus()
 		case "escape", "left":
