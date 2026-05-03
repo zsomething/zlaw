@@ -213,6 +213,11 @@ func (s *SubprocessExecutor) buildCmd(cfg AgentConfig) (*exec.Cmd, error) {
 	env = setEnv(env, "ZLAW_LOG_FORMAT", "json")
 	env = setEnv(env, "ZLAW_AGENT_HOME", agentDir)
 
+	// Pass config file path to agent
+	if cfg.Config != "" {
+		env = setEnv(env, "ZLAW_AGENT_CONFIG", cfg.Config)
+	}
+
 	// Load secrets and inject.
 	sec, err := secrets.Load(secrets.DefaultSecretsPath())
 	if err != nil {

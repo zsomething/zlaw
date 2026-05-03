@@ -466,6 +466,7 @@ func (c *CtlStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 				RestartPolicy: string(agent.RestartPolicy),
 				NATSURL:       natsURL,
 				EnvVars:       agent.EnvVars,
+				Config:        agent.Config,
 			}
 
 			if err := exec.Start(ctx, agentCfg); err != nil {
@@ -536,6 +537,7 @@ func (c *CtlAgentStartCmd) Run(ctx context.Context, logger *slog.Logger) error {
 		RestartPolicy: string(agent.RestartPolicy),
 		NATSURL:       "nats://127.0.0.1:4222",
 		EnvVars:       agent.EnvVars,
+		Config:        agent.Config,
 	}
 
 	if err := exec.Start(ctx, agentCfg); err != nil {

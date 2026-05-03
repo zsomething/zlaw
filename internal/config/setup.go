@@ -9,9 +9,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// WriteLLMConfig writes LLM configuration to agent.toml.
-func WriteLLMConfig(agentDir string, llm LLMConfig) error {
-	path := filepath.Join(agentDir, "agent.toml")
+// WriteLLMConfigToFile writes LLM configuration to the specified config file.
+func WriteLLMConfigToFile(path string, llm LLMConfig) error {
 
 	// Read existing config if present.
 	var existing map[string]any
@@ -55,10 +54,9 @@ func writeAgentConfig(path string, cfg map[string]any) error {
 	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
 
-// WriteAdapterConfig writes adapter configuration to agent.toml.
+// WriteAdapterConfigToFile writes adapter configuration to the specified config file.
 // Pass nil to clear the adapter config.
-func WriteAdapterConfig(agentDir string, adapter *AdapterInstanceConfig) error {
-	path := filepath.Join(agentDir, "agent.toml")
+func WriteAdapterConfigToFile(path string, adapter *AdapterInstanceConfig) error {
 
 	// Read existing config if present.
 	var existing map[string]any

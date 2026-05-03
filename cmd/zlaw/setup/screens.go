@@ -307,7 +307,8 @@ func addAgentToHub(agentID string) error {
 		return fmt.Errorf("agent %q already exists", agentID)
 	}
 	hub.Agents = append(hub.Agents, config.AgentEntry{
-		ID: agentID,
+		ID:     agentID,
+		Config: fmt.Sprintf("agent-%s.toml", agentID), // convention: $ZLAW_HOME/agent-{id}.toml
 	})
 	if err := hub.Save(); err != nil {
 		return fmt.Errorf("save hub: %w", err)
@@ -635,7 +636,8 @@ func (m *Model) configureLLMWithPreset(presetName, envVarName, secretName string
 	if err != nil {
 		return err
 	}
-	agentDir := filepath.Join(m.state.HomePath, "agents", m.state.SelectedAgent)
+	// Config file is at $ZLAW_HOME/agent-{id}.toml (owned by ctl)
+	configPath := filepath.Join(m.state.HomePath, fmt.Sprintf("agent-%s.toml", m.state.SelectedAgent))
 	llmCfg := config.LLMConfig{
 		Backend: preset.Backend,
 		Model:   preset.DefaultModel,
@@ -643,7 +645,7 @@ func (m *Model) configureLLMWithPreset(presetName, envVarName, secretName string
 			"base_url": preset.ClientConfig["base_url"],
 		},
 	}
-	if err := config.WriteLLMConfig(agentDir, llmCfg); err != nil {
+	if err := config.WriteLLMConfigToFile(configPath, llmCfg); err != nil {
 		return err
 	}
 	if envVarName != "" && secretName != "" {

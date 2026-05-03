@@ -189,7 +189,8 @@ var runtimeFieldAllowlist = map[string]struct{}{
 
 // Loader loads and watches configuration files for a single agent.
 type Loader struct {
-	dir          string // agent.toml directory (hub-owned)
+	configFile   string // path to agent config file (owned by ctl); e.g., $ZLAW_HOME/agent-{id}.toml
+	dir          string // agent runtime directory (SOUL.md, IDENTITY.md, sessions, etc.)
 	workspace    string // workspace directory (SOUL.md, IDENTITY.md); agent has access
 	onChange     func(AgentConfig, Personality)
 	onCronChange func(CronConfig)
@@ -197,27 +198,30 @@ type Loader struct {
 	logger       *slog.Logger
 
 	mu          sync.Mutex
-	staticCfg   AgentConfig // from agent.toml; set once in Load, never mutated
+	staticCfg   AgentConfig // from configFile; set once in Load, never mutated
 	personality Personality // from SOUL.md / IDENTITY.md; updated on each Load
 }
 
 // NewLoader creates a Loader for the given directories.
-// agentDir contains agent.toml (hub-owned); workspace contains SOUL.md and IDENTITY.md.
+// configFile is the path to the agent config file (owned by ctl).
+// By convention: $ZLAW_HOME/agent-{id}.toml
+// agentDir contains runtime data (SOUL.md, IDENTITY.md, sessions, etc.)
+// workspace contains SOUL.md and IDENTITY.md; agent has access.
 // When workspace is empty, personality files are loaded from agentDir for
 // backward compatibility.
-func NewLoader(agentDir string, workspace string, onChange func(AgentConfig, Personality), logger *slog.Logger) (*Loader, error) {
+func NewLoader(configFile string, agentDir string, workspace string, onChange func(AgentConfig, Personality), logger *slog.Logger) (*Loader, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("create watcher: %w", err)
 	}
-	return &Loader{dir: agentDir, workspace: workspace, onChange: onChange, watcher: w, logger: logger}, nil
+	return &Loader{configFile: configFile, dir: agentDir, workspace: workspace, onChange: onChange, watcher: w, logger: logger}, nil
 }
 
 // Load reads agent.toml, runtime.toml from agentDir, and SOUL.md/IDENTITY.md
 // from the workspace directory, merges the runtime overrides, and returns the result.
 // It also caches the static config and personality for use by ReloadRuntime.
 func (l *Loader) Load() (AgentConfig, Personality, error) {
-	static, err := loadTOML(l.dir + "/agent.toml")
+	static, err := loadTOML(l.configFile)
 	if err != nil {
 		return AgentConfig{}, Personality{}, err
 	}

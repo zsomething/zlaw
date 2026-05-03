@@ -80,6 +80,10 @@ type AgentEntry struct {
 	Disabled bool `toml:"disabled,omitempty"`
 	// EnvVars lists the env vars to inject from secrets.toml.
 	EnvVars []EnvVarMapping `toml:"env_vars,omitempty"`
+	// Config is the path to the agent configuration file (owned by ctl).
+	// By convention: $ZLAW_HOME/agent-{id}.toml
+	// The path is relative to $ZLAW_HOME, or absolute.
+	Config string `toml:"config"`
 }
 
 // NATSConfig holds embedded NATS server settings.
@@ -177,6 +181,9 @@ func (c HubConfig) AddAgent(entry AgentEntry) error {
 	if len(entry.EnvVars) > 0 {
 		newEntry["env_vars"] = entry.EnvVars
 	}
+	if entry.Config != "" {
+		newEntry["config"] = entry.Config
+	}
 	agents = append(agents, newEntry)
 	raw["agents"] = agents
 
@@ -235,6 +242,9 @@ func (c HubConfig) SaveTo(path string) error {
 		}
 		if len(a.EnvVars) > 0 {
 			entry["env_vars"] = a.EnvVars
+		}
+		if a.Config != "" {
+			entry["config"] = a.Config
 		}
 		agents[i] = entry
 	}

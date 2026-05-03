@@ -22,6 +22,7 @@ type AgentFlags struct {
 	Agent     string `short:"a" env:"ZLAW_AGENT"     help:"agent id; resolves to $ZLAW_HOME/agents/<id>"`
 	AgentDir  string `          env:"ZLAW_AGENT_DIR" help:"explicit path to agent directory (overrides --agent)"`
 	Workspace string `          env:"ZLAW_WORKSPACE" help:"path to agent workspace (SOUL.md, IDENTITY.md); defaults to $ZLAW_HOME/workspaces/<name>"`
+	Config    string `short:"c" env:"ZLAW_AGENT_CONFIG" help:"path to agent config file (owned by ctl); by convention: $ZLAW_HOME/agent-<id>.toml"`
 }
 
 func (f AgentFlags) resolveDir() (string, error) {
@@ -40,6 +41,18 @@ func (f AgentFlags) resolveWorkspace() string {
 	}
 	if h := config.AgentHome(); h != "" {
 		return filepath.Join(h, "workspace")
+	}
+	return ""
+}
+
+// resolveConfig returns the path to the agent config file.
+// Priority: --config flag > ZLAW_AGENT_CONFIG env var > $ZLAW_HOME/agent-{agent}.toml
+func (f AgentFlags) resolveConfig() string {
+	if f.Config != "" {
+		return f.Config
+	}
+	if f.Agent != "" {
+		return filepath.Join(config.ZlawHome(), fmt.Sprintf("agent-%s.toml", f.Agent))
 	}
 	return ""
 }

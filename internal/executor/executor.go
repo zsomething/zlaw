@@ -34,6 +34,7 @@ type AgentConfig struct {
 	NATSURL       string                 // NATS server URL (e.g., nats://127.0.0.1:4222)
 	NATSToken     string                 // NATS credentials token (optional)
 	EnvVars       []config.EnvVarMapping // secrets to inject from secrets.toml
+	Config        string                 // path to agent config file (owned by ctl)
 }
 
 // Executor is the interface for spawning and managing agent processes.

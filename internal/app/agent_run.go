@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"github.com/zsomething/zlaw/internal/adapters/cli"
@@ -29,7 +30,16 @@ func RunAgent(ctx context.Context, agentDir string, workspaceDir string, opts Ag
 	var promptPtr atomic.Pointer[string]
 	var stickyBlocks []agent.StickyBlock
 
-	loader, err := config.NewLoader(agentDir, workspaceDir, func(_ config.AgentConfig, p config.Personality) {
+	// Resolve config file path (owned by ctl)
+	configFile := os.Getenv("ZLAW_AGENT_CONFIG")
+	if configFile == "" && agentDir != "" {
+		// By convention: $ZLAW_HOME/agent-{id}.toml
+		if agentID := os.Getenv("ZLAW_AGENT"); agentID != "" {
+			configFile = filepath.Join(config.ZlawHome(), fmt.Sprintf("agent-%s.toml", agentID))
+		}
+	}
+
+	loader, err := config.NewLoader(configFile, agentDir, workspaceDir, func(_ config.AgentConfig, p config.Personality) {
 		s := agent.BuildSystemPrompt(nil, p, "")
 		promptPtr.Store(&s)
 		logger.Info("system prompt reloaded")
